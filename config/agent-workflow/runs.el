@@ -640,7 +640,9 @@ runs, it's over once every job is done or skipped."
       (throw 'wait nil))
     ;; A running job's step waiting for an agent: started, if there's one.
     (dolist (job (agent-workflow-run-jobs run))
-      (when-let* ((index (plist-get (cdr job) :pool)))
+      (when-let* ((index (plist-get (cdr job) :pool))
+                  ;; Still running (not interrupted, cancelled meanwhile).
+                  ((eq (plist-get (cdr job) :status) 'running)))
         (when (< (agent-workflow-pool-used) agent-workflow-pool)
           (agent-workflow--job-set run (car job) :pool nil :why nil)
           (agent-workflow--agent-step run (car job) (nth index (plist-get (agent-workflow--job-spec run (car job)) :steps))

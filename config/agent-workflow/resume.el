@@ -218,7 +218,8 @@ script killed; interrupted, waiting for you."
       (when (process-live-p process)
         (process-put process 'agent-workflow-stopped t)
         (delete-process process)))
-    (agent-workflow--job-set run job :agent nil :process nil
+    ;; Its step waiting for an agent: it waits for you now, not for one.
+    (agent-workflow--job-set run job :agent nil :process nil :pool nil
                              :ask (list :kind 'interrupted :step (or (plist-get state :step) 0)))
     (agent-workflow--journal run "interrupted" :job job)
     (agent-workflow--wait run job (format "%s: interrupted (paused): continue it, skip its step, or stop?" job))))
@@ -236,7 +237,7 @@ script killed; interrupted, waiting for you."
           (delete-process process)))
       (when (plist-get state :snapshot)
         (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) (car job)))
-      (agent-workflow--job-set run (car job) :agent nil :process nil :snapshot nil))))
+      (agent-workflow--job-set run (car job) :agent nil :process nil :snapshot nil :pool nil))))
 
 (defun agent-workflow--cancel-jobs (run &optional except)
   "RUN's jobs running or waiting (but EXCEPT) cancelled, their run over:

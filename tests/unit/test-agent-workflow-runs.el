@@ -551,6 +551,37 @@ jobs:
         (should (eq (+test-awr--job back "b") 'pending))
         (agent-workflow-cancel back)))))
 
+(ert-deftest agent-workflow-runs/interrupted-waiting-for-an-agent ()
+  "A job whose agent step waits for a free agent (the pool full),
+interrupted (its budget used up, paused now): it waits for you, not for an
+agent; one freed starts nothing for it. Cancelled: the same."
+  (+test-awr "pool-interrupted"
+    (write-region "description: x
+for: [chore]
+jobs:
+  a:
+    steps:
+      - run: echo a
+      - agent: build
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (let* ((agent-workflow-pool 0)
+           (run (agent-workflow-start-run project (+test-awr--issue project "Pool" "--type" "chore"))))
+      (should (+test-awr--wait (lambda () (plist-get (agent-workflow--job run "a") :pool))))
+      (agent-workflow--interrupt run "a")
+      (should (eq (+test-awr--job run "a") 'waiting))
+      (should-not (plist-get (agent-workflow--job run "a") :pool))
+      ;; An agent free now: nothing started for it.
+      (setq agent-workflow-pool 3)
+      (agent-workflow-tick)
+      (should-not (agent-workflow-agents project))
+      (should (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'interrupted))
+      ;; Waiting for one again (as it was), then cancelled: none for it.
+      (agent-workflow--job-set run "a" :pool 1)
+      (agent-workflow-cancel run)
+      (should-not (plist-get (agent-workflow--job run "a") :pool))
+      (agent-workflow-tick)
+      (should-not (agent-workflow-agents project)))))
+
 (ert-deftest agent-workflow-runs/pause-and-cancel ()
   "Paused: nothing new starts, saying so; with now, a running script stopped,
 interrupted, continued after: run again. Cancelled: its agents stopped, the
