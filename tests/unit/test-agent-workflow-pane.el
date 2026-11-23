@@ -690,6 +690,32 @@ growing (no end)."
                 (list (list :job "green" :round 1 :start 100.0 :end 110.0 :outcome "failed")))
     (should (equal (plist-get (car (plist-get (agent-workflow--pane-rounds-element) :tasks)) :status) "failed"))))
 
+(ert-deftest agent-workflow-pane/rounds-sent-back ()
+  "A job sending the work back (review: changes, rerun build): its round
+closed as it does, with its outcome (review → changes), not running through
+build's round 2 then replaced; the others it replaced, replaced; their
+times not counting on."
+  (with-temp-buffer
+    (setq-local agent-workflow--pane-rounds nil)
+    (setq-local agent-workflow--pane-notes nil)
+    (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+    (pcase-dolist (`(,event ,time ,data)
+                   '(("job-started" 100.0 (:job "build" :round 1))
+                     ("job-done" 160.0 (:job "build"))
+                     ("job-started" 160.0 (:job "review" :round 1))
+                     ("job-started" 160.0 (:job "docs" :round 1))
+                     ("step-ended" 200.0 (:job "review" :step 0 :outcome "changes"))
+                     ("went-back" 201.0 (:job "build" :step 0 :by "review" :replaced ["build" "docs" "review"]))
+                     ("job-started" 202.0 (:job "build" :round 2))))
+      (agent-workflow--pane-time event data time))
+    (should (equal (mapcar (lambda (task) (list (plist-get task :name) (plist-get task :status)))
+                           (plist-get (agent-workflow--pane-rounds-element) :tasks))
+                   '(("build" "done") ("review → changes" "done") ("docs → replaced" "queued")
+                     ("build · round 2" "running"))))
+    (should-not (gethash "review" agent-workflow--pane-times))
+    (should-not (gethash "docs" agent-workflow--pane-times))
+    (should (gethash "build" agent-workflow--pane-times))))
+
 (ert-deftest agent-workflow-pane/a-step-s-try ()
   "A running job's line: its step's first try says no try; its second, try
 2 (its tries count the one running)."

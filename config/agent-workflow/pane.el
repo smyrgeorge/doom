@@ -220,6 +220,12 @@ steps' times noted."
       (pcase event
         ("job-started" (setq times (list :started time)))
         ("job-done" (setq times (plist-put times :ended time)))
+        ;; Sent back: the jobs replaced not started (their sections' time
+        ;; counting from their next start, not the last).
+        ("went-back"
+         (dolist (name (append (plist-get data :replaced) nil))
+           (unless (equal name job)
+             (remhash name agent-workflow--pane-times))))
         ;; Its run over: when its jobs running stopped (their section's time).
         ((or "cancelled" "failed")
          (dolist (name (append (plist-get data :jobs) (plist-get data :cancelled) nil))
@@ -317,6 +323,22 @@ running ended."
                                                            (not (plist-get round :end))))
                                       agent-workflow--pane-rounds)))
            (close round (or (plist-get data :outcome) "done"))))
+        ;; Its step ended, saying an outcome: kept on its round, said if
+        ;; it's closed by its sending the work back.
+        ("step-ended"
+         (when-let* ((outcome (plist-get data :outcome))
+                     (round (seq-find (lambda (round) (and (equal (plist-get round :job) job)
+                                                           (not (plist-get round :end))))
+                                      agent-workflow--pane-rounds)))
+           (plist-put round :said outcome)))
+        ;; Sent back: each job replaced its round closed, the one sending it
+        ;; back with its outcome (review → changes), the others replaced.
+        ("went-back"
+         (let ((by (plist-get data :by)))
+           (dolist (name (append (plist-get data :replaced) nil))
+             (dolist (round agent-workflow--pane-rounds)
+               (when (equal (plist-get round :job) name)
+                 (close round (or (and (equal name by) (plist-get round :said)) "replaced")))))))
         ((or "run-done" "cancelled" "failed")
          (dolist (round agent-workflow--pane-rounds)
            (close round (if (equal event "run-done") "done" event))))))))
