@@ -173,20 +173,36 @@ Their merges run no suite: a project's own copy adds its tests with `with: {suit
 
 ## This config's own
 
-This config has one of its own in `.agent-workflow/`, a sample to start a project's from. It has no `for`: an issue gets
-it by its label (`workflow:screenshots`), or by `--workflow` (`M-x agent-workflow-run` offers it for any issue). It runs
-once you trust this config (see [Trust](#trust)).
+This config has two of its own in `.agent-workflow/`, samples to start a project's from. They have no `for`: an issue
+gets one by its label (`workflow:screenshots`, `workflow:github`), or by `--workflow` (`M-x agent-workflow-run` offers
+them for any issue). They run once you trust this config (see [Trust](#trust)).
 
 | Workflow | Jobs |
 |---|---|
 | screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` profile looks at each changed one and commits the good ones; review (changes: capture again); merge |
+| github | green: its script pushes your main and watches its GitHub Actions until they're done (`.agent-workflow/scripts/github.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits, then it's pushed and watched again, 5 times at most; sync: your main fast-forwarded to what was pushed, the fixes with it (`github-sync.sh`); close (a merge: the issue closed) |
 
 The `screenshots` profile (`.agent-workflow/profiles/`) may read, look at images and commit; it never takes them
-again, nor changes anything else.
+again, nor changes anything else. The `ci` profile may read, edit, run the tests and commit; it never pushes (the
+script does) nor runs the Actions again.
+
+github needs gh, logged in (`brew install gh`, `gh auth login`): without it the run fails at once, as it does when your
+checkout isn't on main. Nothing to push (origin has your main already): it watches the Actions of origin's main; done
+already, their verdict at once; none at all (5 minutes), it says so and goes on. A run cancelled on GitHub, a push
+refused (origin has commits you haven't), your main moved on while it ran: the run asks you. Its script reads these
+from Emacs's environment (`(setenv "GITHUB_POLL" "60")`):
+
+| Variable | Default | |
+|---|---|---|
+| `GITHUB_REMOTE` | `origin` | where it pushes |
+| `GITHUB_POLL` | 30 | seconds between looks at the Actions |
+| `GITHUB_APPEAR` | 300 | seconds a pushed commit's Actions have to show up |
+| `GITHUB_LOG_LINES` | 150 | a failed job's last lines given to the agent |
 
 ```sh
 bd label add doom-a1b workflow:screenshots
 cmd/agent-workflow run doom-a1b
+cmd/agent-workflow run doom-a2c --workflow github
 cmd/agent-workflow dry-run screenshots    # what it would do, nothing run
 ```
 

@@ -498,16 +498,16 @@ too, else kept."
 ;; ====== THIS CONFIG'S OWN ======
 
 (ert-deftest agent-workflow-files/this-config-s-samples ()
-  "The sample workflow of this config (.agent-workflow/: screenshots, its
-profile) checked, no problem; walked to its end, its branch deleted once
-merged."
+  "The workflows of this config (.agent-workflow/: github, screenshots,
+their profiles ci and screenshots) checked, no problem; each walked to its
+end, its branch deleted once merged."
   (let ((agent-workflow--profiles-cache (make-hash-table :test #'equal))
         (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
     (should-not (agent-workflow-check-problems +test-root))
     (let ((workflows (agent-workflow-workflows +test-root)))
       (should (equal (mapcar #'car (seq-filter (lambda (w) (eq (plist-get (cdr w) :origin) 'project)) workflows))
-                     '("screenshots")))
-      (dolist (name '("screenshots"))
+                     '("github" "screenshots")))
+      (dolist (name '("github" "screenshots"))
         (ert-info (name :prefix "workflow: ")
           (let* ((workflow (cdr (assoc name workflows)))
                  (result (agent-workflow-dry-run workflow :info '(:id "demo-1" :type "task")
@@ -516,9 +516,170 @@ merged."
                            (expand-file-name (format ".agent-workflow/workflows/%s.yml" name) +test-root)))
             (should-not (plist-get workflow :for))
             (should-not (plist-get result :stopped))
-            (should (member "merge: merged, the issue closed" (+test-awf--dry-lines result)))
+            ;; Its merge job (merge, close) merged, the issue closed.
+            (should (seq-find (lambda (line) (string-match-p "\\`[a-z]+: merged, the issue closed\\'" line))
+                              (+test-awf--dry-lines result)))
             (should (equal (plist-get result :branch) "deleted, merged into the main branch"))))))
-    (should (assoc "screenshots" (agent-workflow-profiles +test-root)))))
+    (should (assoc "screenshots" (agent-workflow-profiles +test-root)))
+    (should (assoc "ci" (agent-workflow-profiles +test-root)))))
+
+;; github.sh and github-sync.sh: a stand-in gh (its runs and logs from
+;; GH_RUNS, GH_PENDING, GH_LOGGED_OUT), a bare origin, a clone of it on main
+;; standing in for your checkout and the issue's worktree.
+
+(defun +test-awf--gh (bin)
+  "A stand-in gh in BIN: auth status fails with GH_LOGGED_OUT; run list
+prints GH_RUNS (lines ID TAB STATUS TAB CONCLUSION TAB NAME, \\n between),
+in_progress the first GH_PENDING times (counted in GH_COUNT); run view
+prints a failed job's lines."
+  (make-directory bin t)
+  (let ((gh (expand-file-name "gh" bin)))
+    (write-region "#!/bin/bash
+case \"$1 $2\" in
+  'auth status') [ -z \"$GH_LOGGED_OUT\" ] ;;
+  'run list')
+    n=$(cat \"$GH_COUNT\" 2>/dev/null || echo 0); echo $((n + 1)) > \"$GH_COUNT\"
+    if [ \"$n\" -lt \"${GH_PENDING:-0}\" ]; then printf '1\\tin_progress\\t\\tTests\\n'
+    else printf \"$GH_RUNS\"; fi ;;
+  'run view') echo \"test-lexer.el: FAILED lexer/escapes\" ;;
+  *) exit 3 ;;
+esac
+" nil gh)
+    (set-file-modes gh #o755)
+    gh))
+
+(defun +test-awf--github (name script &rest env)
+  "SCRIPT (github.sh, github-sync.sh) run in a clone on main of a bare
+origin (a commit there), named NAME, ENV more of its environment (GH_RUNS
+...): (EXIT OUTPUT CLONE ORIGIN), CLONE your checkout and its worktree."
+  (let* ((dir (+test-awf--dir name))
+         (origin (expand-file-name "origin.git" dir))
+         (clone (file-name-as-directory (expand-file-name "clone" dir)))
+         (bin (expand-file-name "bin" dir))
+         (git (lambda (where &rest args)
+                (let ((default-directory where))
+                  (apply #'call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" args)))))
+    (funcall git dir "init" "-q" "--bare" "-b" "main" origin)
+    (funcall git dir "clone" "-q" origin clone)
+    (funcall git clone "checkout" "-q" "-b" "main")
+    (+test-awf--file clone "a.el" "one\n")
+    (funcall git clone "add" "a.el")
+    (funcall git clone "commit" "-q" "-m" "first")
+    (funcall git clone "push" "-q" "origin" "main")
+    (+test-awf--gh bin)
+    (when (plist-get env :ahead)
+      (+test-awf--file clone "b.el" "two\n")
+      (funcall git clone "add" "b.el")
+      (funcall git clone "commit" "-q" "-m" "second"))
+    (when (plist-get env :off-main)
+      (funcall git clone "checkout" "-q" "-b" "other"))
+    (with-temp-buffer
+      (let* ((default-directory clone)
+             (process-environment
+              (append (list (concat "PATH=" (if (plist-get env :no-gh)
+                                                   ;; Nothing: gh nowhere (the Linux runners have one in /usr/bin).
+                                                   (let ((none (expand-file-name "none" dir))) (make-directory none t) none)
+                                                 (concat bin ":" (getenv "PATH"))))
+                            (concat "MAIN=" clone) "MAIN_BRANCH=main" "GITHUB_POLL=0"
+                            (format "GITHUB_APPEAR=%s" (or (plist-get env :appear) 0))
+                            (concat "GH_COUNT=" (expand-file-name "count" dir))
+                            (concat "GH_RUNS=" (or (plist-get env :runs) ""))
+                            (format "GH_PENDING=%s" (or (plist-get env :pending) 0))
+                            (concat "GH_LOGGED_OUT=" (if (plist-get env :logged-out) "1" "")))
+                      process-environment))
+             (exit (call-process "bash" nil t nil
+                                 (expand-file-name (concat ".agent-workflow/scripts/" script) +test-root))))
+        (list exit (string-trim (buffer-string)) clone origin)))))
+
+(defun +test-awf--origin-main (origin)
+  "ORIGIN's main, its commit."
+  (let ((default-directory origin))
+    (string-trim (shell-command-to-string "git rev-parse main"))))
+
+(ert-deftest agent-workflow-files/github-sh ()
+  "github.sh: no gh, gh logged out, your checkout not on main: it fails (2)
+at once. Your main pushed (commits origin hasn't), none to push: on; its
+runs green: 0; one failed: 1, its failed jobs' lines; still running: watched
+until done; none at all: 0, said; cancelled: 2."
+  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-none" "github.sh" :no-gh t)))
+    (should (eql exit 2))
+    (should (string-match-p "gh (GitHub's command line) isn't installed" out)))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-out" "github.sh" :logged-out t)))
+    (should (eql exit 2))
+    (should (string-match-p "gh isn't logged in" out)))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-off" "github.sh" :off-main t)))
+    (should (eql exit 2))
+    (should (string-match-p "your checkout is on other, not main" out)))
+  ;; Ahead of origin: pushed; green.
+  (pcase-let ((`(,exit ,out ,clone ,origin)
+               (+test-awf--github "gh-push" "github.sh" :ahead t :runs "7\tcompleted\tsuccess\tTests\n")))
+    (should (eql exit 0))
+    (should (string-match-p "pushed 1 commit(s)" out))
+    (should (string-match-p "green: Tests passed" out))
+    (should (equal (+test-awf--origin-main origin)
+                   (let ((default-directory clone)) (string-trim (shell-command-to-string "git rev-parse HEAD"))))))
+  ;; Nothing to push; failed: its logs, 1.
+  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-fail" "github.sh"
+                                                :runs "8\tcompleted\tfailure\tTests\n9\tcompleted\tsuccess\tLint\n")))
+    (should (eql exit 1))
+    (should (string-match-p "nothing to push" out))
+    (should (string-match-p "== Tests: failure (gh run view 8)" out))
+    (should (string-match-p "FAILED lexer/escapes" out))
+    (should-not (string-match-p "Lint:" out)))
+  ;; Still running: watched until it's done.
+  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-wait" "github.sh" :pending 2
+                                                :runs "10\tcompleted\tsuccess\tTests\n")))
+    (should (eql exit 0))
+    (should (string-match-p "green" out)))
+  ;; None at all.
+  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-no-runs" "github.sh")))
+    (should (eql exit 0))
+    (should (string-match-p "no GitHub Actions run" out)))
+  ;; Cancelled: you decide.
+  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-cancel" "github.sh" :runs "11\tcompleted\tcancelled\tTests\n")))
+    (should (eql exit 2))
+    (should (string-match-p "was cancelled" out))))
+
+(ert-deftest agent-workflow-files/github-sync-sh ()
+  "github-sync.sh: your main is what was pushed: 0; behind it (the fixes on
+the run's branch): fast-forwarded; ahead of it (commits made meanwhile): 2."
+  (pcase-let ((`(,exit ,out) (+test-awf--github "sync-same" "github-sync.sh")))
+    (should (eql exit 0))
+    (should (string-match-p "what was pushed" out)))
+  ;; The run's branch a commit past your main: fast-forwarded.
+  (let* ((dir (+test-awf--dir "sync-ff"))
+         (default-directory dir))
+    (call-process "git" nil nil nil "init" "-q" "-b" "main" "mine")
+    (let ((mine (file-name-as-directory (expand-file-name "mine" dir))))
+      (+test-awf--file mine "a.el" "one\n")
+      (let ((default-directory mine))
+        (call-process "git" nil nil nil "add" "a.el")
+        (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "first")
+        (call-process "git" nil nil nil "worktree" "add" "-q" "-b" "task/demo-1" (expand-file-name "wt" dir)))
+      (let ((wt (file-name-as-directory (expand-file-name "wt" dir))))
+        (+test-awf--file wt "a.el" "fixed\n")
+        (let ((default-directory wt))
+          (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-am" "fix")
+          (with-temp-buffer
+            (let ((process-environment (append (list (concat "MAIN=" mine) "MAIN_BRANCH=main") process-environment)))
+              (should (eql (call-process "bash" nil t nil
+                                         (expand-file-name ".agent-workflow/scripts/github-sync.sh" +test-root))
+                           0))
+              (should (string-match-p "fast-forwarded" (buffer-string))))))
+        (should (equal (with-temp-buffer (insert-file-contents (expand-file-name "a.el" mine)) (buffer-string))
+                       "fixed\n"))
+        ;; Your main moved on meanwhile: you decide.
+        (+test-awf--file mine "b.el" "mine\n")
+        (let ((default-directory mine))
+          (call-process "git" nil nil nil "add" "b.el")
+          (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "mine"))
+        (let ((default-directory wt)
+              (process-environment (append (list (concat "MAIN=" mine) "MAIN_BRANCH=main") process-environment)))
+          (with-temp-buffer
+            (should (eql (call-process "bash" nil t nil
+                                       (expand-file-name ".agent-workflow/scripts/github-sync.sh" +test-root))
+                         2))
+            (should (string-match-p "has commits the pushed one" (buffer-string)))))))))
 
 ;; ====== CHECKING THEM ======
 

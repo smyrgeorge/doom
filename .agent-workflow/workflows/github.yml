@@ -1,0 +1,31 @@
+# A workflow of this config's own: your main pushed to GitHub and its Actions
+# watched until they pass (.agent-workflow/scripts/github.sh). A failure: its
+# jobs' logs to an agent with the ci profile, which finds why, fixes the code
+# or its test and commits; then pushed and watched again, 5 times at most
+# (then the run asks you). Not on main, no gh: it fails at once. Nothing to
+# push: on to the watching; finished already, their verdict at once. Green:
+# your main fast-forwarded to what was pushed, the fixes with it
+# (github-sync.sh), the issue closed. No for: picked by its label
+# (workflow:github), or --workflow github.
+name: github
+description: Your main pushed to GitHub, its Actions watched until they pass; a failure fixed (the code or its test), pushed, watched again.
+concurrency: 1
+budget: {cost: 20, time: 4h}
+
+jobs:
+  green:
+    steps:
+      - run: .agent-workflow/scripts/github.sh
+        timeout: 2h
+        retries: 5
+        on-fail: ci
+
+  sync:
+    needs: green
+    run: .agent-workflow/scripts/github-sync.sh
+
+  # Your main has the branch now (sync): merged already, no commit made (none
+  # to push again); the issue closed, the branch deleted.
+  close:
+    needs: sync
+    uses: merge
