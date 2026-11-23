@@ -157,3 +157,67 @@ issue; its labels after, muted."
       (should (equal prefix ""))
       (should (equal (substring-no-properties suffix) "  workflow:quick"))
       (should (memq 'shadow (+test-awk--faces suffix))))))
+
+;; ====== ITS WORKFLOW ======
+
+(defconst +test-awk--workflows
+  '(("mine" :origin local :description "My own" :for ("feature") :jobs (("build")))
+    ("github" :origin project :description "Pushed" :ticketless t :jobs (("green")))
+    ("ours" :origin project :description "The project's" :for ("bug") :jobs (("fix") ("review")))
+    ("feature" :origin starter :description "A feature, built with its tests" :for ("feature" "task")
+     :jobs (("build") ("review") ("merge")))
+    ("bugfix" :origin starter :description "A bug" :for ("bug") :jobs (("reproduce") ("fix"))))
+  "Workflows of every origin, one with no ticket.")
+
+(defun +test-awk--rows (info &optional width)
+  (cl-letf (((symbol-function 'agent-workflow-workflows) (lambda (_) +test-awk--workflows)))
+    (agent-workflow--workflow-rows "/tmp/" info (or width 120))))
+
+(ert-deftest agent-workflow-pick/its-workflow-s-rows ()
+  "Every workflow taking a ticket (one with none left out), grouped by
+where it comes from (yours, the project's, the starters), those that fit
+the issue first in each: ● and their types in green; the others ○, dimmed.
+Its workflow:NAME label: that one alone fits, said."
+  (let ((rows (+test-awk--rows '(:type "feature"))))
+    (should (equal (mapcar #'car rows) '("mine" "ours" "feature" "bugfix")))
+    (should (equal (mapcar (lambda (row) (nth 3 row)) rows) '(local project starter starter)))
+    (should (equal (mapcar (lambda (row) (nth 4 row)) rows) '(t nil t nil)))
+    (pcase-let ((`(,_ ,prefix ,suffix) (assoc "feature" rows)))
+      (should (equal (substring-no-properties prefix) "● "))
+      (should (string-match-p "A feature, built with its tests +build · review · merge +for feature, task"
+                              (substring-no-properties suffix)))
+      (should (memq 'success (+test-awk--faces suffix))))
+    (pcase-let ((`(,_ ,prefix ,suffix) (assoc "bugfix" rows)))
+      (should (equal (substring-no-properties prefix) "○ "))
+      (should (memq 'shadow (+test-awk--faces suffix)))))
+  (let ((rows (+test-awk--rows '(:type "feature" :labels ("workflow:bugfix")))))
+    (should (equal (mapcar #'car (seq-filter (lambda (row) (nth 4 row)) rows)) '("bugfix")))
+    (should (string-search "its workflow:bugfix" (nth 2 (assoc "bugfix" rows))))))
+
+(ert-deftest agent-workflow-pick/its-workflow-s-rows-narrow ()
+  "Narrow: its jobs dropped first, then its types; its description cut
+with …; never wider than the width."
+  (let ((rows (+test-awk--rows '(:type "feature") 50)))
+    (should-not (string-search "review · merge" (nth 2 (assoc "feature" rows))))
+    (dolist (row rows)
+      (should (<= (+ 2 (string-width (car row)) (string-width (nth 2 row))) 50)))))
+
+(ert-deftest agent-workflow-pick/its-workflow-always-asked ()
+  "Its workflow always asked, even when one alone fits: the first that fits
+selected, RET taking it."
+  (cl-letf (((symbol-function 'agent-workflow-workflows) (lambda (_) +test-awk--workflows))
+            ((symbol-function 'agent-workflow-issue) (lambda (&rest _) '(:type "bug" :title "Crash"))))
+    (let* ((asked nil)
+           (picked nil)
+           (map (define-keymap "<f5>" (lambda () (interactive)
+                                        (setq picked (agent-workflow--read-workflow "/tmp/" "demo-3"))))))
+      (with-current-buffer (switch-to-buffer (get-buffer-create "*awk*"))
+        (use-local-map map)
+        (vertico-mode 1)
+        (unwind-protect
+            (minibuffer-with-setup-hook (lambda () (setq asked (minibuffer-prompt)))
+              (execute-kbd-macro (vconcat (kbd "<f5>") (kbd "RET"))))
+          (vertico-mode -1)
+          (use-local-map nil)))
+      (should (equal asked "Workflow for demo-3 (a bug: Crash): "))
+      (should (equal picked "ours")))))

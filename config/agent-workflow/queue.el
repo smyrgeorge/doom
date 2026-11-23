@@ -548,17 +548,153 @@ issues): their ids."
                                               nil t))
         (user-error "No issue picked"))))
 
+(defconst agent-workflow--picker-gap 2
+  "The columns between two of the workflow picker's.")
+
+(defun agent-workflow--fit-text (text width)
+  "TEXT cut to WIDTH columns, … where cut."
+  (if (<= (string-width text) width) text (truncate-string-to-width text width nil nil "…")))
+
+(defun agent-workflow--workflow-group-title (origin)
+  "The workflow picker's divider for workflows of ORIGIN."
+  (pcase origin
+    ('local (format "local · %s/workflows/" agent-workflow-local-directory))
+    ('project (format "project · %s/workflows/" agent-workflow-directory))
+    (_ "starters")))
+
+(defun agent-workflow--workflow-rows (project info width)
+  "The workflow picker's rows for the issue INFO of PROJECT, WIDTH columns
+at most: ((NAME PREFIX SUFFIX ORIGIN FITS)...), every workflow taking a
+ticket, grouped by where it comes from (yours, the project's, the
+starters), those that fit it first in each (its workflow:NAME label's, or
+those whose for: has its type), each a row of columns as the agent
+workspace's role picker has them: a mark (● fits, ○ doesn't), its name,
+its description, its jobs, the types it's for (its label's, said). Those
+that don't fit, dimmed; columns that don't fit the width dropped from the
+right (its jobs first), its description cut with …."
+  (let* ((label (seq-find (lambda (label) (string-prefix-p "workflow:" label)) (plist-get info :labels)))
+         (labelled (and label (string-remove-prefix "workflow:" label)))
+         (type (plist-get info :type))
+         (workflows (seq-remove (lambda (workflow) (plist-get (cdr workflow) :ticketless))
+                                (agent-workflow-workflows project)))
+         (fits (lambda (workflow)
+                 (if labelled
+                     (equal (car workflow) labelled)
+                   (and (member type (plist-get (cdr workflow) :for)) t))))
+         (origins '(local project starter))
+         (sorted (seq-mapcat (lambda (origin)
+                               (let ((these (seq-filter (lambda (workflow)
+                                                          (eq (or (plist-get (cdr workflow) :origin) 'starter) origin))
+                                                        workflows)))
+                                 (append (seq-filter fits these) (seq-remove fits these))))
+                             origins))
+         (cells (mapcar (lambda (workflow)
+                          (let ((spec (cdr workflow)))
+                            (list :name (car workflow)
+                                  :fits (funcall fits workflow)
+                                  :description (or (plist-get spec :description) "")
+                                  :jobs (mapconcat #'car (plist-get spec :jobs) " · ")
+                                  :for (cond ((and labelled (equal (car workflow) labelled)) (concat "its " label))
+                                             ((plist-get spec :for)
+                                              (concat "for " (string-join (plist-get spec :for) ", ")))
+                                             (t "")))))
+                        sorted))
+         (gap agent-workflow--picker-gap)
+         (widest (lambda (key) (apply #'max 0 (mapcar (lambda (cell) (string-width (plist-get cell key))) cells))))
+         (names (funcall widest :name))
+         (shown (seq-filter (lambda (key) (> (funcall widest key) 0)) '(:for :jobs)))
+         (cap (lambda (key) (if (eq key :jobs) 32 40)))
+         (room (lambda (keys) (apply #'+ (mapcar (lambda (key) (+ gap (min (funcall cap key) (funcall widest key)))) keys))))
+         (description-room (lambda (keys) (- width 2 names gap (funcall room keys)))))
+    ;; Its jobs dropped first, then the types, while the description can't
+    ;; have 20 columns.
+    (while (and shown (< (funcall description-room shown) (min 20 (funcall widest :description))))
+      (setq shown (remq (if (memq :jobs shown) :jobs :for) shown)))
+    (let ((described (max 0 (min (funcall widest :description) (funcall description-room shown)))))
+      (mapcar
+       (lambda (cell)
+         (let* ((fit (plist-get cell :fits))
+                (pad (lambda (text w) (concat text (make-string (max 0 (- w (string-width text))) ?\s))))
+                (parts (append (and (> described 3)
+                                    (list (funcall pad (agent-workflow--fit-text (plist-get cell :description) described)
+                                                   described)))
+                               (mapcar (lambda (key)
+                                         (let ((w (min (funcall cap key) (funcall widest key))))
+                                           (funcall pad (agent-workflow--fit-text (plist-get cell key) w) w)))
+                                       (reverse shown))))
+                (suffix (string-trim-right
+                         (concat (make-string (- names (string-width (plist-get cell :name))) ?\s)
+                                 (mapconcat (lambda (part) (concat (make-string gap ?\s) part)) parts "")))))
+           (if fit
+               (when-let* ((at (and (memq :for shown) (string-search (plist-get cell :for) suffix))))
+                 (add-face-text-property at (+ at (length (plist-get cell :for))) 'success t suffix))
+             (add-face-text-property 0 (length suffix) 'shadow t suffix))
+           (list (plist-get cell :name)
+                 (if fit (propertize "● " 'face 'success) (propertize "○ " 'face 'shadow))
+                 suffix
+                 (or (plist-get (cdr (assoc (plist-get cell :name) workflows)) :origin) 'starter)
+                 fit)))
+       cells))))
+
+(defun agent-workflow--read-in-place (prompt names default)
+  "One of NAMES read in the minibuffer with PROMPT (a match required),
+DEFAULT selected where it is: vertico moves a default to the top, out of
+its group, so there it's given none and DEFAULT is selected once vertico
+has listed them. An empty answer is DEFAULT."
+  (let* ((vertico (bound-and-true-p vertico-mode))
+         (answer
+          (minibuffer-with-setup-hook
+              (lambda ()
+                (when (and vertico default (fboundp 'vertico--goto))
+                  (letrec ((select (lambda ()
+                                     (remove-hook 'post-command-hook select t)
+                                     (when-let* ((index (and (local-variable-p 'vertico--input)
+                                                             (seq-position (bound-and-true-p vertico--candidates)
+                                                                           default))))
+                                       (vertico--goto index)
+                                       (vertico--exhibit)))))
+                    (add-hook 'post-command-hook select 90 t))))
+            (completing-read prompt names nil t nil nil (unless vertico default)))))
+    (if (string-empty-p answer) (or default answer) answer)))
+
 (defun agent-workflow--read-workflow (project issue)
-  "ISSUE's workflow in PROJECT: the one that fits it, asked only when
-several do (or none: all of them)."
+  "ISSUE's workflow in PROJECT, always asked: every workflow taking a ticket
+\(yours, the project's, the starters), grouped, a row of columns each
+\(`agent-workflow--workflow-rows'), those that fit it first, the first of
+them selected."
   (let* ((info (agent-workflow-issue project issue))
-         (fitting (ignore-errors (agent-workflow--fitting project info))))
-    (if (and fitting (null (cdr fitting)))
-        (car fitting)
-      (completing-read (format "Workflow for %s (a %s): " issue (plist-get info :type))
-                       (or fitting (mapcar #'car (seq-remove (lambda (workflow) (plist-get (cdr workflow) :ticketless))
-                                                             (agent-workflow-workflows project))))
-                       nil t))))
+         (rows nil)
+         (row-list (lambda ()
+                     (let ((width (1- (window-body-width (or (active-minibuffer-window) (minibuffer-window))))))
+                       (unless (eq (car rows) width)
+                         (setq rows (cons width (agent-workflow--workflow-rows project info width))))
+                       (cdr rows))))
+         (all (funcall row-list))
+         (names (mapcar #'car all))
+         (default (car (or (seq-find (lambda (row) (nth 4 row)) all) (car all))))
+         (completion-extra-properties
+          (list :affixation-function
+                (lambda (candidates)
+                  (let ((now (funcall row-list)))
+                    (mapcar (lambda (name)
+                              (if-let* ((row (assoc name now)))
+                                  (list (if (nth 4 row) name (propertize name 'face 'shadow)) (nth 1 row) (nth 2 row))
+                                (list name "" "")))
+                            candidates)))
+                :group-function
+                (lambda (name transform)
+                  (if transform
+                      name
+                    (when-let* ((row (assoc name (funcall row-list))))
+                      (agent-workflow--workflow-group-title (nth 3 row)))))
+                :display-sort-function #'identity
+                :cycle-sort-function #'identity)))
+    (unless names
+      (user-error "No workflow takes a ticket (M-x agent-workflow-run runs those that don't)"))
+    (agent-workflow--read-in-place
+     (format "Workflow for %s (a %s%s): " issue (or (plist-get info :type) "task")
+             (if-let* ((title (plist-get info :title))) (concat ": " (agent-workflow--fit-text title 40)) ""))
+     names default)))
 
 (defun agent-workflow--started (started refused)
   "STARTED runs said to `agent-workflow-started-functions', and with those
@@ -609,8 +745,9 @@ ticket: \[agent-workflow-run-ticket]."
   "Start runs on ISSUES (ids) of PROJECT (default: the current one's), each
 with WORKFLOW, else its own: those started and those refused, said.
 Interactively, the issues picked, several at once (an epic: its open
-issues), then each one's workflow, asked only when several fit (those that
-run without a ticket left out: \[agent-workflow-run]). Return
+issues), then each one's workflow, always asked: every workflow that takes
+a ticket, yours, the project's and the starters, those that fit it first
+\(those that run without a ticket left out: \[agent-workflow-run]). Return
 \(STARTED . REFUSED): runs, and (ISSUE . WHY) each."
   (interactive (let ((project (or (agent-workflow-project) (user-error "Not in a git repository"))))
                  (list (agent-workflow--read-issues project) nil project)))

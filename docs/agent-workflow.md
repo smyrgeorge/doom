@@ -267,9 +267,12 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 ## Runs
 
 `M-x agent-workflow-run-ticket` starts runs on tickets: it asks for the issues (several at once; an epic: its open
-issues), then each one's workflow, asked only when several fit it. The issues are shown as in [their list](issues.md): status,
+issues), then each one's workflow. The issues are shown as in [their list](issues.md): status,
 priority and type before each, its labels after. `RET` picks one; for several, `TAB` adds one and a separator starts
-the next: a comma, or `;` when a title has a comma (the prompt says which). From the shell:
+the next: a comma, or `;` when a title has a comma (the prompt says which). Its workflow is always asked: every
+workflow that takes a ticket, grouped by where it comes from (yours, the project's, the starters), a row each, its
+description, its jobs and the types it's for; those that fit the issue (its type in their `for:`, or its
+`workflow:NAME` label's) first and marked ●, the first of them selected, the others ○ and dimmed. From the shell:
 
 ```sh
 cmd/agent-workflow run doom-a1b doom-c3d          # each with its own workflow
