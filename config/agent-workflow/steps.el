@@ -15,15 +15,20 @@
 ;;   exit 0     the next step
 ;;   exit 1     the work is wrong: its output goes to the job's agent (or,
 ;;              the job having none, one with the step's on-fail profile),
-;;              which fixes it and says done; the step runs again, up to
-;;              its retries (0 by default); used up, the run asks you: go
-;;              on (with a note for the agent), skip the step, or stop
+;;              which fixes it and says done; the step runs again (from
+;;              its retry-from step: those between run again too), up to
+;;              its retries (0 by default, its own tries counted); used
+;;              up, the run asks you: go on (with a note for the agent),
+;;              skip the step, or stop
+;;   exit 3     it can't go on: the run failed (its agents stopped, its
+;;              issue open again, its branch and worktree kept; resume.el)
 ;;   other, or a timeout: the script broke; no agent is sent, the run asks
 ;;              you: go (run it again), skip it, or stop
 ;;
 ;; An elisp: step runs in your Emacs, the run's helpers bound as in if:
 ;; (issue-id)...: returning is exit 0; signalling `agent-workflow-fail' (its
-;; message the output) exit 1; any other error, it broke. Quick: it blocks
+;; message the output) exit 1; `agent-workflow-abort' exit 3 (the run
+;; failed); any other error, it broke. Quick: it blocks
 ;; Emacs.
 ;;
 ;; uses: merge, safe. It merges the issue's branch into the main branch
@@ -51,6 +56,7 @@
 (require 'subr-x)
 
 (define-error 'agent-workflow-fail "The step failed")
+(define-error 'agent-workflow-abort "The run failed")
 
 (defvar agent-workflow-script-timeout)
 
@@ -64,9 +70,14 @@ waits for you."
   (let* ((step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
          (state (agent-workflow--job run job))
          (held (plist-get state :agent))
-         (message (format "%s (try %d of %d). Its output:\n\n%s\n\nFix it, commit, then say done again: the step runs again."
+         (from (agent-workflow--retry-from run job index))
+         (message (format "%s (try %d of %d). Its output:\n\n%s\n\nFix it, commit, then say done again: %s."
                           what (agent-workflow--tries run job index) (1+ (or (plist-get step :retries) 0))
-                          (agent-workflow--tail output 60)))
+                          (agent-workflow--tail output 60)
+                          (if (= from index)
+                              "the step runs again"
+                            (format "its job runs again from its step %d%s, then this one"
+                                    (1+ from) (agent-workflow--step-called run job from)))))
          (profile (plist-get step :on-fail)))
     (agent-workflow--job-set run job :retry index :finished nil)
     (cond
@@ -94,6 +105,16 @@ waits for you."
         (error (agent-workflow--job-set run job :retry nil)
                (agent-workflow--wait run job (format "%s: %s, and its agent didn't start: %s" job what
                                                      (error-message-string err)))))))))
+
+(defun agent-workflow--step-called (run job index)
+  "Step INDEX of JOB of RUN's name, as \" (NAME)\"; none: \"\"."
+  (if-let* ((name (plist-get (nth index (plist-get (agent-workflow--job-spec run job) :steps)) :name)))
+      (format " (%s)" name)
+    ""))
+
+(defun agent-workflow--step-named (step)
+  "STEP's name, as \", NAME\"; none: \"\"."
+  (if-let* ((name (plist-get step :name))) (concat ", " name) ""))
 
 (defun agent-workflow--tries (run job index)
   "How many times step INDEX of JOB of RUN has run, this round."
@@ -224,6 +245,10 @@ OUTPUT: on to the next, fixed, or asked (see the top of this file)."
   (pcase status
     (0 (agent-workflow-step-ended run job))
     (1 (agent-workflow--failed run job index output (format "%s returned 1" what)))
+    (3 (agent-workflow-fail run (format "%s: %s: %s" job what
+                                        (or (car (last (split-string (string-trim (or output "")) "\n" t)))
+                                            "it returned 3"))
+                            :job job :step index))
     ('timeout (agent-workflow--broke run job index (format "%s ran out of time" what)))
     (_ (agent-workflow--broke run job index (format "%s broke (it returned %s)" what status)))))
 
@@ -231,7 +256,8 @@ OUTPUT: on to the next, fixed, or asked (see the top of this file)."
   "The run: step STEP (INDEX of JOB of RUN): its script, as the top of
 this file says."
   (agent-workflow--count-try run job index)
-  (let ((what (format "its step %d (%s)" (1+ index) (agent-workflow--short (plist-get step :run)))))
+  (let ((what (format "its step %d%s (%s)" (1+ index) (agent-workflow--step-named step)
+                      (agent-workflow--short (plist-get step :run)))))
     (agent-workflow--journal run "step-started" :job job :step index :kind "run"
                              :try (agent-workflow--tries run job index))
     (agent-workflow--spawn run job index (agent-workflow--script-command run (plist-get step :run) (plist-get step :shell))
@@ -252,7 +278,7 @@ Emacs with the run's helpers, in the job's place."
   (agent-workflow--count-try run job index)
   (agent-workflow--journal run "step-started" :job job :step index :kind "elisp"
                            :try (agent-workflow--tries run job index))
-  (let ((what (format "its step %d (elisp)" (1+ index)))
+  (let ((what (format "its step %d%s (elisp)" (1+ index) (agent-workflow--step-named step)))
         (default-directory (file-name-as-directory (plist-get (agent-workflow--job run job) :dir)))
         (outcome nil))
     (setq outcome
@@ -266,6 +292,7 @@ Emacs with the run's helpers, in the job's place."
                         (eval (car read) t)))))
                 (list 0 ""))
             (agent-workflow-fail (list 1 (error-message-string err)))
+            (agent-workflow-abort (list 3 (error-message-string err)))
             (error (list 2 (error-message-string err)))))
     (agent-workflow--journal run "script-ended" :job job :step index :exit (car outcome) :tail (cadr outcome))
     (agent-workflow--step-done-or-failed run job index (car outcome) (cadr outcome) what)))

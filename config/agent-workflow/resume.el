@@ -220,9 +220,8 @@ script killed; interrupted, waiting for you."
 
 ;; ====== CANCELLING ======
 
-(cl-defun agent-workflow-cancel (run &key (by "you"))
-  "Cancel RUN: its agents stopped, its scripts killed, its snapshots gone;
-the run over, its issue open again; its branch and worktree kept."
+(defun agent-workflow--stop-all (run)
+  "RUN's agents stopped, its scripts killed, its snapshots gone."
   (dolist (job (agent-workflow-run-jobs run))
     (let ((state (cdr job)))
       (when-let* ((agent (plist-get state :agent))) (agent-workflow-stop-agent agent))
@@ -232,11 +231,34 @@ the run over, its issue open again; its branch and worktree kept."
           (delete-process process)))
       (when (plist-get state :snapshot)
         (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) (car job)))
-      (agent-workflow--job-set run (car job) :agent nil :process nil :snapshot nil)))
+      (agent-workflow--job-set run (car job) :agent nil :process nil :snapshot nil))))
+
+(cl-defun agent-workflow-cancel (run &key (by "you"))
+  "Cancel RUN: its agents stopped, its scripts killed, its snapshots gone;
+the run over, its issue open again; its branch and worktree kept."
+  (agent-workflow--stop-all run)
   (agent-workflow--journal run "cancelled" :by by)
   (agent-workflow--set-state run 'cancelled)
   (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) "--status" "open")
   (agent-workflow--issue-summary run)
+  run)
+
+;; ====== FAILING ======
+
+(cl-defun agent-workflow-fail (run why &key job step)
+  "RUN failed, WHY (words): a step of JOB (STEP, from 0) said it can't go
+on (exit 3; an elisp: step's `agent-workflow-abort'). As cancelled: its
+agents stopped, its scripts killed, its snapshots gone, its issue open
+again, its branch and worktree kept; JOB failed, the run over, said as a
+run needing you is (`agent-workflow-needs-you-functions')."
+  (agent-workflow--stop-all run)
+  (when job
+    (agent-workflow--job-set run job :status 'failed :why why))
+  (agent-workflow--journal run "failed" :job job :step step :why why)
+  (agent-workflow--set-state run 'failed why)
+  (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) "--status" "open")
+  (agent-workflow--issue-summary run)
+  (run-hook-with-args 'agent-workflow-needs-you-functions run (concat "failed: " why))
   run)
 
 ;; ====== PAUSING ======

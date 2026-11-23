@@ -12,7 +12,8 @@
 ;; shows its last lines (`agent-workflow-log-functions'). The journal stays
 ;; the truth: log.txt is made again from it when it's gone.
 ;;
-;; A run starting to wait for you (or for something else of yours) is said:
+;; A run starting to wait for you (or for something else of yours), or
+;; failing, is said:
 ;; `agent-workflow-needs-you-functions' (config/notify/agent-workflow.el, a
 ;; notification while Emacs isn't in front).
 
@@ -25,7 +26,8 @@
 
 (defvar agent-workflow-needs-you-functions nil
   "Called with a run and what it waits for you on (words), once it starts
-waiting for you, or for something else.")
+waiting for you, or for something else; or once it failed (\"failed: WHY\",
+`agent-workflow-fail').")
 
 (defconst agent-workflow--log-name "log.txt" "A run's log, in its folder.")
 
@@ -54,7 +56,10 @@ session, `none' for a wait with no question."
   "What EVENT of ISSUE's run with DATA (a plist) says, in words; nil for
 one the log leaves out. KIND: what a wait asks (`agent-workflow--log-hint')."
   (cl-flet ((get (key) (agent-workflow--log-value (plist-get data key)))
-            (step () (format "step %d" (1+ (or (agent-workflow--log-value (plist-get data :step)) 0)))))
+            (step () (format "step %d%s" (1+ (or (agent-workflow--log-value (plist-get data :step)) 0))
+                             (if-let* ((name (agent-workflow--log-value (plist-get data :name))))
+                                 (format " (%s)" name)
+                               ""))))
     (pcase event
       ("run-started" (format "started, with %s, by %s" (get :workflow) (or (get :by) "you")))
       ("state" (and (equal (get :state) "queued") (get :why) (format "queued: %s" (get :why))))
@@ -86,6 +91,9 @@ one the log leaves out. KIND: what a wait asks (`agent-workflow--log-hint')."
       ("interrupted" "interrupted")
       ("continued" (format "continued, by %s" (or (get :by) "you")))
       ("cancelled" (format "run cancelled, by %s" (or (get :by) "you")))
+      ("failed" (format "run failed: %s" (or (get :why) "a step can't go on")))
+      ("retry-from" (format "%s fixed: run again from step %d%s"
+                            (step) (1+ (or (get :from) 0)) (if (get :from-name) (format " (%s)" (get :from-name)) "")))
       ("run-done" "run done")
       ("merged" (if (get :empty)
                     (format "nothing to merge: %s has no commit" (get :branch))

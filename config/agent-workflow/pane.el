@@ -225,7 +225,7 @@ in its Log. In `agent-workflow-journal-functions'."
 ;; wrong, an error.
 
 (defconst agent-workflow--pane-log-errors
-  '("cancelled" "budget-used-up" "interrupted" "branch-moved")
+  '("cancelled" "failed" "budget-used-up" "interrupted" "branch-moved")
   "The events a run's pane's Log says as errors.")
 
 (defconst agent-workflow--pane-log-warnings
@@ -294,9 +294,9 @@ running ended."
                                                            (not (plist-get round :end))))
                                       agent-workflow--pane-rounds)))
            (close round (or (plist-get data :outcome) "done"))))
-        ((or "run-done" "cancelled")
+        ((or "run-done" "cancelled" "failed")
          (dolist (round agent-workflow--pane-rounds)
-           (close round (if (equal event "cancelled") "cancelled" "done"))))))))
+           (close round (if (equal event "run-done") "done" event))))))))
 
 (defun agent-workflow--pane-rounds-element ()
   "The pane's rounds as a timeline (nil before the first): a bar each, its
@@ -321,6 +321,7 @@ one ended done (its outcome in its name), replaced or cancelled grey."
                                       ;; changes: said in its name); not a failure.
                                       :status (cond ((null (plist-get round :end)) "running")
                                                     ((member outcome '("replaced" "cancelled")) "queued")
+                                                    ((equal outcome "failed") "failed")
                                                     (t "done")))
                                 (and (plist-get round :end) (list :end (stamp (plist-get round :end)))))))
                            agent-workflow--pane-rounds)))))
@@ -469,6 +470,9 @@ tokens, each against its budget if it has one."
                                                  "")))
                    ('done (if (plist-get (agent-workflow-run-where run) :empty) "✓ done · no commit" "✓ done"))
                    ('cancelled "✗ cancelled")
+                   ('failed (concat "✗ failed" (if (agent-workflow-run-why run)
+                                                   (concat ": " (agent-workflow-run-why run))
+                                                 "")))
                    (_ "● running"))
                  (concat (agent-workflow--duration-words (plist-get spent :time))
                          (if (plist-get budget :time)
@@ -491,11 +495,16 @@ tokens, each against its budget if it has one."
         :title (format "%s: %s" (agent-workflow-run-issue run)
                        (or (plist-get (agent-workflow-run-info run) :title) ""))
         :face (pcase (agent-workflow-run-state run)
-                ('waiting "warning") ('cancelled "muted") ('done "success") (_ "plain"))
+                ('waiting "warning") ('cancelled "muted") ('failed "error") ('done "success") (_ "plain"))
         :text (agent-workflow--pane-state-line run)))
 
 (defun agent-workflow--pane-step-name (step)
-  "STEP of a job (a plist), as its checklist names it."
+  "STEP of a job (a plist), as its checklist names it: its name, else what
+it does (`agent-workflow--pane-step-does')."
+  (or (plist-get step :name) (agent-workflow--pane-step-does step)))
+
+(defun agent-workflow--pane-step-does (step)
+  "What STEP of a job (a plist) does, in a few words."
   (pcase (plist-get step :kind)
     ('agent (format "agent: %s" (plist-get step :agent)))
     ('run (format "run: %s" (truncate-string-to-width
@@ -508,7 +517,8 @@ tokens, each against its budget if it has one."
 (defun agent-workflow--pane-status (status)
   "A job's STATUS as a checklist's: waiting for you, ◆."
   (pcase status
-    ('running "running") ('waiting "waiting") ('done "done") ('skipped "skipped") (_ "pending")))
+    ('running "running") ('waiting "waiting") ('done "done") ('skipped "skipped") ('failed "failed")
+    (_ "pending")))
 
 (defun agent-workflow--pane-timed (item times status)
   "ITEM, a checklist's step, with its TIMES (:started :ended) for STATUS
@@ -561,13 +571,16 @@ tokens, each against its budget if it has one."
               (list :steps
                     (cl-loop for step in steps for i from 0
                              collect (let ((sub (cond ((memq status '(done skipped)) (if (eq status 'done) "done" "skipped"))
-                                                      ((memq status '(running waiting))
+                                                      ((memq status '(running waiting failed))
                                                        (cond ((< i index) "done")
-                                                             ((= i index) (if (eq status 'running) "running" "waiting"))
+                                                             ((= i index) (symbol-name status))
                                                              (t "pending")))
                                                       (t "pending"))))
                                        (agent-workflow--pane-timed
-                                        (list :name (agent-workflow--pane-step-name step) :status sub)
+                                        (append (list :name (agent-workflow--pane-step-name step) :status sub)
+                                                ;; Named: what it does after it.
+                                                (and (plist-get step :name)
+                                                     (list :detail (agent-workflow--pane-step-does step))))
                                         (alist-get i (plist-get times :steps)) sub))))))))
 
 (defun agent-workflow--pane-graph (run)
@@ -584,11 +597,11 @@ round past 1 said), an arrow from each job to those needing it."
                                     :label (concat (car job) " "
                                                    (pcase status
                                                      ('done "✓") ('running "●") ('waiting "◆")
-                                                     ('skipped "–") (_ "○"))
+                                                     ('skipped "–") ('failed "✗") (_ "○"))
                                                    (if (and (numberp round) (> round 1)) (format " r%d" round) "")))
                               (pcase status
                                 ('done '(:status "ok")) ('running '(:status "active"))
-                                ('waiting '(:status "warning"))))))
+                                ('waiting '(:status "warning")) ('failed '(:status "error"))))))
                          (agent-workflow-run-jobs run))
           :edges (cl-loop for (job . spec) in specs
                           append (mapcar (lambda (need) (list need job)) (plist-get spec :needs))))))
@@ -1089,7 +1102,7 @@ events). Stopped once there's none."
           (agent-ui-remove "rounds" :canvas pane :section "run")))
       (agent-ui-section pane "run" :state (pcase (agent-workflow-run-state run)
                                             ('running 'running) ('waiting 'needs-you) ('queued 'waiting)
-                                            ('done 'done) ('cancelled 'failed)))
+                                            ('done 'done) ((or 'cancelled 'failed) 'failed)))
       (agent-workflow--pane-needs run pane)
       (agent-workflow--pane-show-notes run pane)
       (agent-workflow--pane-agents run pane)))

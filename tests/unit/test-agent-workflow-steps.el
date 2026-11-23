@@ -78,6 +78,106 @@ jobs:
       (should (equal (seq-filter (lambda (ev) (member ev '("script-ended" "fixing"))) (+test-awr--journal run))
                      '("script-ended" "fixing" "script-ended"))))))
 
+(ert-deftest agent-workflow-steps/retry-from-an-earlier-step ()
+  "A step with retry-from: its exit 1, fixed by the job's agent (told so),
+runs its job again from that step: both run again, the second passes; its
+tries counted on it; journaled, logged, the steps' names with them."
+  (let ((pushes (make-temp-file "pushes")))
+    (+test-awr "retryfrom"
+      (+test-aws--workflow project (format "description: x
+for: [feature]
+jobs:
+  green:
+    steps:
+      - agent: build
+      - run: echo pushed >> %s
+        name: push
+      - run: test -f fixed.txt || { echo \"red\"; exit 1; }
+        name: watch
+        retries: 2
+        retry-from: push
+" pushes))
+      (let* ((issue (+test-awr--issue project "Retry from"))
+             (run (agent-workflow-start-run project issue))
+             (worktree (agent-workflow-worktree-directory project issue))
+             (agent (+test-awr--agent run "green")))
+        (should (+test-awr--wait (lambda () (eq (+test-awr--job run "green") 'waiting))))
+        (agent-workflow-done agent nil "built")
+        (should (+test-awr--wait
+                 (lambda () (seq-some (lambda (prompt)
+                                        (and (string-prefix-p "its step 3, watch (" prompt)
+                                             (string-match-p "returned 1 (try 1 of 3)" prompt)
+                                             (string-match-p "its job runs again from its step 2 (push), then this one" prompt)))
+                                      (+test-awr--prompts "retryfrom")))))
+        (should (equal (with-temp-buffer (insert-file-contents pushes) (buffer-string)) "pushed\n"))
+        (write-region "x" nil (expand-file-name "fixed.txt" worktree))
+        (agent-workflow-done agent nil "fixed")
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        ;; The push ran again, then the watch passed.
+        (should (equal (with-temp-buffer (insert-file-contents pushes) (buffer-string)) "pushed\npushed\n"))
+        (let ((tries (plist-get (agent-workflow--job run "green") :tries)))
+          (should (equal (alist-get 1 tries) 2))
+          (should (equal (alist-get 2 tries) 2)))
+        (should (equal (seq-filter (lambda (ev) (member ev '("script-ended" "fixing" "retry-from"))) (+test-awr--journal run))
+                       '("script-ended" "script-ended" "fixing" "retry-from" "script-ended" "script-ended")))
+        (with-temp-buffer
+          (insert-file-contents (expand-file-name "log.txt" (agent-workflow-run-dir run)))
+          (should (search-forward "step 3 (watch) fixed: run again from step 2 (push)" nil t))
+          (goto-char (point-min))
+          (should (search-forward "step 2 (push) started (run)" nil t)))))
+    (delete-file pushes)))
+
+(ert-deftest agent-workflow-steps/exit-3-fails-the-run ()
+  "Exit 3: the run failed at once (no agent sent, nothing asked), its job
+failed, the jobs after it never started, its issue open again; said as a
+run needing you is; logged; read back failed, not restored; not sent back.
+An elisp: step's agent-workflow-abort: the same."
+  (+test-awr "fails"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    steps:
+      - run: echo checking
+      - run: echo \"gh isn't installed\" >&2; exit 3
+        name: gh
+  after:
+    needs: check
+    run: echo after > after.txt
+")
+    (let* ((issue (+test-awr--issue project "Fails"))
+           (said nil)
+           (agent-workflow-needs-you-functions (list (lambda (_run why) (push why said))))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'failed))))
+      (should (equal (agent-workflow-run-why run) "check: its step 2, gh (echo \"gh isn't installed\" >&2; exit 3): gh isn't installed"))
+      (should (eq (+test-awr--job run "check") 'failed))
+      (should (eq (+test-awr--job run "after") 'pending))
+      (should-not (agent-workflow-asking run))
+      (should-not (agent-workflow-agents project))
+      (should (member (concat "failed: " (agent-workflow-run-why run)) said))
+      (should (equal (alist-get 'status (+test-awr--shown project issue)) "open"))
+      (should (member "failed" (+test-awr--journal run)))
+      (with-temp-buffer
+        (insert-file-contents (expand-file-name "log.txt" (agent-workflow-run-dir run)))
+        (should (search-forward "run failed: check: its step 2, gh" nil t)))
+      (should-error (agent-workflow-back run "check") :type 'user-error)
+      ;; Read back (Emacs started again): failed, its job too; not restored.
+      (let ((back (agent-workflow--read-run (agent-workflow-run-dir run))))
+        (should (eq (agent-workflow-run-state back) 'failed))
+        (should (eq (plist-get (cdr (assoc "check" (agent-workflow-run-jobs back))) :status) 'failed)))
+      (should (memq 'failed agent-workflow--ended))))
+  (+test-awr "aborts"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    elisp: (signal 'agent-workflow-abort '(\"no gh here\"))
+")
+    (let ((run (agent-workflow-start-run project (+test-awr--issue project "Aborts"))))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'failed))))
+      (should (string-match-p "no gh here" (agent-workflow-run-why run))))))
+
 (ert-deftest agent-workflow-steps/broke-timeout-skip ()
   "Another exit code: it broke, asked (no agent sent); skip goes on. A
 timeout: broke too; stop waits, skip after."
@@ -87,13 +187,13 @@ for: [feature]
 jobs:
   check:
     steps:
-      - run: exit 3
+      - run: exit 4
       - run: sleep 5
         timeout: 1s
       - run: echo fine
 ")
     (let ((run (agent-workflow-start-run project (+test-awr--issue project "Broke"))))
-      (+test-aws--asks run "check: its step 1 (exit 3) broke (it returned 3): run it again, skip it, or stop?")
+      (+test-aws--asks run "check: its step 1 (exit 4) broke (it returned 4): run it again, skip it, or stop?")
       (should-not (agent-workflow-agents project))
       (should-error (agent-workflow-confirm run "accept") :type 'user-error)
       (agent-workflow-confirm run "skip")

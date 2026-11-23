@@ -9,7 +9,8 @@
 ;; would wait and why (the branch held by a job that edits, the pool, a
 ;; concurrency), what would be skipped (if:), sent back (an outcome's rerun,
 ;; counted against max-rounds), fixed and run again (a script's 1, up to its
-;; retries), and where the run would stop and ask you.
+;; retries, from its retry-from step), and where the run would stop and ask
+;; you, or fail (a script's 3).
 ;;
 ;; M-x agent-workflow-dry-run asks for the workflow, the issue its if: reads
 ;; (none: one of the first type it's for), and each job's outcomes and each
@@ -73,44 +74,57 @@ project's (to tell the jobs that edit; default: the current project's)."
          (dependents (job)
            (let ((needs (mapcar (lambda (j) (cons (car j) (plist-get (cdr j) :needs))) jobs)))
              (seq-filter (lambda (other) (member job (agent-workflow--before needs other))) (mapcar #'car jobs))))
-         (run-step (job step index lines)
-           ;; Step INDEX of JOB: said in LINES; why it stops, or nil.
+         (named (step index) (format "%d%s" (1+ index) (if (plist-get step :name) (format " (%s)" (plist-get step :name)) "")))
+         (run-try (job step index try lines)
+           ;; Try TRY of step INDEX of JOB, said in LINES: :pass, :again (fixed,
+           ;; run again from its retry-from step), or why it stops.
            (pcase (plist-get step :kind)
              ('agent
               (push (format "%s: its agent (%s) works%s" job (plist-get step :agent)
                             (if (> (get job :round) 1) (format ", round %d" (get job :round)) ""))
                     (car lines))
-              nil)
+              :pass)
              (kind
-              (let ((try 1) (retries (or (plist-get step :retries) 0)) (why nil) (done nil))
-                (while (not (or done why))
-                  (let ((code (exit job index try)))
-                    (cond
-                     ((eql code 0)
-                      (push (format "%s: its %s step %d passes%s" job kind (1+ index)
-                                    (if (> try 1) (format " (try %d)" try) ""))
-                            (car lines))
-                      (setq done t))
-                     ((not (eql code 1))
-                      (setq why (format "%s: its step %d breaks (%s): it asks you" job (1+ index) code)))
-                     ((> try retries)
-                      (setq why (format "%s: its step %d returns 1, its retries used up: it asks you" job (1+ index))))
-                     ((not (or (agent-p job) (plist-get step :on-fail)))
-                      (setq why (format "%s: its step %d returns 1, and no agent fixes it: it asks you" job (1+ index))))
-                     (t
-                      (push (format "%s: its step %d returns 1: %s fixes it, run again" job (1+ index)
-                                    (if (agent-p job) "its agent" (format "an agent (%s)" (plist-get step :on-fail))))
-                            (car lines))
-                      (cl-incf try)))))
-                why))))
+              (let ((code (exit job index try))
+                    (retries (or (plist-get step :retries) 0))
+                    (from (plist-get step :retry-from)))
+                (cond
+                 ((eql code 0)
+                  (push (format "%s: its %s step %s passes%s" job kind (named step index)
+                                (if (> try 1) (format " (try %d)" try) ""))
+                        (car lines))
+                  :pass)
+                 ((eql code 3)
+                  (format "%s: its step %s returns 3: the run fails" job (named step index)))
+                 ((not (eql code 1))
+                  (format "%s: its step %s breaks (%s): it asks you" job (named step index) code))
+                 ((> try retries)
+                  (format "%s: its step %s returns 1, its retries used up: it asks you" job (named step index)))
+                 ((not (or (agent-p job) (plist-get step :on-fail)))
+                  (format "%s: its step %s returns 1, and no agent fixes it: it asks you" job (named step index)))
+                 (t
+                  (push (format "%s: its step %s returns 1: %s fixes it, run again%s" job (named step index)
+                                (if (agent-p job) "its agent" (format "an agent (%s)" (plist-get step :on-fail)))
+                                (if (and from (< from index))
+                                    (format " from step %s" (named (nth from (plist-get (spec job) :steps)) from))
+                                  ""))
+                        (car lines))
+                  :again))))))
          (run-job (job lines)
            ;; JOB's steps, each to its end: said in LINES; why it stops, or nil.
-           (let ((why nil))
-             (cl-loop for step in (plist-get (spec job) :steps) for index from 0
-                      until why do
-                      (setq why (run-step job step index lines))
-                      (when (and (not why) (plist-get step :approve))
-                        (push (format "%s: its step %d waits for your OK (given)" job (1+ index)) (car lines))))
+           (let* ((steps (plist-get (spec job) :steps))
+                  (index 0) (tries nil) (why nil))
+             (while (and (not why) (< index (length steps)))
+               (let* ((step (nth index steps))
+                      (try (1+ (alist-get index tries 0))))
+                 (setf (alist-get index tries) try)
+                 (pcase (run-try job step index try lines)
+                   (:pass
+                    (when (plist-get step :approve)
+                      (push (format "%s: its step %d waits for your OK (given)" job (1+ index)) (car lines)))
+                    (cl-incf index))
+                   (:again (setq index (or (plist-get step :retry-from) index)))
+                   (said (setq why said)))))
              (when (and (not why) (plist-get (spec job) :approve))
                (push (format "%s: waits for your OK (given)" job) (car lines)))
              why)))

@@ -287,6 +287,66 @@ jobs:
                      (warning 8 "on-fail: an agent step has no script to fail: ignored")
                      (warning 9 "unknown key colour: ignored"))))))
 
+(ert-deftest agent-workflow-files/step-names-and-retry-from ()
+  "A step's name and retry-from: retry-from read as an index of its job's
+steps (a name, a number from 1, its own step); naming no step, a step after
+it, not a name, a name twice in a job: errors; on an agent step: warned."
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  green:
+    steps:
+      - run: check.sh
+        name: check
+      - run: push.sh
+        name: push
+      - run: watch.sh
+        name: watch
+        retries: 5
+        retry-from: push
+  again:
+    steps:
+      - run: a.sh
+      - run: b.sh
+        retry-from: 1
+  self:
+    run: x
+    retry-from: 1
+")))
+    (should-not problems)
+    (let ((green (plist-get (cdr (assoc "green" (plist-get workflow :jobs))) :steps)))
+      (should (equal (mapcar (lambda (step) (plist-get step :name)) green) '("check" "push" "watch")))
+      (should (equal (mapcar (lambda (step) (plist-get step :retry-from)) green) '(nil nil 1))))
+    (should (equal (plist-get (nth 1 (plist-get (cdr (assoc "again" (plist-get workflow :jobs))) :steps)) :retry-from) 0))
+    (should (equal (plist-get (car (plist-get (cdr (assoc "self" (plist-get workflow :jobs))) :steps)) :retry-from) 0)))
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  a:
+    steps:
+      - run: one.sh
+        name: one
+        retry-from: two
+      - run: two.sh
+        name: two
+        retry-from: three
+      - run: x
+        name: one
+      - run: y
+        name: Big
+        retry-from: 9
+      - agent: build
+        retry-from: one
+")))
+    (should-not workflow)
+    (should (equal (+test-awf--said problems)
+                   '((error 7 "retry-from two: a step after it (its retry starts again at one before it, or itself)")
+                     (error 10 "retry-from three: no such step of its job (one, two)")
+                     (error 12 "name one: another step's of its job")
+                     (error 14 "name Big: a lowercase letter, then lowercase letters, digits or -")
+                     (error 15 "retry-from 9: no such step of its job (one, two)")
+                     (warning 17 "retry-from: an agent step isn't retried (its script's are): ignored"))))))
+
 (ert-deftest agent-workflow-files/a-check-an-agent-can-change ()
   "A run: of a file of the branch: warned (its agents can change it); one of
 .agent-workflow/, a command, a script: not."
@@ -523,7 +583,7 @@ end, its branch deleted once merged."
     (should (assoc "screenshots" (agent-workflow-profiles +test-root)))
     (should (assoc "ci" (agent-workflow-profiles +test-root)))))
 
-;; github.sh and github-sync.sh: a stand-in gh (its runs and logs from
+;; github's scripts (check, push, watch, sync): a stand-in gh (its runs and logs from
 ;; GH_RUNS, GH_PENDING, GH_LOGGED_OUT), a bare origin, a clone of it on main
 ;; standing in for your checkout and the issue's worktree.
 
@@ -549,9 +609,11 @@ esac
     gh))
 
 (defun +test-awf--github (name script &rest env)
-  "SCRIPT (github.sh, github-sync.sh) run in a clone on main of a bare
-origin (a commit there), named NAME, ENV more of its environment (GH_RUNS
-...): (EXIT OUTPUT CLONE ORIGIN), CLONE your checkout and its worktree."
+  "SCRIPT (github-check.sh...) run in a clone on main of a bare origin (a
+commit there), named NAME, ENV more of its environment (GH_RUNS ...) and
+how it's set up (:ahead a commit origin hasn't, :behind origin one it
+hasn't, :off-main, :no-remote, :no-gh, :logged-out): (EXIT OUTPUT CLONE
+ORIGIN), CLONE your checkout and its worktree."
   (let* ((dir (+test-awf--dir name))
          (origin (expand-file-name "origin.git" dir))
          (clone (file-name-as-directory (expand-file-name "clone" dir)))
@@ -571,8 +633,17 @@ origin (a commit there), named NAME, ENV more of its environment (GH_RUNS
       (+test-awf--file clone "b.el" "two\n")
       (funcall git clone "add" "b.el")
       (funcall git clone "commit" "-q" "-m" "second"))
+    (when (plist-get env :behind)
+      (let ((other (expand-file-name "other" dir)))
+        (funcall git dir "clone" "-q" origin other)
+        (+test-awf--file (file-name-as-directory other) "c.el" "theirs\n")
+        (funcall git other "add" "c.el")
+        (funcall git other "commit" "-q" "-m" "theirs")
+        (funcall git other "push" "-q" "origin" "main")))
     (when (plist-get env :off-main)
       (funcall git clone "checkout" "-q" "-b" "other"))
+    (when (plist-get env :no-remote)
+      (funcall git clone "remote" "remove" "origin"))
     (with-temp-buffer
       (let* ((default-directory clone)
              (process-environment
@@ -596,47 +667,61 @@ origin (a commit there), named NAME, ENV more of its environment (GH_RUNS
   (let ((default-directory origin))
     (string-trim (shell-command-to-string "git rev-parse main"))))
 
-(ert-deftest agent-workflow-files/github-sh ()
-  "github.sh: no gh, gh logged out, your checkout not on main: it fails (2)
-at once. Your main pushed (commits origin hasn't), none to push: on; its
-runs green: 0; one failed: 1, its failed jobs' lines; still running: watched
-until done; none at all: 0, said; cancelled: 2."
-  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-none" "github.sh" :no-gh t)))
-    (should (eql exit 2))
-    (should (string-match-p "gh (GitHub's command line) isn't installed" out)))
-  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-out" "github.sh" :logged-out t)))
-    (should (eql exit 2))
-    (should (string-match-p "gh isn't logged in" out)))
-  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-off" "github.sh" :off-main t)))
-    (should (eql exit 2))
-    (should (string-match-p "your checkout is on other, not main" out)))
-  ;; Ahead of origin: pushed; green.
-  (pcase-let ((`(,exit ,out ,clone ,origin)
-               (+test-awf--github "gh-push" "github.sh" :ahead t :runs "7\tcompleted\tsuccess\tTests\n")))
+(ert-deftest agent-workflow-files/github-check-sh ()
+  "github-check.sh: no gh, gh logged out, your checkout not on main, no
+remote: the run fails (3), its last line why; else 0."
+  (pcase-dolist (`(,name ,setup ,why)
+                 '(("chk-none" (:no-gh t) "gh (GitHub's command line) isn't installed: brew install gh, then gh auth login")
+                   ("chk-out" (:logged-out t) "gh isn't logged in to GitHub: gh auth login")
+                   ("chk-off" (:off-main t) "your checkout is on other, not main: check out main, then run it again")
+                   ("chk-remote" (:no-remote t) "no remote origin to push to")))
+    (ert-info (name :prefix "case: ")
+      (pcase-let ((`(,exit ,out) (apply #'+test-awf--github name "github-check.sh" setup)))
+        (should (eql exit 3))
+        (should (equal (car (last (split-string out "\n"))) (concat "github-check.sh: " why))))))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "chk-ok" "github-check.sh")))
     (should (eql exit 0))
-    (should (string-match-p "pushed 1 commit(s)" out))
-    (should (string-match-p "green: Tests passed" out))
+    (should (string-prefix-p "github-check.sh: gh logged in, your checkout on main, origin: " out))))
+
+(ert-deftest agent-workflow-files/github-push-sh ()
+  "github-push.sh: commits origin hasn't, pushed; none, said (0); origin
+with commits yours hasn't, refused: the run asks (2)."
+  (pcase-let ((`(,exit ,out ,clone ,origin) (+test-awf--github "push-ahead" "github-push.sh" :ahead t)))
+    (should (eql exit 0))
+    (should (string-match-p "pushed 1 commit(s): origin/main now" out))
     (should (equal (+test-awf--origin-main origin)
                    (let ((default-directory clone)) (string-trim (shell-command-to-string "git rev-parse HEAD"))))))
-  ;; Nothing to push; failed: its logs, 1.
-  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-fail" "github.sh"
+  (pcase-let ((`(,exit ,out) (+test-awf--github "push-none" "github-push.sh")))
+    (should (eql exit 0))
+    (should (string-match-p "nothing to push: origin/main has" out)))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "push-refused" "github-push.sh" :ahead t :behind t)))
+    (should (eql exit 2))
+    (should (string-match-p "refused (origin/main has commits your main hasn't)" out))))
+
+(ert-deftest agent-workflow-files/github-watch-sh ()
+  "github-watch.sh: origin's main's runs green: 0; one failed: 1, its
+failed jobs' lines; still running: watched until done; none at all: 0,
+said; cancelled: 2."
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-green" "github-watch.sh"
+                                                :runs "7\tcompleted\tsuccess\tTests\n8\tcompleted\tskipped\tLint\n")))
+    (should (eql exit 0))
+    (should (string-match-p "green: Tests, Lint passed" out)))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-fail" "github-watch.sh"
                                                 :runs "8\tcompleted\tfailure\tTests\n9\tcompleted\tsuccess\tLint\n")))
     (should (eql exit 1))
-    (should (string-match-p "nothing to push" out))
+    (should (string-match-p "GitHub Actions failed on main" out))
     (should (string-match-p "== Tests: failure (gh run view 8)" out))
     (should (string-match-p "FAILED lexer/escapes" out))
     (should-not (string-match-p "Lint:" out)))
-  ;; Still running: watched until it's done.
-  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-wait" "github.sh" :pending 2
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-wait" "github-watch.sh" :pending 2
                                                 :runs "10\tcompleted\tsuccess\tTests\n")))
     (should (eql exit 0))
     (should (string-match-p "green" out)))
-  ;; None at all.
-  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-no-runs" "github.sh")))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-none" "github-watch.sh")))
     (should (eql exit 0))
     (should (string-match-p "no GitHub Actions run" out)))
-  ;; Cancelled: you decide.
-  (pcase-let ((`(,exit ,out) (+test-awf--github "gh-cancel" "github.sh" :runs "11\tcompleted\tcancelled\tTests\n")))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-cancel" "github-watch.sh"
+                                                :runs "11\tcompleted\tcancelled\tTests\n")))
     (should (eql exit 2))
     (should (string-match-p "was cancelled" out))))
 
@@ -888,6 +973,41 @@ stops."
   (should-not (plist-get (+test-awf--dry-run '(("review" "changes")) nil) :branch))
   (should (string-suffix-p "Its branch: deleted, merged into the main branch.\n"
                            (agent-workflow--dry-text (+test-awf--dry-run nil nil)))))
+
+(ert-deftest agent-workflow-files/a-dry-run-retry-from-and-exit-3 ()
+  "A dry run of a step with retry-from: its 1 fixed, its job again from
+that step (it runs again too, its own tries), the steps named; a 3: the
+run fails."
+  (let* ((workflow (car (+test-awf--workflow "description: x
+jobs:
+  green:
+    steps:
+      - run: check.sh
+        name: check
+      - run: push.sh
+        name: push
+      - run: watch.sh
+        name: watch
+        retries: 5
+        retry-from: push
+        on-fail: build
+" '("build") "dry.yml")))
+         (profiles (list (cons "build" (list :name "build"))))
+         (dry (lambda (exits) (agent-workflow-dry-run workflow :info '(:id "demo-1" :type "task")
+                                                      :exits exits :profiles profiles :pool 3))))
+    (should (equal (car (plist-get (funcall dry '(("green.3" 1 1 0))) :waves))
+                   '("green: its run step 1 (check) passes"
+                     "green: its run step 2 (push) passes"
+                     "green: its step 3 (watch) returns 1: an agent (build) fixes it, run again from step 2 (push)"
+                     "green: its run step 2 (push) passes (try 2)"
+                     "green: its step 3 (watch) returns 1: an agent (build) fixes it, run again from step 2 (push)"
+                     "green: its run step 2 (push) passes (try 3)"
+                     "green: its run step 3 (watch) passes (try 3)"
+                     "green: done (done)")))
+    (should (equal (plist-get (funcall dry '(("green.3" 1 1 1 1 1 1))) :stopped)
+                   "green: its step 3 (watch) returns 1, its retries used up: it asks you"))
+    (should (equal (plist-get (funcall dry '(("green.1" 3))) :stopped)
+                   "green: its step 1 (check) returns 3: the run fails"))))
 
 (ert-deftest agent-workflow-files/a-dry-run-stopping ()
   "Where it stops: the loop guard, retries used up; a job its if skips."

@@ -535,7 +535,39 @@ growing (no end)."
                            (plist-get (agent-workflow--pane-rounds-element) :tasks))
                    '(("build" "done") ("review → changes" "done") ("docs → replaced" "queued")
                      ("build · round 2" "done") ("review · round 2 → approved" "done") ("merge" "running"))))
-    (should-not (plist-get (car (last (plist-get (agent-workflow--pane-rounds-element) :tasks))) :end))))
+    (should-not (plist-get (car (last (plist-get (agent-workflow--pane-rounds-element) :tasks))) :end)))
+  ;; The run failed: its round failed, red.
+  (with-temp-buffer
+    (setq-local agent-workflow--pane-rounds
+                (list (list :job "green" :round 1 :start 100.0 :end 110.0 :outcome "failed")))
+    (should (equal (plist-get (car (plist-get (agent-workflow--pane-rounds-element) :tasks)) :status) "failed"))))
+
+(ert-deftest agent-workflow-pane/a-failed-run ()
+  "A run that failed: its state line says why, red; its job failed (✗, an
+error in the graph), its steps done up to the one that failed, named, what
+each does after its name."
+  (let* ((workflow '(:name "github"
+                     :jobs (("green" :name "green"
+                             :steps ((:kind run :run "check.sh" :name "check")
+                                     (:kind run :run "push.sh" :name "push")
+                                     (:kind run :run "watch.sh"))))))
+         (run (agent-workflow-run--make :project "/p/" :issue "demo-1" :state 'failed
+                                        :why "green: its step 2, push (push.sh): refused"
+                                        :workflow workflow :spent '(:cost 0 :tokens 0) :active 60
+                                        :jobs (list (cons "green" (list :status 'failed :step 1))))))
+    (should (string-prefix-p "✗ failed: green: its step 2, push (push.sh): refused"
+                             (agent-workflow--pane-state-line run)))
+    (should (equal (plist-get (agent-workflow--pane-header run) :face) "error"))
+    (let ((node (car (plist-get (agent-workflow--pane-graph run) :nodes))))
+      (should (equal (plist-get node :label) "green ✗"))
+      (should (equal (plist-get node :status) "error")))
+    (let ((item (with-temp-buffer
+                  (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+                  (agent-workflow--pane-job run "green" (cdr (assoc "green" (agent-workflow-run-jobs run)))))))
+      (should (equal (plist-get item :status) "failed"))
+      (should (equal (mapcar (lambda (step) (list (plist-get step :name) (plist-get step :status) (plist-get step :detail)))
+                             (plist-get item :steps))
+                     '(("check" "done" "run: check.sh") ("push" "failed" "run: push.sh") ("run: watch.sh" "pending" nil)))))))
 
 (ert-deftest agent-workflow-pane/where-in-words ()
   "Its state in a line: its mark, its time, what it spent, its tokens, each

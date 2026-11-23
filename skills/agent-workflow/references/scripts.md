@@ -14,10 +14,14 @@ Its environment: `ISSUE`, `BRANCH`, `MAIN` (the user's checkout), `MAIN_BRANCH`,
 | It returns | Then |
 |---|---|
 | 0 | the next step |
-| 1 | the work is wrong: its output goes to the job's agent (or one with the step's `on-fail` profile, in a job with none), which fixes it and says done; the step runs again, up to its `retries` |
+| 1 | the work is wrong: its output goes to the job's agent (or one with the step's `on-fail` profile, in a job with none), which fixes it and says done; the step runs again (from its `retry-from` step), up to its `retries` |
+| 3 | it can't go on: the run failed (its last line why), its agents stopped, its issue open again: for what no agent can fix (a tool missing, the wrong branch) |
 | another code, or past its `timeout` | it broke: no agent is sent; the run asks the user (run it again, skip it, stop) |
 
 Retries used up, the run asks the user: go on (with a note for the agent fixing it), skip the step, or stop.
+
+`retry-from: STEP` (an earlier step of its job: its `name`, or its number from 1): its fix runs the job again from
+there, those steps too, its retries counted on it. For a check of what an earlier step made: a push, then CI watched.
 
 ```yaml
 - run: make test
@@ -27,12 +31,18 @@ Retries used up, the run asks the user: go on (with a note for the agent fixing 
   run: |
     import json, sys
     sys.exit(0 if json.load(open("coverage.json"))["percent"] >= 80 else 1)
+- name: push
+  run: .agent-workflow/scripts/push.sh
+- name: watch
+  run: .agent-workflow/scripts/watch.sh
+  retries: 5
+  retry-from: push
 ```
 
 ## elisp:
 
 Lisp in the user's Emacs, `if`'s helpers bound, in the job's place: returning is 0; `(signal 'agent-workflow-fail
-'("why"))` is 1; any other error, it broke. Quick: it blocks Emacs.
+'("why"))` is 1; `(signal 'agent-workflow-abort '("why"))` is 3; any other error, it broke. Quick: it blocks Emacs.
 
 ## uses: merge
 

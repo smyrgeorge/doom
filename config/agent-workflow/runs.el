@@ -59,7 +59,7 @@
   dir                    ; its folder: its journal, state, workflow
   workflow               ; its workflow, as it started (a plist)
   info                   ; its issue as it started (a plist: beads.el)
-  state                  ; queued, running, waiting (for you), done, cancelled
+  state                  ; queued, running, waiting (for you), done, cancelled, failed
   why                    ; what it waits for, in words; nil
   jobs                   ; each job's state: ((NAME . PLIST)...)
   order                  ; when it was started: the queue's second key
@@ -96,7 +96,7 @@ started from the shell (`agent-workflow-from-shell').")
   "Non-nil while runs are started from the shell (cmd/agent-workflow run):
 no pane opens for them.")
 
-(defconst agent-workflow--ended '(done cancelled)
+(defconst agent-workflow--ended '(done cancelled failed)
   "A run's states once it's over.")
 
 (defun agent-workflow-runs-of (&optional project)
@@ -148,7 +148,14 @@ commit as its round started."
 
 (defun agent-workflow--journal (run event &rest data)
   "Append EVENT (a string) with DATA (keys and values, as JSON takes them)
-to RUN's journal."
+to RUN's journal. DATA naming a step of a job (:job, :step) has its name
+too (:name), if it has one."
+  (when-let* (((not (plist-member data :name)))
+              (job (plist-get data :job))
+              (index (plist-get data :step))
+              ((natnump index))
+              (name (plist-get (nth index (plist-get (agent-workflow--job-spec run job) :steps)) :name)))
+    (setq data (append data (list :name name))))
   (let ((coding-system-for-write 'utf-8-unix)
         (create-lockfiles nil))
     (write-region (concat (json-serialize (append (list :t (agent-workflow--now) :ev event)
@@ -892,11 +899,16 @@ end."
         (agent-workflow-back run (agent-workflow--first-editing run job)
                              :note (format "The branch was rebased onto the main branch, its conflicts resolved by %s's agent: see that your work still holds." job)
                              :by job))
-       ;; A step its agent fixed: run again.
+       ;; A step its agent fixed: run again, from its retry-from step.
        ((plist-get state :retry)
-        (let ((index (plist-get state :retry)))
+        (let* ((index (plist-get state :retry))
+               (from (agent-workflow--retry-from run job index)))
           (agent-workflow--job-set run job :retry nil :resolving nil)
-          (agent-workflow--step-start run job index)))
+          (unless (= from index)
+            (let ((steps (plist-get (agent-workflow--job-spec run job) :steps)))
+              (agent-workflow--journal run "retry-from" :job job :step index
+                                       :from from :from-name (plist-get (nth from steps) :name))))
+          (agent-workflow--step-start run job from)))
        ;; Its result waits for your OK, if its step or job says so.
        ((agent-workflow--needs-approval-p run job)
         (agent-workflow--ask-approval run job))
@@ -906,6 +918,12 @@ end."
           (if (nth next (plist-get (agent-workflow--job-spec run job) :steps))
               (agent-workflow--step-start run job next)
             (agent-workflow--job-end run job))))))))
+
+(defun agent-workflow--retry-from (run job index)
+  "Where step INDEX of JOB of RUN, fixed, runs again from: its retry-from
+step (an earlier one), else itself."
+  (let ((from (plist-get (nth index (plist-get (agent-workflow--job-spec run job) :steps)) :retry-from)))
+    (if (and (integerp from) (<= 0 from index)) from index)))
 
 (defun agent-workflow--first-editing (run job)
   "RUN's first job that edits and ran, not JOB: where a resolved conflict
@@ -1166,8 +1184,9 @@ JOB hasn't run, or STEP isn't one."
       (agent-workflow--refuse "%s hasn't run in %s" job (agent-workflow-run-name run)))
     (unless (and (natnump step) (< step (length steps)))
       (user-error "%s has no step %s (%d step%s)" job step (length steps) (if (= (length steps) 1) "" "s")))
-    (when (eq (agent-workflow-run-state run) 'cancelled)
-      (user-error "%s was cancelled" (agent-workflow-run-name run)))
+    (when (memq (agent-workflow-run-state run) '(cancelled failed))
+      (user-error "%s %s" (agent-workflow-run-name run)
+                  (if (eq (agent-workflow-run-state run) 'failed) "failed" "was cancelled")))
     (let ((session (or (plist-get state :session)
                        (when-let* ((agent (plist-get state :agent))) (agent-workflow-agent-session agent))))
           (lost (and discard (agent-workflow-back-lost run job))))
@@ -1213,7 +1232,8 @@ JOB hasn't run, or STEP isn't one."
 
 (defun agent-workflow--read-run (project)
   "A run of PROJECT you pick (the only one, not asked)."
-  (let ((runs (seq-remove (lambda (run) (eq (agent-workflow-run-state run) 'cancelled)) (agent-workflow-runs-of project))))
+  (let ((runs (seq-remove (lambda (run) (memq (agent-workflow-run-state run) '(cancelled failed)))
+                          (agent-workflow-runs-of project))))
     (pcase runs
       ('nil (user-error "No run in %s" (file-name-nondirectory (directory-file-name project))))
       (`(,run) run)

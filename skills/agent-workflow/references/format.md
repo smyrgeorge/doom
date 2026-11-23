@@ -40,16 +40,19 @@ One of these, and only one:
 | `elisp` | Lisp in the user's Emacs | (quick: it blocks Emacs) |
 | `uses` | a built-in: `merge` | `with`: `{suite: make test}` |
 
-And: `timeout` (a duration: a script's), `retries` (how many times a script failing with 1 is fixed and run again; 0 by
-default), `on-fail` (the profile of the agent sent to fix a step, in a job with no agent of its own), `approve`.
+And: `name` (a name, its own in its job), `timeout` (a duration: a script's), `retries` (how many times a script
+failing with 1 is fixed and run again; 0 by default), `retry-from` (where its retry starts again: an earlier step of
+its job, its name or number from 1), `on-fail` (the profile of the agent sent to fix a step, in a job with no agent of
+its own), `approve`.
 
 ## What the check refuses
 
 An error leaves the workflow out: YAML that doesn't parse; no jobs; a job's name that isn't one; `needs` naming no
 job, or its own; needs going round (`a → b → a`); a step with no kind, or two; `agent` or `on-fail` naming no profile
-of the project's; `uses` naming no built-in; `shell` without `run`; `prompt` on a step that isn't an agent's; an `if`
+of the project's; `uses` naming no built-in; `shell` without `run`; a step's `name` that isn't one, or another's of its job;
+`retry-from` naming no step of its job, or one after it; `prompt` on a step that isn't an agent's; an `if`
 that isn't one Lisp form; `elisp` that isn't Lisp; a variable that isn't one; `jobs.X.notes` of no job; an outcome's
 `rerun` naming no job; a number, duration or `true`/`false` that isn't one.
 
 A warning keeps it: an unknown key; a `for` type Beads doesn't have; `{jobs.X.notes}` of a job not before it (empty
-then); `retries` or `on-fail` on an agent step; no description; a `run:` of a file outside `.agent-workflow/`.
+then); `retries`, `retry-from` or `on-fail` on an agent step; no description; a `run:` of a file outside `.agent-workflow/`.

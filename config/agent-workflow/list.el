@@ -87,7 +87,7 @@ those not over first, then the latest."
                                   (propertize (symbol-name state)
                                               'face (pcase state
                                                       ('waiting 'warning) ('done 'success)
-                                                      ('cancelled 'shadow) (_ 'default)))
+                                                      ('cancelled 'shadow) ('failed 'error) (_ 'default)))
                                   (agent-workflow--duration-words (plist-get spent :time))
                                   (if (> (plist-get spent :cost) 0) (format "$%.2f" (plist-get spent :cost)) "")
                                   (agent-workflow--runs-what run)))))

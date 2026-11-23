@@ -18,8 +18,11 @@
 ;;         - agent: build           an LLM in agent-shell, with a profile
 ;;           prompt: Build {issue}.
 ;;         - run: tests/run.sh      any program (inline: run: |, shell:
-;;           timeout: 10m           python...)
+;;           name: test             python...); a name, its step's
+;;           timeout: 10m
 ;;           retries: 3
+;;           retry-from: test       its retry starts again there (an
+;;                                  earlier step, or its own: the default)
 ;;     review:
 ;;       needs: build               after it (a list too)
 ;;       if: (eq (issue-type) 'bug) Lisp, evaluated as the job starts
@@ -30,15 +33,16 @@
 ;;       concurrency: 1
 ;;   A step is agent: (with prompt:), run: (with shell:), elisp: (Lisp in
 ;;   your Emacs) or uses: (a built-in: merge, its with: {suite: make
-;;   test}), with timeout:, retries:, on-fail: (a profile), approve:.
+;;   test}), with name:, timeout:, retries:, retry-from: (a step, its name
+;;   or number), on-fail: (a profile), approve:.
 ;;
 ;; WORKFLOW, read: a plist (:name :file :description :for :concurrency
 ;; :budget (:cost :tokens :time) :max-rounds :branch (delete|keep; nil:
 ;; delete) :jobs ((NAME . JOB)...)), JOB (:name :needs
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
 ;; :max-rounds :steps (STEP...)), STEP (:kind agent|run|elisp|uses :agent
-;; :prompt :run :shell :elisp :uses :with :timeout :retries :on-fail
-;; :approve),
+;; :name :prompt :run :shell :elisp :uses :with :timeout :retries
+;; :retry-from (an index of its job's steps) :on-fail :approve),
 ;; durations in seconds. Nothing in it is run here: if: and elisp: are only
 ;; read, to check them.
 ;;
@@ -48,11 +52,13 @@
 ;; then letters, digits or -, a name: not its file's, a needs, rerun or
 ;; {jobs.X...} naming no job, needs going round, a step with no kind or two,
 ;; an agent: or on-fail: naming no profile, a uses: no built-in, a shell:
-;; without run:, an if: not one Lisp form, an elisp: not Lisp, a variable not
+;; without run:, a step's name: not a name or another's of its job, a
+;; retry-from: naming no step of its job or one after it, an if: not one Lisp form, an elisp: not Lisp, a variable not
 ;; one there is, a number, duration or true/false that isn't one, a branch:
 ;; neither delete nor keep. Warnings:
 ;; an unknown key, a for: type Beads doesn't have, a {jobs.X...} of a job not
-;; before it, retries: or on-fail: on an agent step, no description.
+;; before it, retries:, retry-from: or on-fail: on an agent step, no
+;; description.
 
 (require 'cl-lib)
 (require 'seq)
@@ -75,7 +81,8 @@ is only warned about).")
   "A workflow's keys.")
 
 (defconst agent-workflow--step-keys
-  '("agent" "prompt" "run" "shell" "elisp" "uses" "with" "timeout" "retries" "on-fail" "approve")
+  '("name" "agent" "prompt" "run" "shell" "elisp" "uses" "with" "timeout" "retries" "retry-from" "on-fail"
+    "approve")
   "A step's keys.")
 
 (defconst agent-workflow--job-keys
@@ -354,8 +361,46 @@ file). NEEDS: every job's needs (an alist), PROFILES the profiles' names
                                 (cl-loop for step in steps for i from 0
                                          collect (agent-workflow--step-read
                                                   step (append path (list "steps" i)) job needs profiles
-                                                  problem count duration bool))))))))
+                                                  problem count duration bool))))))
+        (when (plist-get read :steps)
+          (setq read (plist-put read :steps
+                                (agent-workflow--steps-named
+                                 (plist-get read :steps)
+                                 (if own (list path)
+                                   (cl-loop for i from 0 below (length (plist-get read :steps))
+                                            collect (append path (list "steps" i))))
+                                 problem))))))
     read))
+
+(defun agent-workflow--steps-named (steps paths problem)
+  "A job's STEPS (each at its path in PATHS) with their names checked (one
+a step, in its job) and each retry-from: an index of theirs, an earlier
+step or its own (a number from 1, or a step's name): those that aren't,
+said with PROBLEM and left out."
+  (let ((names (mapcar (lambda (step) (plist-get step :name)) steps)))
+    (cl-loop for step in steps for at in paths for i from 0
+             collect
+             (let ((name (plist-get step :name))
+                   (from (plist-get step :retry-from)))
+               (when (and name (member name (seq-take names i)))
+                 (funcall problem 'error (append at '("name")) "name %s: another step's of its job" name))
+               (if (not from)
+                   step
+                 (let ((index (if (integerp from)
+                                  (and (<= from (length steps)) (1- from))
+                                (seq-position names from)))
+                       (at (append at '("retry-from"))))
+                   (cond
+                    ((not index)
+                     (funcall problem 'error at "retry-from %s: no such step of its job (%s)" from
+                              (if (delq nil (copy-sequence names))
+                                  (string-join (delete-dups (delq nil (copy-sequence names))) ", ")
+                                (format "1 to %d" (length steps))))
+                     (plist-put step :retry-from nil))
+                    ((> index i)
+                     (funcall problem 'error at "retry-from %s: a step after it (its retry starts again at one before it, or itself)" from)
+                     (plist-put step :retry-from nil))
+                    (t (plist-put step :retry-from index)))))))))
 
 (defun agent-workflow--step-read (spec path job needs profiles problem count duration bool)
   "A step of the job JOB, SPEC as read, at PATH: a plist (see the top of
@@ -453,6 +498,21 @@ this file). As `agent-workflow--job-read' for the rest."
                            (agent-workflow--listed profiles)))
                  (t (setq step (plist-put step :on-fail value)))))
           ("approve" (setq step (plist-put step :approve (funcall bool at value "approve"))))
+          ("name"
+           (if (and (stringp value) (string-match-p agent-workflow--name-regexp value))
+               (setq step (plist-put step :name value))
+             (funcall problem 'error at "name %s: a lowercase letter, then lowercase letters, digits or -"
+                      (agent-workflow--shown value))))
+          ("retry-from"
+           (cond ((equal kind "agent")
+                  (funcall problem 'warning at "retry-from: an agent step isn't retried (its script's are): ignored"))
+                 ((or (and (integerp value) (> value 0))
+                      (and (stringp value) (string-match-p agent-workflow--name-regexp value)))
+                  ;; Its step found once the job's are read
+                  ;; (`agent-workflow--steps-named').
+                  (setq step (plist-put step :retry-from value)))
+                 (t (funcall problem 'error at "retry-from %s: a step of its job, its name or its number (from 1)"
+                             (agent-workflow--shown value)))))
           (_ (funcall problem 'warning at "unknown key %s: ignored" key)))))
     step))
 

@@ -11,7 +11,7 @@ or several fitting, a project whose workflows the user doesn't trust. Blocked: q
 queue: priority, then the order started.
 
 From the shell, `run` follows its runs: their logs printed as they go, a line per event (`10:42:07  doom-a1b  review
-started`), until they all end (exit 0 done, 1 one cancelled); what needs the user says the command answering it. An
+started`), until they all end (exit 0 done, 1 one cancelled or failed); what needs the user says the command answering it. An
 agent running it should start it with `--detach` (the reply only, at once) and read later: `agent-workflow logs ISSUE`
 (its log; `-f`: followed to its end; `--json`: its journal), `agent-workflow status [ISSUE]` (JSON: its state, jobs,
 question, spend, where its work is: worktree, branch, base, what it merges into; without ISSUE, every run not over).
@@ -27,7 +27,8 @@ Its jobs start once their `needs` are done; those that don't need each other at 
 feature at its limit, 3 of 3 agents`). An agent step ends with the agent's `cmd/agent-workflow done OUTCOME "notes"`;
 a turn ending without it, the run waits for the user.
 
-States: `queued`, `running`, `waiting` (for the user, saying why), `done`, `cancelled`.
+States: `queued`, `running`, `waiting` (for the user, saying why), `done`, `cancelled`, `failed` (a script's exit 3,
+saying why: its issue open again, its branch kept).
 
 ## Its questions
 

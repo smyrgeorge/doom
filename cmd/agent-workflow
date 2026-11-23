@@ -17,7 +17,7 @@
 #                                "workflow", "run", "state", "why", "log",
 #                                "journal", "state_file"}...], "refused":
 #                                [{"issue", "error"}...]}. Exit 0 all done, 1
-#                                one cancelled (or none started)
+#                                one cancelled or failed (or none started)
 #   agent-workflow logs ISSUE [-f] [--json]
 #                                ISSUE's latest run's log (--json: its
 #                                journal); -f: followed until the run ends
@@ -329,7 +329,7 @@ field() {  # field NAME JSON: each string value of NAME in JSON, a line each
   printf '%s' "$2" | grep -o "\"$1\":\"[^\"]*\"" | sed "s/^\"$1\":\"//; s/\"\$//"
 }
 
-follow() {  # follow ISSUES LOGS STATES: newline-separated, in order; exit 0 all done, 1 one cancelled
+follow() {  # follow ISSUES LOGS STATES: newline-separated, in order; exit 0 all done, 1 one cancelled or failed
   local issues logs states i n file state all failed last=""
   IFS=$'\n' read -r -d '' -a issues <<< "$1"
   IFS=$'\n' read -r -d '' -a logs <<< "$2"
@@ -355,7 +355,7 @@ follow() {  # follow ISSUES LOGS STATES: newline-separated, in order; exit 0 all
       state=$(grep -o '"state":"[a-z]*"' "${states[$i]}" 2>/dev/null | head -1)
       case "$state" in
         *'"done"') ;;
-        *'"cancelled"') failed=1 ;;
+        *'"cancelled"'|*'"failed"') failed=1 ;;
         *) all=0 ;;
       esac
     done

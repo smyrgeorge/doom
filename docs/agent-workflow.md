@@ -106,8 +106,9 @@ A step does one thing:
 | `elisp` | Lisp in your Emacs (quick: it blocks it). Lisp with `: ` in it goes under `elisp: \|` |
 | `uses` | A built-in: `merge`, with `with: {suite: make test}` |
 
-With `timeout` (`45s`, `10m`, `1h30m`), `retries` (a script's), `on-fail` (the profile of the agent a failing step
-goes to, in a job with none) and `approve`.
+With `name` (a name of its own in its job: its pane, its log say it), `timeout` (`45s`, `10m`, `1h30m`), `retries`
+(a script's), `retry-from` (where its retry starts again: an earlier step of its job, its name or number), `on-fail`
+(the profile of the agent a failing step goes to, in a job with none) and `approve`.
 
 ### Variables
 
@@ -180,16 +181,16 @@ them for any issue). They run once you trust this config (see [Trust](#trust)).
 | Workflow | Jobs |
 |---|---|
 | screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` profile looks at each changed one and commits the good ones; review (changes: capture again); merge |
-| github | green: its script pushes your main and watches its GitHub Actions until they're done (`.agent-workflow/scripts/github.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits, then it's pushed and watched again, 5 times at most; sync: your main fast-forwarded to what was pushed, the fixes with it (`github-sync.sh`); close (a merge: the issue closed) |
+| github | green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits, and the job runs again from its push (`retry-from`), 5 times at most; sync: your main fast-forwarded to what was pushed, the fixes with it (`github-sync.sh`); close (a merge: the issue closed) |
 
 The `screenshots` profile (`.agent-workflow/profiles/`) may read, look at images and commit; it never takes them
 again, nor changes anything else. The `ci` profile may read, edit, run the tests and commit; it never pushes (the
 script does) nor runs the Actions again.
 
-github needs gh, logged in (`brew install gh`, `gh auth login`): without it the run fails at once, as it does when your
-checkout isn't on main. Nothing to push (origin has your main already): it watches the Actions of origin's main; done
+github needs gh, logged in (`brew install gh`, `gh auth login`): without it the run fails at once (✗ failed, saying
+why), as it does when your checkout isn't on main. Nothing to push (origin has your main already): it watches the Actions of origin's main; done
 already, their verdict at once; none at all (5 minutes), it says so and goes on. A run cancelled on GitHub, a push
-refused (origin has commits you haven't), your main moved on while it ran: the run asks you. Its script reads these
+refused (origin has commits you haven't), your main moved on while it ran: the run asks you. Its scripts read these
 from Emacs's environment (`(setenv "GITHUB_POLL" "60")`):
 
 | Variable | Default | |
@@ -267,7 +268,7 @@ over, its agent stops, and the next jobs start. Every job done or skipped, the r
 it has changes not committed). Its branch then goes too (`branch: delete`, the default), once its work is in the main
 branch (merged by the run's merge, or before): never a commit lost. Not merged, or its worktree kept, the branch stays,
 its log saying why (`its branch feat/doom-a1b-lexer kept: not merged into main`). `branch: keep` keeps it, always; a
-cancelled run keeps both.
+cancelled run, or one that failed, keeps both.
 
 ### Following a run
 
@@ -307,7 +308,7 @@ review asks: Should the escape table also cover Unicode escapes?
 ```
 
 - **Its state**, a line coloured by it: ● running, ◆ needs you, ○ queued (why), ✓ done (`no commit`, its branch got
-  none), ✗ cancelled; how long it ran, what it spent and its tokens, each against its budget if it has one.
+  none), ✗ cancelled, ✗ failed (why); how long it ran, what it spent and its tokens, each against its budget if it has one.
 - **Where its work is** (git): ⎇ its branch, the branch and commit of your checkout it started from → what its merge
   goes into (merged, deleted, once it is; `no commit · deleted`, nothing to merge; its worktree removed, said; a reading job's snapshot); **Worktree** and
   **Magit** open its worktree. Under it, its files changed since it started (`RET` opens one; those not committed yet,
@@ -349,12 +350,12 @@ install`). Needs you shows it: a permission's own buttons (Allow, Reject...), pr
 as Agent UI's own, answered there (agent-shell's form gets the answer, as its Submit gives it); and **Go to it**, its
 session shown at the question. Answered, there or in its session, the run goes on.
 
-A run waiting for you is said by a notification while Emacs isn't in front (`agent-workflow-needs-you`, `SPC t N`),
+A run waiting for you, or one that failed, is said by a notification while Emacs isn't in front (`agent-workflow-needs-you`, `SPC t N`),
 however it was started; a click opens its pane. Its agents' sessions aren't said on their own (a turn over, a
 permission, a question): their run says what needs you.
 
 From the shell, `run` prints its runs' logs as they go, a line per event (time, issue, job, what happened), until
-they all end: exit 0 when they're done, 1 when one was cancelled. What needs you says how to answer it from there.
+they all end: exit 0 when they're done, 1 when one was cancelled or failed. What needs you says how to answer it from there.
 Ctrl-C stops following, never the runs.
 
 ```sh
@@ -410,14 +411,28 @@ is kept in the run's `logs/`.
 | It returns | Then |
 |---|---|
 | 0 | The next step |
-| 1 | The work is wrong: its output goes to the job's agent (or, in a job with none, one with the step's `on-fail` profile), which fixes it and says done; the step runs again, up to its `retries` (0 by default) |
+| 1 | The work is wrong: its output goes to the job's agent (or, in a job with none, one with the step's `on-fail` profile), which fixes it and says done; the step runs again (from its `retry-from` step, those between with it), up to its `retries` (0 by default) |
+| 3 | It can't go on: the run failed, its last line saying why. Its agents stopped, its issue open again, its branch and worktree kept, as cancelled |
 | another code, or runs out of its `timeout` | It broke: no agent is sent |
 
 Retries used up, or a step that broke, the run asks you (`M-x agent-workflow-confirm`, `cmd/agent-workflow confirm`):
 go on (with a note for the agent fixing it; for one that broke, run it again), skip the step, or stop.
 
+A step whose fix has to run what's before it again (a push before a check of what was pushed) says where from:
+
+```yaml
+steps:
+  - name: push
+    run: .agent-workflow/scripts/push.sh
+  - name: watch
+    run: .agent-workflow/scripts/watch.sh
+    retries: 5
+    retry-from: push        # fixed: pushed again, then watched
+    on-fail: ci
+```
+
 An `elisp:` step runs in your Emacs, the same helpers as `if` bound: returning is 0, `(signal 'agent-workflow-fail
-'("why"))` is 1, any other error, it broke. It blocks Emacs while it runs: keep it quick.
+'("why"))` is 1, `(signal 'agent-workflow-abort '("why"))` is 3, any other error, it broke. It blocks Emacs while it runs: keep it quick.
 
 `uses: merge` merges the issue's branch into the main branch (origin's HEAD, else `main`, else `master`), never
 pushing:
