@@ -1304,8 +1304,8 @@ tracked yet, added."
                         (agent-workflow--git-lines "diff" "--numstat" "--no-renames" base)))
          (statuses (mapcar (lambda (line) (split-string line "\t"))
                            (agent-workflow--git-lines "diff" "--name-status" "--no-renames" base)))
-         (uncommitted (append (agent-workflow--git-lines "diff" "--name-only" "HEAD")
-                              (agent-workflow--git-lines "ls-files" "--others" "--exclude-standard")))
+         (untracked (agent-workflow--git-lines "ls-files" "--others" "--exclude-standard"))
+         (uncommitted (append (agent-workflow--git-lines "diff" "--name-only" "HEAD") untracked))
          (count (lambda (text) (and text (string-match-p "\\`[0-9]+\\'" text) (string-to-number text)))))
     (append
      (mapcar (lambda (status)
@@ -1317,8 +1317,26 @@ tracked yet, added."
                        :removed (funcall count (nth 1 stat))
                        :uncommitted (and (member path uncommitted) t))))
              statuses)
-     (mapcar (lambda (path) (list :path path :status 'added :uncommitted t))
-             (agent-workflow--git-lines "ls-files" "--others" "--exclude-standard")))))
+     (mapcar (lambda (path) (list :path path :status 'added :uncommitted t)) untracked))))
+
+(defun agent-workflow--where-stamp (run)
+  "What changes as RUN's place is worked on, read without git: the times
+of its git folder's HEAD, index and HEAD's log (a commit, a reset, a
+checkout, a file staged), nil if it has none. Equal twice: nothing
+committed or staged there in between."
+  (let* ((dir (if (agent-workflow-run-checkout-p run)
+                  (agent-workflow-run-project run)
+                (agent-workflow-worktree-directory (agent-workflow-run-project run) (agent-workflow-run-issue run))))
+         (dot (expand-file-name ".git" dir))
+         (git (cond ((file-directory-p dot) dot)
+                    ((file-readable-p dot)
+                     (with-temp-buffer
+                       (insert-file-contents dot)
+                       (and (re-search-forward "^gitdir: *\\(.+\\)$" nil t)
+                            (expand-file-name (match-string 1) dir)))))))
+    (when git
+      (mapcar (lambda (name) (file-attribute-modification-time (file-attributes (expand-file-name name git))))
+              '("HEAD" "index" "logs/HEAD")))))
 
 (defun agent-workflow--where-commits (dir base branch)
   "BRANCH's commits since BASE, read in DIR, the latest first: ((SHORT

@@ -390,6 +390,37 @@ pick it; it stays cancelled, no agent started."
       (should-not (seq-some (lambda (agent) (buffer-live-p (agent-workflow-agent-buffer agent)))
                             (agent-workflow-agents project))))))
 
+(ert-deftest agent-workflow-pane/git-left-alone-while-it-waits ()
+  "Its tick, while its run waits for you: git asked once, then not again
+until something's committed or staged in its worktree. Its files changed:
+one ls-files --others."
+  (+test-awp "git-quiet"
+    (let* ((issue (+test-awr--issue project "A gate" "--type" "task"))
+           (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
+           (agent-workflow--where-age 0)
+           (calls nil))
+      (+test-awr--finish-step run "build" "built it")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'waiting))))
+      (cl-flet ((git-calls (thunk)
+                  (setq calls nil)
+                  (cl-letf* ((process-file-real (symbol-function 'process-file))
+                             ((symbol-function 'process-file)
+                              (lambda (program &rest args)
+                                (when (equal program "git") (push (nthcdr 3 args) calls))
+                                (apply process-file-real program args))))
+                    (funcall thunk))
+                  (length calls)))
+        (git-calls #'agent-workflow--pane-where-tick)
+        (should (= (git-calls #'agent-workflow--pane-where-tick) 0))
+        (should (= (git-calls #'agent-workflow--pane-where-tick) 0))
+        ;; A commit there: looked at again.
+        (let ((worktree (agent-workflow-worktree-directory project issue)))
+          (+test-awr--commit worktree "c.txt" "a commit")
+          (should (> (git-calls #'agent-workflow--pane-where-tick) 0))
+          (git-calls (lambda () (agent-workflow--where-files worktree "HEAD")))
+          (should (= (seq-count (lambda (args) (equal (car args) "ls-files")) calls) 1))))
+      (agent-workflow-cancel run))))
+
 (defun +test-awp--ask (pane)
   "The question in PANE's Needs you, if there's one."
   (ignore-errors (agent-ui-get "ask" :canvas pane :section "needs-you")))
