@@ -3,7 +3,8 @@
 ;; config/agent-ui/elements.el. Appending a step whose name is there changes
 ;; it in its place. A step may have steps of its own, drawn under it;
 ;; appended to by its "parent" name. Its time: how long it ran (from running
-;; to done or failed, or given), counting while it runs.
+;; to done or failed, or given), counting while it runs or waits (◆: for the
+;; user).
 ;;
 ;;   ✓ Run the tests      41s  412 passed
 ;;   ▛ Build              12s
@@ -14,7 +15,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 
-(defconst agent-ui-steps--statuses '(pending running done failed skipped))
+(defconst agent-ui-steps--statuses '(pending running waiting done failed skipped))
 
 (defconst agent-ui-steps--keys '(:name :status :detail :seconds :started :steps)
   "What a step has (started: when it began running, noted).")
@@ -49,7 +50,7 @@ its status a symbol, its sub-steps too. An error naming WHERE (\"step 2\",
              (steps (plist-get step :steps)))
         (unless (stringp name) (bad "has no name"))
         (unless (memq sym agent-ui-steps--statuses)
-          (bad (format "has status %s; one of: pending, running, done, failed, skipped"
+          (bad (format "has status %s; one of: pending, running, waiting, done, failed, skipped"
                        (agent-ui--show-value status))))
         (when (and detail (not (stringp detail)))
           (setq detail (agent-ui-cell detail)))
@@ -84,7 +85,7 @@ how long it ran, once done or failed. A step noted already: as it is."
               (let ((status (format "%s" (or (plist-get step :status) "pending")))
                     (step (copy-sequence step)))
                 (cond
-                 ((and (equal status "running") (not (plist-get step :started)))
+                 ((and (member status '("running" "waiting")) (not (plist-get step :started)))
                   (setq step (plist-put step :started now)))
                  ((and (member status '("done" "failed")) (plist-get step :started)
                        (not (plist-get step :seconds)))
@@ -106,6 +107,7 @@ through, unlike the steps kept."
     ('done (propertize "✓" 'face 'agent-ui-success))
     ('failed (propertize "✗" 'face 'agent-ui-error))
     ('running (agent-ui-spinner ctx 'agent-ui-accent))
+    ('waiting (propertize "◆" 'face 'agent-ui-warning))
     ('skipped (propertize "–" 'face 'agent-ui-muted))
     (_ (propertize "○" 'face 'agent-ui-muted))))
 
@@ -122,7 +124,7 @@ through, unlike the steps kept."
     (cond
      ((memq (plist-get step :status) '(pending skipped)) "")
      (seconds (agent-ui-format-duration seconds))
-     ((and started (eq (plist-get step :status) 'running))
+     ((and started (memq (plist-get step :status) '(running waiting)))
       (agent-ui-format-duration (max 0 (- (funcall agent-ui-clock) started))))
      (t ""))))
 
@@ -268,9 +270,10 @@ merged so too), the others after."
                    ((stringp old) step)
                    (t
                     ;; Running again (after done, failed...): timed anew,
-                    ;; not with its last run's start and time.
-                    (when (and (equal (format "%s" (plist-get step :status)) "running")
-                               (not (equal (format "%s" (plist-get old :status)) "running"))
+                    ;; not with its last run's start and time. Waiting
+                    ;; (for the user) and running again: the same run.
+                    (when (and (member (format "%s" (plist-get step :status)) '("running" "waiting"))
+                               (not (member (format "%s" (plist-get old :status)) '("running" "waiting")))
                                (not (plist-member step :started)))
                       (setq old (agent-ui--plist-delete (agent-ui--plist-delete old :started) :seconds)))
                     (cl-loop for (k v) on step by #'cddr
@@ -507,8 +510,8 @@ text's colour until it's answered."
 (agent-ui-define steps
   "A checklist whose steps change state as work goes on. A step is a name
 \(pending), or {\"name\", \"status\", \"detail\", \"seconds\", \"steps\"}:
-status one of pending, running (a spinner), done, failed, skipped; detail a
-note after it; seconds how long it took (else timed from running to done);
+status one of pending, running (a spinner), waiting (◆: for the user, timed
+as running), done, failed, skipped; detail a note after it; seconds how long it took (else timed from running to done);
 steps its own, drawn under it. Appending a step whose name is there changes
 it in its place: append {\"steps\": [{\"name\": \"Build\", \"status\":
 \"done\"}]}; with \"parent\": \"Build\", among that step's own. With APPROVE,

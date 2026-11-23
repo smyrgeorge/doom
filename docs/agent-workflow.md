@@ -258,40 +258,62 @@ cancelled run keeps both.
 ### Following a run
 
 Started from Emacs, a run opens its **pane**, an [Agent UI](agent-ui.md) canvas named `ISSUE · WORKFLOW`, a pane per
-run (tiling lays them out). Under the issue's title, its state, time and budget, where its work is, then its sections,
-each under its divider:
+run (tiling lays them out). Under the issue's title, its state in a line, then where its work is (git), then its
+sections, each under its divider:
 
 ```text
 doom-a1b: Lexer escapes
-feature · running · 12m 30s
-spent $1.24 of $15, 12m 30s of 3h
-⎇ feat/doom-a1b-lexer-escapes: 2 commits, 3 files not committed
-from main at 9bf1963 · merges into main
-  .agent-shell/agent-workflow/worktrees/doom-a1b/  its worktree
-▾ Run ● ──────────────────────────────────────
-✓ build   4m 12s  agent build
-● review  2m 05s  agent review · round 2
+◆ needs you · 15m of 3h · $1.24 of $15 · 182k tokens
+
+⎇ feat/doom-a1b-lexer-escapes   main@62651d7 → main
+⏵ Worktree   ⏵ Magit
+M lexer.el       +2 −0 not committed
+A test-lexer.el  +1 −0
+5f20fa9  Lexer: escapes tested
+2b437d2  Lexer: string escapes
+
+▾ Run ◆ ──────────────────────────────────────
+[build ✓ r2] → [docs ✓ r2] → [review ◆ r2] → [merge ○]     (a graph)
+✓ build      2m 34s  agent build · round 2
+– security           its if: (member "security" (issue-labels))
+◆ review    12m 56s  agent review · round 2 · needs you
 ○ merge
-▸ build ✓ 4m 12s · 2 hidden ──────────────────
-▾ review ● 2m ────────────────────────────────
-…the reviewer's plan, its questions
+Rounds: build ▬▬ docs ▬ review → changes ▬ build · round 2 ▬ …   (a timeline)
+▾ Needs you ◆ review ─────────────────────────
+Unicode
+review asks: Should the escape table also cover Unicode escapes?
+ ( ) Yes, \u{…} and \U…  the table gets both forms
+ ( ) No, not now         a ticket of its own for later
+ ✎ Add a note
+ ⏵ Answer   ⏵ Go to it
+▸ build ✓ 2m 34s · 2 hidden ──────────────────
 ▾ Log ────────────────────────────────────────
-10:42:07  doom-a1b  review  started
+13:10  build   done (2m 34s)
+13:13  review  waits for you: its agent asks you: Should the escape table …
 ```
 
-- **Where its work is**, above them: its branch, its commits, the files changed and not committed; the branch and
-  commit of your checkout it started from, and what its merge goes into (merged, once it is). Under it, its worktree
-  and the snapshots its reading jobs read: `RET` opens one. Started from a branch other than the main one, it says so:
-  that branch's commits not in the main one are merged with it. Looked at again every 15 seconds while the pane is open
+- **Its state**, a line coloured by it: ● running, ◆ needs you, ○ queued (why), ✓ done, ✗ cancelled; how long it ran,
+  what it spent and its tokens, each against its budget if it has one.
+- **Where its work is** (git): ⎇ its branch, the branch and commit of your checkout it started from → what its merge
+  goes into (merged, deleted, once it is; its worktree removed, said; a reading job's snapshot); **Worktree** and
+  **Magit** open its worktree. Under it, its files changed since it started (`RET` opens one; those not committed yet,
+  said), and its latest commits. Started from a branch other than the main one, it says so: that branch's commits not
+  in the main one are merged with it. Looked at again every 15 seconds while the pane is open
   (`agent-workflow-pane-where-every`); once the run is done, its worktree gone, its branch deleted or kept (above).
-- **Run:** its jobs, each a step of a checklist, its steps under it: status, agent, round, try, time.
-- **Needs you**, only while the run waits for you: what on, as a question you answer there: an approval (approve, or
-  reject with a note), the loop guard (go on with a note for each agent, accept it as it is, or stop), retries used up,
-  a step that broke, a merge waiting, its budget used up (go on with more), a turn that ended without `done` (run its
-  step again, with a note, or cancel the run), its agent asking in its session (below).
+- **Run:** a graph of its jobs and their `needs`, each marked and coloured by its state, its round past 1; its
+  checklist, each job a step, its steps under it (status, agent, round, try, time; a job waiting for you ◆, timed;
+  one skipped, its `if`); its rounds as a timeline, each job's runs as bars, one sent back said (`review → changes`),
+  the one running growing.
+- **Needs you**, only while the run waits for you: what on, a line coloured, its answers buttons: an approval
+  (Approve, or Reject…, which asks its note), retries used up, a step that broke (go on, skip it, stop; go on with a
+  note…), a merge waiting, a turn that ended without `done` (run its step again, with a note…, or cancel the run); the
+  loop guard and its budget used up, a form (a note for each agent; more budget). Its agent asking in its session
+  (below): a permission, its own buttons; a question (its form), Agent UI's own, answered here as its Submit does (one
+  with options a choice, its free answer the note; several a form), **Go to it** beside it opening its session there.
 - **A section per agent:** its session's canvas, shown there: its plan, its progress, its questions. Its job over, it's
   folded (`▸ build ✓ 4m 12s`). `RET` on its divider opens its session; `TAB` on any divider folds it.
-- **Log:** its last events.
+- **Log:** its last events, shorter than its log.txt: no issue on each line, its job in a column, a job's agent step
+  starting and ending left out, a job done how long it took; a wait a warning, what went wrong an error.
 
 Emacs draws the run's sections from its journal, never an agent. A run done: its checklist finished, its pane closes
 after Agent UI's countdown (**Keep** keeps it); a run waiting, failed or cancelled keeps it. Closing it (`q`) stops
@@ -304,7 +326,8 @@ them again.
 
 An agent asking you in its session, for a permission (a tool its profile doesn't allow without asking) or with a
 question (its form), holds its turn: its run waits for you, saying what (`build: its agent asks for your permission: npm
-install`). Needs you shows it: a permission's own buttons (Allow, Reject...), pressed from there, and **Go to it**, its
+install`). Needs you shows it: a permission's own buttons (Allow, Reject...), pressed from there; a question, its form
+as Agent UI's own, answered there (agent-shell's form gets the answer, as its Submit gives it); and **Go to it**, its
 session shown at the question. Answered, there or in its session, the run goes on.
 
 A run waiting for you is said by a notification while Emacs isn't in front (`agent-workflow-needs-you`, `SPC t N`),

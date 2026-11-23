@@ -61,12 +61,17 @@ ending without its done makes it wait for you, a moment)."
   (let ((end (+ (float-time) 0.3)))
     (while (< (float-time) end) (accept-process-output nil 0.02))))
 
-(defun +test-awp--answer (pane choice &optional note)
-  "PANE's question answered: CHOICE picked, NOTE given, its Answer pressed."
-  (agent-ui-update "ask" (list :selected (list choice) :note-text note) :canvas pane :section "needs-you")
+(defun +test-awp--answer (pane label &optional note)
+  "PANE's question answered: its button LABEL pressed, NOTE the note it asks
+\(a label ending in …)."
   (with-current-buffer pane
-    (let ((agent-ui-pressed "needs-you/ask"))
-      (funcall agent-ui-action-function "the answer" t))))
+    (cl-letf (((symbol-function 'read-string) (lambda (&rest _) (or note ""))))
+      (let ((agent-ui-pressed "needs-you/ask"))
+        (funcall agent-ui-action-function label t)))))
+
+(defun +test-awp--labels (element)
+  "ELEMENT's buttons' labels."
+  (mapcar (lambda (action) (plist-get action :label)) (plist-get element :actions)))
 
 ;; ====== ITS LOG ======
 
@@ -148,15 +153,24 @@ checklist's countdown closes it all."
           (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) (push buffer shown))))
             (agent-ui-section-open))
           (should (eq (car shown) (agent-workflow-agent-buffer agent)))))
-      ;; What it shows.
+      ;; What it shows: its state in a line; a graph of its jobs, its
+      ;; checklist, its rounds; its log without its issue.
       (let ((header (agent-ui-get "run" :canvas pane))
-            (jobs (agent-ui-get "jobs" :canvas pane :section "run")))
+            (jobs (agent-ui-get "jobs" :canvas pane :section "run"))
+            (graph (agent-ui-get "graph" :canvas pane :section "run")))
         (should (equal (plist-get header :title) (concat issue ": A pane")))
-        (should (string-match-p "\\`feature · \\(running\\|waits for you\\) · " (plist-get header :text)))
+        (should (string-match-p "\\`\\(● running\\|◆ needs you\\) · [0-9]+s\\'" (plist-get header :text)))
         (should (equal (mapcar (lambda (s) (plist-get s :name)) (plist-get jobs :steps)) '("build" "docs" "review")))
-        (should (member (plist-get (car (plist-get jobs :steps)) :status) '("running" "pending"))))
-      (should (seq-some (lambda (line) (string-match-p (format "  %s  build  started\\'" (regexp-quote issue)) line))
-                        (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines)))
+        (should (member (plist-get (car (plist-get jobs :steps)) :status) '("running" "waiting" "pending")))
+        (should (equal (mapcar (lambda (node) (plist-get node :id)) (plist-get graph :nodes)) '("build" "docs" "review")))
+        (should (equal (plist-get graph :edges) '(("build" "docs") ("build" "review"))))
+        (should (string-match-p "\\`build [●◆]\\'" (plist-get (car (plist-get graph :nodes)) :label)))
+        (should (equal (mapcar (lambda (task) (plist-get task :name))
+                               (plist-get (agent-ui-get "rounds" :canvas pane :section "run") :tasks))
+                       '("build"))))
+      (should (member "build   started"
+                      (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
+                              (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
       ;; Build done: folded, done; its agent's elements gone with it.
       (+test-awr--finish run "build")
       (should (+test-awr--wait (lambda () (null (agent-ui-elements :canvas pane :section "job.build")))))
@@ -169,12 +183,18 @@ checklist's countdown closes it all."
       (should (equal (+test-awp--sections pane) '("run" "job.build" "job.review" "log")))
       (+test-awr--finish run "review" "approved")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
-      ;; Its log: every event a line, the pane's the same.
-      (let ((lines (agent-workflow-log-lines run)))
+      ;; Its log: every event a line; the pane's shorter: no issue, a job's
+      ;; agent step's start and end left out, a job done how long it took.
+      (let ((lines (agent-workflow-log-lines run))
+            (pane-lines (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
+                                (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
         (should (string-match-p "  ·  run done\\'" (car (last lines))))
         (should (seq-some (lambda (line) (string-match-p "  docs  skipped" line)) lines))
-        (should (equal (last (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines) 3)
-                       (last lines 3)))
+        (should (seq-some (lambda (line) (string-match-p "step 1 started" line)) lines))
+        (should (equal (car (last pane-lines)) "·       run done"))
+        (should (seq-some (lambda (line) (string-match-p "\\`review  done: approved ([0-9]+s)\\'" line)) pane-lines))
+        (should (member "docs    skipped (if: (eq (issue-type) 'bug))" pane-lines))
+        (should-not (seq-some (lambda (line) (string-match-p "step 1" line)) pane-lines))
         ;; log.txt gone: made again from the journal, the same.
         (delete-file (agent-workflow--log-path run))
         (should (equal (mapcar (lambda (line) (substring line 10)) (agent-workflow-log-lines run))
@@ -210,7 +230,10 @@ again, approved: the run done."
         (should (equal (+test-awp--sections pane t) '("run" "needs-you" "job.build" "log")))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "needs-you"))
                        '("ask" "look")))
-        (should (equal (plist-get (agent-ui-get "ask" :canvas pane :section "needs-you") :options) '("Approve" "Reject")))
+        (let ((ask (agent-ui-get "ask" :canvas pane :section "needs-you")))
+          (should (equal (plist-get ask :type) "text"))
+          (should (string-prefix-p "◆ build: its result waits for your OK" (plist-get ask :text)))
+          (should (equal (+test-awp--labels ask) '("Approve" "Reject…"))))
         (should (string-match-p "Notes: built it" (plist-get (agent-ui-get "look" :canvas pane :section "needs-you") :text)))
         ;; Said once a wait: its turn's end without done before, then this.
         (should (string-match-p "its result waits for your OK" (cdar said)))
@@ -220,9 +243,9 @@ again, approved: the run done."
         ;; Waiting for you, it opens by itself only once you looked.
         (should-not shown)
         ;; Rejected without a note: refused, still asked.
-        (should (string-match-p "Say why in a note"
-                                (cadr (should-error (+test-awp--answer pane "Reject") :type 'user-error))))
-        (+test-awp--answer pane "Reject" "shorter, please")
+        (should (string-match-p "No note"
+                                (cadr (should-error (+test-awp--answer pane "Reject…") :type 'user-error))))
+        (+test-awp--answer pane "Reject…" "shorter, please")
         (+test-awp--settle)
         ;; Its agent told (it runs, its turn ends without done: waiting).
         (should (+test-awr--wait (lambda () (seq-some (lambda (p) (string-search "shorter, please" p))
@@ -230,7 +253,7 @@ again, approved: the run done."
         ;; Asked again: approved, done.
         (+test-awr--finish-step run "build" "shorter now")
         (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
-        (should (equal (plist-get (agent-ui-get "ask" :canvas pane :section "needs-you") :options) '("Approve" "Reject")))
+        (should (equal (+test-awp--labels (agent-ui-get "ask" :canvas pane :section "needs-you")) '("Approve" "Reject…")))
         (should (= (seq-count (lambda (s) (string-match-p "your OK" (cdr s))) said) 2))
         (+test-awp--answer pane "Approve")
         (+test-awp--settle)
@@ -275,18 +298,18 @@ the question asked here again; answered there: running, Needs you gone."
       ;; Needs you: agent-shell's buttons, and Go to it.
       (should (+test-awr--wait (lambda () (+test-awp--ask pane))))
       (let ((ask (+test-awp--ask pane)))
-        (should (equal (plist-get ask :question) why))
-        (should (string-prefix-p "Allow" (car (plist-get ask :options))))
-        (should (equal (car (last (plist-get ask :options))) agent-workflow--pane-go-to-it))
+        (should (equal (plist-get ask :text) "◆ build asks for your permission: npm install"))
+        (should (string-prefix-p "Allow" (car (+test-awp--labels ask))))
+        (should (equal (car (last (+test-awp--labels ask))) agent-workflow--pane-go-to-it))
         ;; Allow, from the pane: its agent goes on; its turn over without
         ;; done, the usual wait.
-        (+test-awp--answer pane (car (plist-get ask :options))))
+        (+test-awp--answer pane (car (+test-awp--labels ask))))
       (+test-awp--settle)
       (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why run)
                                                  "build: its agent ended its turn without saying it's done"))))
       (should-not (agent-workflow-agent-asking run))
-      (should (+test-awr--wait (lambda () (equal (plist-get (+test-awp--ask pane) :options)
-                                                 '("Run its step again" "Cancel the run")))))
+      (should (+test-awr--wait (lambda () (equal (+test-awp--labels (+test-awp--ask pane))
+                                                 '("Run its step again" "Run it again, with a note…" "Cancel the run")))))
       (should (member "answered its agent, by you"
                       (mapcar (lambda (line) (car (last (split-string line "  ")))) (agent-workflow-log-lines run))))
       (should (equal (seq-filter (lambda (event) (member event '("asked" "answered"))) (+test-awr--journal run))
@@ -296,57 +319,159 @@ the question asked here again; answered there: running, Needs you gone."
       (agent-workflow--agent-event agent '((:event . elicitation-request)
                                            (:data (:message . "Retina or 1x?\nThe screen is 1x."))))
       (should (equal (agent-workflow-run-why run) "build: its agent asks you: Retina or 1x?"))
-      (should (+test-awr--wait (lambda () (equal (plist-get (+test-awp--ask pane) :options)
+      (should (+test-awr--wait (lambda () (equal (+test-awp--labels (+test-awp--ask pane))
                                                  (list agent-workflow--pane-go-to-it)))))
+      (should (equal (plist-get (+test-awp--ask pane) :text) "◆ build asks you: Retina or 1x?"))
       ;; Go to it: its session shown; asked here again, it still is.
       (+test-awp--answer pane agent-workflow--pane-go-to-it)
       (+test-awp--settle)
       (should (get-buffer-window (agent-workflow-agent-buffer agent)))
       (should (agent-workflow-agent-asking run))
       (should (+test-awp--ask pane))
-      (should-not (plist-get (+test-awp--ask pane) :selected))
       ;; Answered there: running, Needs you gone.
       (agent-workflow--agent-event agent '((:event . elicitation-response)))
       (should (eq (agent-workflow-run-state run) 'running))
       (should (+test-awr--wait (lambda () (not (member "needs-you" (+test-awp--sections pane t)))))))))
 
+(defun +test-awp--form (agent id schema)
+  "AGENT's session asks its form ID (agent-shell's elicitation/create, its
+SCHEMA's properties and required ones: alists), as Claude Code's
+AskUserQuestion does: drawn there, said."
+  (with-current-buffer (agent-workflow-agent-buffer agent)
+    (agent-shell-elicitation--on-create-request
+     :state (agent-shell--state)
+     :acp-request `((id . ,id) (method . "elicitation/create")
+                    (params . ((mode . "form") (message . "Should the escape table cover Unicode escapes?")
+                               (requestedSchema . ((type . "object") ,@schema))))))))
+
+(defun +test-awp--form-answered (agent id)
+  "AGENT's form ID: its status and values, as agent-shell has them."
+  (with-current-buffer (agent-workflow-agent-buffer agent)
+    (let ((form (agent-shell-elicitation--get (agent-shell--state) id)))
+      (list (map-elt form :status) (map-elt form :values)))))
+
+(ert-deftest agent-workflow-pane/its-agent-s-form-answered-there ()
+  "Its agent's question, its form in its session (AskUserQuestion's), in
+the pane as Agent UI's own: one with options a choice (its free answer the
+note), several a form; answered there as its Submit does, the run goes
+on; Go to it, beside."
+  (+test-awp "agent-form"
+    (let* ((issue (+test-awr--issue project "Ask a question"))
+           (run (car (car (agent-workflow-run (list issue) nil project))))
+           (pane (agent-workflow-run-pane run))
+           (agent (+test-awr--agent run "build"))
+           (custom agent-shell-elicitation--custom-answer-meta-key)
+           (select `((type . "string") (title . "Unicode")
+                     (oneOf . [((const . "both") (title . "Both forms") (description . "and their tests"))
+                               ((const . "braced") (title . "Only braced"))]))))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'waiting))))
+      ;; One question with options: a choice, its note the free answer.
+      (agent-workflow--job-set run "build" :status 'running :why nil)
+      (+test-awp--form agent 41 `((properties . ((question_0 . ,select)
+                                                 (question_0_custom . ((type . "string")
+                                                                       (_meta . ((,custom . ((questionId . "question_0")))))))))
+                                  (required . ["question_0"])))
+      (should (equal (plist-get (cdr (agent-workflow-agent-asking run)) :request) 41))
+      (should (+test-awr--wait (lambda () (equal (plist-get (+test-awp--ask pane) :type) "choice"))))
+      (let ((ask (+test-awp--ask pane)))
+        (should (equal (plist-get ask :question) "build asks: Should the escape table cover Unicode escapes?"))
+        (should (equal (plist-get ask :title) "Unicode"))
+        (should (equal (plist-get ask :options) '((:label "Both forms" :detail "and their tests") (:label "Only braced"))))
+        (should (eq (plist-get ask :note) t))
+        (should (equal (+test-awp--labels ask) (list agent-workflow--pane-go-to-it))))
+      (should (string-match-p "Choose one" (cadr (should-error (+test-awp--answer pane "the answer") :type 'user-error))))
+      (agent-ui-update "ask" '(:selected ("Only braced")) :canvas pane :section "needs-you")
+      (+test-awp--answer pane "the answer")
+      (+test-awp--settle)
+      (should (equal (+test-awp--form-answered agent 41) '(answered (("question_0" . "braced")))))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'running))))
+      (should (+test-awr--wait (lambda () (not (member "needs-you" (+test-awp--sections pane t))))))
+      ;; Its free answer, the note.
+      (+test-awp--form agent 42 `((properties . ((question_0 . ,select)
+                                                 (question_0_custom . ((type . "string")
+                                                                       (_meta . ((,custom . ((questionId . "question_0")))))))))))
+      (should (+test-awr--wait (lambda () (equal (plist-get (+test-awp--ask pane) :type) "choice"))))
+      (agent-ui-update "ask" '(:note-text "only \\x, for now") :canvas pane :section "needs-you")
+      (+test-awp--answer pane "the answer")
+      (+test-awp--settle)
+      (should (equal (+test-awp--form-answered agent 42) '(answered (("question_0_custom" . "only \\x, for now")))))
+      ;; Two questions: a form, its select and its yes or no.
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'running))))
+      (+test-awp--form agent 43 `((properties . ((question_0 . ,select)
+                                                 (tests . ((type . "boolean") (title . "With tests?")))))
+                                  (required . ["question_0" "tests"])))
+      (should (+test-awr--wait (lambda () (equal (plist-get (+test-awp--ask pane) :type) "form"))))
+      (should (equal (mapcar (lambda (field) (list (plist-get field :name) (plist-get field :type)))
+                             (plist-get (+test-awp--ask pane) :fields))
+                     '(("question_0" "select") ("tests" "boolean"))))
+      (agent-ui-update "ask" '(:values (:question_0 "Both forms" :tests t)) :canvas pane :section "needs-you")
+      (+test-awp--answer pane "the answer")
+      (+test-awp--settle)
+      (should (equal (car (+test-awp--form-answered agent 43)) 'answered))
+      (should (equal (sort (copy-sequence (cadr (+test-awp--form-answered agent 43)))
+                           (lambda (a b) (string< (car a) (car b))))
+                     '(("question_0" . "both") ("tests" . t))))
+      ;; Go to it, beside it: its session shown, the form still asked.
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'running))))
+      (+test-awp--form agent 44 `((properties . ((question_0 . ,select)))))
+      (should (+test-awr--wait (lambda () (+test-awp--ask pane))))
+      (+test-awp--answer pane agent-workflow--pane-go-to-it)
+      (+test-awp--settle)
+      (should (get-buffer-window (agent-workflow-agent-buffer agent)))
+      (should (eq (car (+test-awp--form-answered agent 44)) 'pending)))))
+
 ;; ====== WHERE ITS WORK IS ======
 
 (ert-deftest agent-workflow-pane/where-in-words ()
-  "Where a run's work is, in its header's words: its branch, its commits,
-what isn't committed, where it started, what it merges into (merged once
-it is); under it, its worktree and its reading jobs' snapshots; started
-from another branch than the main one, said."
-  (should (equal (agent-workflow--pane-where-lines
-                  '(:branch "feat/demo-1-x" :into "main" :own 2 :uncommitted 1 :worktree "/p/w/"
-                    :base (:branch "main" :commit "abcdef1234")))
-                 '("⎇ feat/demo-1-x: 2 commits, 1 file not committed" "from main at abcdef1 · merges into main")))
-  (should (equal (agent-workflow--pane-where-lines '(:branch "feat/demo-1-x" :into "main" :own 1 :merged t
-                                                     :base (:branch nil :commit "abcdef1234")))
-                 '("⎇ feat/demo-1-x: 1 commit, its worktree removed" "from a detached HEAD at abcdef1 · merged into main")))
-  (should (equal (agent-workflow--pane-where-lines '(:branch "feat/demo-1-x" :into "main" :own 0 :worktree "/p/w/"))
-                 '("⎇ feat/demo-1-x: no commit yet" "merges into main")))
-  (should (equal (agent-workflow--pane-where-lines '(:branch "feat/demo-1-x" :into "main" :own 0 :merged t))
-                 '("⎇ feat/demo-1-x: its worktree removed" "merged into main")))
-  (should-not (agent-workflow--pane-where-lines '(:into "main")))
+  "Its state in a line: its mark, its time, what it spent, its tokens, each
+against its budget. Where its work is: ⎇ its branch, where it started →
+what it merges into (merged, deleted once it is; its worktree removed,
+said; its reading jobs' snapshots); its files changed (not committed,
+said), its commits; started from another branch than the main one, said."
+  (let ((run (agent-workflow-run--make :project "/p/" :issue "demo-1" :state 'waiting
+                                       :workflow '(:name "feature" :budget (:cost 15 :time 10800))
+                                       :spent '(:cost 1.24 :tokens 182000) :active 900)))
+    (should (equal (agent-workflow--pane-state-line run) "◆ needs you · 15m of 3h · $1.24 of $15 · 182k tokens"))
+    (setf (agent-workflow-run-state run) 'running
+          (agent-workflow-run-workflow run) '(:name "feature")
+          (agent-workflow-run-spent run) '(:cost 0 :tokens 0))
+    (should (equal (agent-workflow--pane-state-line run) "● running · 15m")))
+  (should (equal (agent-workflow--pane-git-line
+                  '(:branch "feat/demo-1-x" :into "main" :worktree "/p/w/" :base (:branch "main" :commit "abcdef1234")))
+                 "⎇ feat/demo-1-x   main@abcdef1 → main"))
+  (should (equal (agent-workflow--pane-git-line '(:branch "feat/demo-1-x" :into "main" :merged t))
+                 "⎇ feat/demo-1-x   merged into main · its worktree removed"))
+  (should (equal (agent-workflow--pane-git-line '(:branch "feat/demo-1-x" :into "main" :deleted t :merged t))
+                 "⎇ feat/demo-1-x   deleted, merged into main"))
+  (should (equal (agent-workflow--pane-git-line '(:branch "feat/demo-1-x" :into "main" :worktree "/p/w/"
+                                                  :snapshots (("review" "/p/w@review/" "1234567890"))))
+                 "⎇ feat/demo-1-x   → main\nreview reads its snapshot at 1234567"))
+  (should-not (agent-workflow--pane-git-line '(:into "main")))
   (let ((run (agent-workflow-run--make :project "/p/" :issue "demo-1")))
-    (should (equal (agent-workflow--pane-where
-                    run '(:worktree "/p/w/" :into "main" :with 0 :snapshots (("review" "/p/w@review/" "1234567890"))))
-                   '((:id "where" :type "files" :dir "/p/"
-                      :files ((:path "w/" :note "its worktree") (:path "w@review/" :note "review's snapshot, at 1234567")))
-                     nil)))
-    (should (equal (agent-workflow--pane-where run '(:into "main" :with 3 :base (:branch "side" :commit "abc")))
-                   '(nil (:id "where-note" :type "text" :face "warning"
-                          :text "Started from side, not main: its 3 commits not in main are merged too."))))
-    (should (equal (agent-workflow--pane-where run '(:into "main" :with 3 :merged t :base (:branch "side" :commit "abc")))
-                   '(nil nil)))))
+    (pcase-let ((`(,git ,changes ,commits ,note)
+                 (agent-workflow--pane-git
+                  run '(:branch "feat/demo-1-x" :into "main" :worktree "/p/w/" :with 0
+                        :files ((:path "a.el" :status changed :added 2 :removed 1 :uncommitted t)
+                                (:path "b.el" :status added :added 3))
+                        :commits (("abc1234" "A commit"))))))
+      (should (equal (+test-awp--labels git) '("Worktree" "Magit")))
+      (should (equal changes '(:id "changes" :type "files" :dir "/p/w/" :tree :false
+                               :files ((:path "a.el" :status "changed" :added 2 :removed 1 :note "not committed")
+                                       (:path "b.el" :status "added" :added 3)))))
+      (should (equal (plist-get commits :text) "abc1234  A commit"))
+      (should-not note))
+    (should (equal (nth 3 (agent-workflow--pane-git run '(:into "main" :with 3 :base (:branch "side" :commit "abc"))))
+                   '(:id "where-note" :type "text" :face "warning"
+                     :text "Started from side, not main: its 3 commits not in main are merged too.")))
+    (should-not (nth 3 (agent-workflow--pane-git run '(:into "main" :with 3 :merged t :base (:branch "side" :commit "abc")))))))
 
 (ert-deftest agent-workflow-pane/where-its-work-is ()
-  "Started from a branch other than the main one: its header says its
-branch, where it started and what it merges into, its worktree under it,
-the start branch's commit merged too, said; a commit and a file changed by
-its agent, said once looked at again; status has the same; kept in its
-state.json. Done: its worktree removed, said."
+  "Started from a branch other than the main one: its git line says its
+branch, where it started and what it merges into, the start branch's
+commit merged too, said; a commit and a file changed by its agent, its
+files changed (not committed, said) and its commits, once looked at again;
+status has the same; kept in its state.json. Done: its worktree removed
+\(its branch kept: not merged), said."
   (+test-awp "where"
     (let* ((main (agent-workflow-main-branch project))
            (agent-workflow--where-age 0)
@@ -359,19 +484,20 @@ state.json. Done: its worktree removed, said."
            (pane (agent-workflow-run-pane run))
            (dir (progn (+test-awr--agent run "build") (agent-workflow-worktree-directory project issue)))
            (branch (agent-workflow-issue-branch issue "feature" "Where it is"))
-           (text (lambda () (plist-get (agent-ui-get "run" :canvas pane) :text))))
+           (git (lambda () (plist-get (agent-ui-get "git" :canvas pane) :text))))
       (should (equal (agent-workflow-run-base run) (list :branch "side" :commit base)))
-      (should (string-search (format "⎇ %s: no commit yet" branch) (funcall text)))
-      (should (string-search (format "from side at %s · merges into %s" (substring base 0 7) main) (funcall text)))
-      (should (equal (plist-get (agent-ui-get "where" :canvas pane) :files)
-                     (list (list :path (file-relative-name dir project) :note "its worktree"))))
+      (should (equal (funcall git) (format "⎇ %s   side@%s → %s" branch (substring base 0 7) main)))
+      (should-not (ignore-errors (agent-ui-get "changes" :canvas pane)))
       (should (equal (plist-get (agent-ui-get "where-note" :canvas pane) :text)
                      (format "Started from side, not %s: its 1 commit not in %s is merged too." main main)))
       ;; Its agent commits, changes a file: said once looked at again.
       (+test-awr--commit dir "a.txt" "a commit of its own")
       (write-region "x" nil (expand-file-name "b.txt" dir))
       (agent-workflow--pane-where-tick)
-      (should (string-search ": 1 commit, 1 file not committed" (funcall text)))
+      (should (equal (plist-get (agent-ui-get "changes" :canvas pane) :files)
+                     '((:path "a.txt" :status "added" :added 1 :removed 0)
+                       (:path "b.txt" :status "added" :note "not committed"))))
+      (should (string-suffix-p "  a commit of its own" (plist-get (agent-ui-get "commits" :canvas pane) :text)))
       (should (equal (plist-get (aref (plist-get (agent-workflow--request-status project nil) :runs) 0) :where)
                      (list :worktree dir :branch branch :deleted :false
                            :base (list :branch "side" :commit base) :into main
@@ -387,8 +513,9 @@ state.json. Done: its worktree removed, said."
       (+test-awr--finish run "review" "approved")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should-not (file-exists-p dir))
-      (should (string-search ": 1 commit, its worktree removed" (funcall text)))
-      (should-not (ignore-errors (agent-ui-get "where" :canvas pane))))))
+      (should (equal (funcall git) (format "⎇ %s   side@%s → %s · its worktree removed"
+                                           branch (substring base 0 7) main)))
+      (should-not (ignore-errors (agent-ui-get "changes" :canvas pane))))))
 
 ;; ====== EVERY RUN ======
 

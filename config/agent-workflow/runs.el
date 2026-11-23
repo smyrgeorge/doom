@@ -828,7 +828,8 @@ In `agent-workflow-agent-event-functions'."
     ('permission-request
      (agent-workflow--agent-asks agent 'permission (map-elt (map-elt (map-elt event :data) :tool-call) :title)))
     ('elicitation-request
-     (agent-workflow--agent-asks agent 'question (map-elt (map-elt event :data) :message)))
+     (agent-workflow--agent-asks agent 'question (map-elt (map-elt event :data) :message)
+                                 (map-elt (map-elt event :data) :request-id)))
     ((or 'permission-response 'elicitation-response)
      (agent-workflow--agent-answered agent))
     ('init-finished
@@ -952,8 +953,9 @@ its issue's (nil: none yet), :deleted non-nil once its run deleted it
 \(merged), :base where it started (:branch B :commit C;
 nil: unknown), :into what its merge goes into, :own its commits, :with
 its base branch's the merge takes too, :uncommitted the files changed and
-not committed, :merged non-nil once it's merged, :snapshots its reading
-jobs' ((JOB DIR COMMIT)...). Read from git if it was more than
+not committed, :merged non-nil once it's merged, :files its files changed
+since its base (`agent-workflow--where-files'), :commits its latest
+\((SHORT SUBJECT)...), :snapshots its reading jobs' ((JOB DIR COMMIT)...). Read from git if it was more than
 `agent-workflow--where-age' seconds ago, or FRESH; nil if git can't say."
   (let ((cached (gethash run agent-workflow--where-cache)))
     (if (and cached (not fresh) (< (- (float-time) (car cached)) agent-workflow--where-age))
@@ -1001,12 +1003,52 @@ jobs' ((JOB DIR COMMIT)...). Read from git if it was more than
                                        (seq-some (lambda (step) (equal (plist-get step :uses) "merge"))
                                                  (plist-get (agent-workflow--job-spec run (car job)) :steps))))
                                 (agent-workflow-run-jobs run)))
+          :files (and live (agent-workflow--where-files dir (or (plist-get base :commit) into)))
+          :commits (and made (agent-workflow--where-commits (if live dir project)
+                                                            (or (plist-get base :commit) into) made))
           :snapshots (delq nil (mapcar (lambda (job)
                                          (when-let* (((memq (plist-get (cdr job) :status) '(running waiting)))
                                                      (snapshot (plist-get (cdr job) :snapshot))
                                                      ((file-directory-p (nth 0 snapshot))))
                                            (list (car job) (nth 0 snapshot) (nth 2 snapshot))))
                                        (agent-workflow-run-jobs run))))))
+
+(defconst agent-workflow--where-commits-shown 5
+  "A run's latest commits its where has, at most.")
+
+(defun agent-workflow--where-files (dir base)
+  "The files changed in the worktree DIR since BASE (a commit, a branch),
+committed or not: ((:path P :status added|changed|deleted :added N
+:removed N :uncommitted BOOL)...), in their order; a file new and not
+tracked yet, added."
+  (let* ((default-directory dir)
+         (stats (mapcar (lambda (line) (split-string line "\t"))
+                        (agent-workflow--git-lines "diff" "--numstat" "--no-renames" base)))
+         (statuses (mapcar (lambda (line) (split-string line "\t"))
+                           (agent-workflow--git-lines "diff" "--name-status" "--no-renames" base)))
+         (uncommitted (append (agent-workflow--git-lines "diff" "--name-only" "HEAD")
+                              (agent-workflow--git-lines "ls-files" "--others" "--exclude-standard")))
+         (count (lambda (text) (and text (string-match-p "\\`[0-9]+\\'" text) (string-to-number text)))))
+    (append
+     (mapcar (lambda (status)
+               (let* ((path (nth 1 status))
+                      (stat (seq-find (lambda (stat) (equal (nth 2 stat) path)) stats)))
+                 (list :path path
+                       :status (pcase (car status) ("A" 'added) ("D" 'deleted) (_ 'changed))
+                       :added (funcall count (nth 0 stat))
+                       :removed (funcall count (nth 1 stat))
+                       :uncommitted (and (member path uncommitted) t))))
+             statuses)
+     (mapcar (lambda (path) (list :path path :status 'added :uncommitted t))
+             (agent-workflow--git-lines "ls-files" "--others" "--exclude-standard")))))
+
+(defun agent-workflow--where-commits (dir base branch)
+  "BRANCH's commits since BASE, read in DIR, the latest first: ((SHORT
+SUBJECT)...), `agent-workflow--where-commits-shown' at most."
+  (let ((default-directory dir))
+    (mapcar (lambda (line) (split-string line "\t"))
+            (agent-workflow--git-lines "log" (format "--max-count=%d" agent-workflow--where-commits-shown)
+                                       "--format=%h%x09%s" (concat base ".." branch)))))
 
 ;; ====== ITS AGENT ASKS ======
 ;; An agent asking you in its session (agent-shell's permission-request: a
@@ -1019,7 +1061,7 @@ jobs' ((JOB DIR COMMIT)...). Read from git if it was more than
 
 (defun agent-workflow-agent-asking (run)
   "RUN's job whose agent asks you in its session, and what: (JOB . ASKS),
-ASKS (:kind permission|question :what WORDS :why WHY), or nil."
+ASKS (:kind permission|question :what WORDS :why WHY [:request ID]), or nil."
   (seq-some (lambda (job)
               (let* ((state (cdr job))
                      (asks (plist-get state :agent-asks)))
@@ -1028,9 +1070,10 @@ ASKS (:kind permission|question :what WORDS :why WHY), or nil."
                      (cons (car job) asks))))
             (agent-workflow-run-jobs run)))
 
-(defun agent-workflow--agent-asks (agent kind what)
+(defun agent-workflow--agent-asks (agent kind what &optional request)
   "AGENT asks you KIND (permission, question) of WHAT (its tool call's
-title, the question; nil): its job, running, waits for you."
+title, the question; nil), REQUEST its question's id (its form in its
+session: answered in its pane): its job, running, waits for you."
   (when-let* ((found (agent-workflow--agent-run agent)))
     (pcase-let ((`(,run . ,job) found))
       (when (eq (plist-get (agent-workflow--job run job) :status) 'running)
@@ -1040,7 +1083,8 @@ title, the question; nil): its job, running, waits for you."
                (why (format "%s: its agent asks %s%s" job
                             (if (eq kind 'permission) "for your permission" "you")
                             (if what (concat ": " what) ""))))
-          (agent-workflow--job-set run job :agent-asks (list :kind kind :what what :why why))
+          (agent-workflow--job-set run job :agent-asks (append (list :kind kind :what what :why why)
+                                                               (and request (list :request request))))
           (agent-workflow--journal run "asked" :job job :kind "agent" :what what)
           (agent-workflow--wait run job why))))))
 

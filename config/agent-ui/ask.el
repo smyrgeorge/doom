@@ -191,7 +191,16 @@ Note: NOTE\" (PICKED a list of what each picked item answers)."
   "The Answer button (LABEL): nothing picked nor noted, said; else the answer
 \(`agent-ui-ask-answer-text' of WHAT, QUESTION, ANSWERS and the note) into the
 session's prompt, sent at once (an answer goes straight to the agent); then
-the element answered (locked)."
+the element answered (locked). The element's actions after it, on its row
+\(CTX's :actions: `agent-ui--actions-beside-answer-p')."
+  (concat
+   (agent-ui-ask--answer-only props ctx what question answers label)
+   (if-let* ((actions (agent-ui--actions (plist-get ctx :actions) nil)))
+       (concat "   " actions)
+     "")))
+
+(defun agent-ui-ask--answer-only (props ctx what question answers label)
+  "The Answer button alone (see `agent-ui-ask-answer-button')."
   (agent-ui-button
    (propertize label 'face 'agent-ui-action)
    (lambda ()

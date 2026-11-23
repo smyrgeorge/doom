@@ -269,8 +269,7 @@ deleted, its log saying so; its pane's where and status's too."
       (let ((where (agent-workflow-run-where run t)))
         (should (equal (plist-get where :branch) branch))
         (should (plist-get where :deleted))
-        (should (equal (car (agent-workflow--pane-where-lines where)) (format "⎇ %s: deleted, its run done" branch)))
-        (should (string-suffix-p (format "merged into %s" main) (cadr (agent-workflow--pane-where-lines where))))))))
+        (should (equal (agent-workflow--pane-git-line where) (format "⎇ %s   deleted, merged into %s" branch main)))))))
 
 (ert-deftest agent-workflow-steps/its-branch-kept ()
   "A run done, its branch not merged (no merge in its workflow): kept,

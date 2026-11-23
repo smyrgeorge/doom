@@ -501,10 +501,24 @@ newlines spaces; too long for the width, wrapped (it was one line cut with
                             'face 'agent-ui-title)
                 "\n")))))
 
+(defconst agent-ui--answer-row-types '("choice" "compare" "rank")
+  "The questions whose actions are drawn beside their Answer button, on its
+row (see `agent-ui-ask-answer-button'), while they wait for an answer:
+one row of buttons, aligned.")
+
+(defun agent-ui--actions-beside-answer-p (element)
+  "Whether ELEMENT's actions go beside its Answer button (see
+`agent-ui--answer-row-types'), not under it."
+  (and (member (plist-get element :type) agent-ui--answer-row-types)
+       (plist-get element :actions)
+       (not (plist-get element :answered))))
+
 (defun agent-ui--actions-text (element ctx)
   "ELEMENT's actions as drawn under it in CTX, the newline before them; nil
-if it has none, or in a still picture (CTX's :still)."
+if it has none, in a still picture (CTX's :still), or beside its Answer
+\(`agent-ui--actions-beside-answer-p')."
   (when-let* (((not (plist-get ctx :still)))
+              ((not (agent-ui--actions-beside-answer-p element)))
               (buttons (agent-ui--actions (plist-get element :actions) (plist-get ctx :width))))
     (concat "\n" buttons)))
 
@@ -521,7 +535,10 @@ elements. No newline at its end."
               (props (agent-ui-check type element))
               (draw (or (and (plist-get ctx :graphic) (agent-ui-type-gui type))
                         (agent-ui-type-text type)))
-              (text (funcall draw props ctx)))
+              ;; A question's actions beside its Answer: given to it.
+              (text (funcall draw props (if (agent-ui--actions-beside-answer-p element)
+                                            (plist-put (copy-sequence ctx) :actions (plist-get element :actions))
+                                          ctx))))
          (unless (stringp text)
            (agent-ui--fail "%s: its drawing returned %s, not text"
                            (agent-ui-type-name type) (agent-ui--show-value text)))

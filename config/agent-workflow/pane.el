@@ -38,6 +38,11 @@
 (declare-function agent-ui--session-name "agent-ui/agent")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")
+(declare-function agent-shell-elicitation--get "agent-shell-elicitation")
+(declare-function agent-shell-elicitation--set-values "agent-shell-elicitation")
+(declare-function agent-shell-elicitation--clearing "agent-shell-elicitation")
+(declare-function agent-shell-elicitation--submit "agent-shell-elicitation")
+(defvar agent-shell--state)
 (declare-function +my/agent-shell-permission-buttons "config/agent-shell/permissions")
 (declare-function +my/agent-shell-press-permission "config/agent-shell/permissions")
 
@@ -51,6 +56,10 @@ its journal: a hash table of a job to (:started T :ended T :steps ((INDEX
 (defvar-local agent-workflow--pane-open nil
   "In a run's pane: non-nil once it may open by itself (started from Emacs,
 or you opened it).")
+
+(defvar-local agent-workflow--pane-rounds nil
+  "In a run's pane: its jobs' rounds, from its journal, the first first:
+plists (:job :round :start :end :outcome), END nil while it runs.")
 
 (defvar-local agent-workflow--pane-asked nil
   "In a run's pane: the question its Needs you shows, (JOB KIND WHY).")
@@ -123,24 +132,29 @@ its window selected too."
 (defun agent-workflow--pane-make (run)
   "RUN's pane made, drawn, in no window yet."
   (let* ((agent-ui-display-function #'ignore)
-         (pane (agent-ui-canvas (agent-workflow-run-name run))))
+         (pane (agent-ui-canvas (agent-workflow-run-name run)))
+         (lines nil))
     (setf (agent-workflow-run-pane run) pane)
     (with-current-buffer pane
       (setq agent-workflow--pane-run run
             agent-workflow--pane-times (make-hash-table :test #'equal)
+            agent-workflow--pane-rounds nil
             agent-workflow--pane-asked nil
             agent-workflow--pane-ended nil)
       (setq-local agent-ui-answer-function #'agent-workflow--pane-answer
                   agent-ui-closes-with "run/jobs")
       (add-hook 'kill-buffer-hook #'agent-workflow--pane-killed nil t)
+      ;; Its times, rounds and Log's lines, event by event (a job done: how
+      ;; long its round took, its round's start then).
       (dolist (event (agent-workflow--journal-events (agent-workflow-run-dir run)))
-        (agent-workflow--pane-time (plist-get event :ev) event
-                                   (or (ignore-errors (float-time (date-to-time (plist-get event :t))))
-                                       (float-time)))))
+        (let ((time (or (ignore-errors (date-to-time (plist-get event :t))) (current-time))))
+          (agent-workflow--pane-time (plist-get event :ev) event (float-time time))
+          (when-let* ((line (agent-workflow--pane-log-line run (plist-get event :ev) event time)))
+            (push line lines)))))
     (agent-ui-section pane "run" :title "Run")
     (agent-ui-section pane "log" :title "Log")
     (agent-ui-show (list :id "log" :type "log" :show 12 :keep agent-workflow-pane-log-lines
-                         :lines (agent-workflow-log-lines run agent-workflow-pane-log-lines))
+                         :lines (last (nreverse lines) agent-workflow-pane-log-lines))
                    :canvas pane :section "log")
     (agent-workflow--pane-draw run t)
     pane))
@@ -165,6 +179,7 @@ steps' times noted."
                   (when (eq key :started)
                     (setf (alist-get index steps) (plist-put (alist-get index steps) :ended nil)))
                   (setq times (plist-put times :steps steps)))))
+      (agent-workflow--pane-round event data time)
       (pcase event
         ("job-started" (setq times (list :started time)))
         ("job-done" (setq times (plist-put times :ended time)))
@@ -174,63 +189,177 @@ steps' times noted."
         (puthash job times agent-workflow--pane-times)))))
 
 (defun agent-workflow--pane-journal (run event data)
-  "EVENT of RUN with DATA, in its journal: its pane's times noted. In
-`agent-workflow-journal-functions'."
+  "EVENT of RUN with DATA, in its journal: its pane's times noted, its line
+in its Log. In `agent-workflow-journal-functions'."
   (when-let* ((pane (agent-workflow--pane-live run)))
     (with-current-buffer pane
-      (agent-workflow--pane-time event data (float-time)))))
+      (agent-workflow--pane-time event data (float-time))
+      (when-let* ((line (agent-workflow--pane-log-line run event data (current-time))))
+        (with-demoted-errors "agent workflow's pane: %S"
+          (agent-ui-append "log" (list :lines (list line)) :canvas pane :section "log"))))))
+
+;; THE LOG: the run's journal as log.el says it (log.txt, the shell's), but
+;; shorter, in its own pane: no issue on each line, its time HH:MM, its job's
+;; name in a column; a job's agent step starting and ending left out (its
+;; job's start and end say it), a job done saying how long it took; a wait
+;; saying what for (not how to answer from the shell), a warning; what went
+;; wrong, an error.
+
+(defconst agent-workflow--pane-log-errors
+  '("cancelled" "budget-used-up" "interrupted" "branch-moved")
+  "The events a run's pane's Log says as errors.")
+
+(defconst agent-workflow--pane-log-warnings
+  '("waiting" "budget-near" "branch-kept")
+  "The events a run's pane's Log says as warnings.")
+
+(defun agent-workflow--pane-log-line (run event data time)
+  "EVENT of RUN with DATA at TIME (a Lisp time) as a line of its pane's Log
+\(see above): text, or (:level LEVEL :text TEXT); nil if it says nothing
+there. In the pane's buffer: a job's times its `agent-workflow--pane-times'."
+  (let* ((job (if (equal event "rerun")
+                  ;; Sent back: the job it's sent to, by the one sending it.
+                  (or (cadr (split-string (or (plist-get data :edge) "") ">")) (plist-get data :job))
+                (plist-get data :job)))
+         (step (plist-get data :step))
+         (spec (and job (agent-workflow--job-spec run job)))
+         (kind (and (numberp step) (plist-get (nth step (plist-get spec :steps)) :kind)))
+         (what (cond
+                ;; Its job's start and end say it.
+                ((and (member event '("step-started" "step-ended")) (eq kind 'agent)) nil)
+                ((equal event "waiting")
+                 (concat "waits for you: "
+                         (let ((why (or (plist-get data :why) "")))
+                           (if (and job (string-prefix-p (concat job ": ") why))
+                               (substring why (+ (length job) 2))
+                             why))))
+                ((equal event "job-done")
+                 (let* ((times (and job (gethash job agent-workflow--pane-times)))
+                        (started (plist-get times :started))
+                        (ended (or (plist-get times :ended) (float-time time))))
+                   (concat (agent-workflow--log-what (agent-workflow-run-issue run) event data 'none)
+                           (if started
+                               (format " (%s)" (agent-workflow--duration-words (round (max 0 (- ended started)))))
+                             ""))))
+                (t (agent-workflow--log-what (agent-workflow-run-issue run) event data 'none))))
+         (width (apply #'max 1 (mapcar (lambda (job) (length (car job))) (agent-workflow-run-jobs run)))))
+    (when what
+      (let ((text (format "%s  %s  %s" (format-time-string "%H:%M" time)
+                          (string-pad (or job "·") width)
+                          (replace-regexp-in-string "[\n\r]+" " " what))))
+        (cond ((member event agent-workflow--pane-log-errors) (list :level "error" :text text))
+              ((member event agent-workflow--pane-log-warnings) (list :level "warn" :text text))
+              (t text))))))
 
 (add-hook 'agent-workflow-journal-functions #'agent-workflow--pane-journal)
 
+(defun agent-workflow--pane-round (event data time)
+  "EVENT of the pane's run, with DATA, at TIME (seconds): its jobs' rounds
+noted (`agent-workflow--pane-rounds'). A round started again before its
+end (sent back, replaced): replaced; the run over, cancelled: every round
+running ended."
+  (let ((job (plist-get data :job)))
+    (cl-flet ((close (round outcome)
+                (unless (plist-get round :end)
+                  (plist-put round :end time)
+                  (plist-put round :outcome outcome))))
+      (pcase event
+        ("job-started"
+         (dolist (round agent-workflow--pane-rounds)
+           (when (equal (plist-get round :job) job) (close round "replaced")))
+         (setq agent-workflow--pane-rounds
+               (append agent-workflow--pane-rounds
+                       (list (list :job job :round (or (plist-get data :round) 1) :start time :end nil)))))
+        ("job-done"
+         (when-let* ((round (seq-find (lambda (round) (and (equal (plist-get round :job) job)
+                                                           (not (plist-get round :end))))
+                                      agent-workflow--pane-rounds)))
+           (close round (or (plist-get data :outcome) "done"))))
+        ((or "run-done" "cancelled")
+         (dolist (round agent-workflow--pane-rounds)
+           (close round (if (equal event "cancelled") "cancelled" "done"))))))))
+
+(defun agent-workflow--pane-rounds-element ()
+  "The pane's rounds as a timeline (nil before the first): a bar each, its
+round past 1 and an outcome other than done said; one running growing."
+  (when agent-workflow--pane-rounds
+    (cl-flet ((stamp (time) (format-time-string "%FT%TZ" time t)))
+      (list :id "rounds" :type "timeline" :title "Rounds"
+            :tasks (mapcar (lambda (round)
+                             (let ((outcome (plist-get round :outcome))
+                                   (number (plist-get round :round)))
+                               (append
+                                (list :name (concat (plist-get round :job)
+                                                    (if (and (numberp number) (> number 1))
+                                                        (format " · round %d" number)
+                                                      "")
+                                                    (if (and outcome (not (equal outcome "done")))
+                                                        (concat " → " outcome)
+                                                      ""))
+                                      :start (stamp (plist-get round :start))
+                                      :status (cond ((null (plist-get round :end)) "running")
+                                                    ((member outcome '("done")) "done")
+                                                    ((member outcome '("replaced" "cancelled")) "queued")
+                                                    (t "failed")))
+                                (and (plist-get round :end) (list :end (stamp (plist-get round :end)))))))
+                           agent-workflow--pane-rounds)))))
+
 ;; ====== WHAT IT SHOWS ======
 
-(defun agent-workflow--pane-where-lines (where)
-  "WHERE (`agent-workflow-run-where') in words, the header's lines: its
-branch, its commits, what isn't committed; where it started, what it merges
-into."
-  (when-let* ((branch (plist-get where :branch)))
-    (let* ((base (plist-get where :base))
-           (into (plist-get where :into))
-           (own (or (plist-get where :own) 0))
-           (uncommitted (or (plist-get where :uncommitted) 0))
-           (merged (plist-get where :merged))
-           (said (delq nil (list (pcase own
-                                   ;; Merged, where it started unknown: its
-                                   ;; commits too.
-                                   (0 (and (not merged) "no commit yet"))
-                                   (1 "1 commit")
-                                   (_ (format "%d commits" own)))
-                                 (and (> uncommitted 0)
-                                      (format "%d %s not committed" uncommitted (if (= uncommitted 1) "file" "files")))
-                                 (and (not (plist-get where :worktree)) "its worktree removed")))))
-      (list (concat "⎇ " branch
-                    (cond ((plist-get where :deleted) ": deleted, its run done")
-                          (said (concat ": " (string-join said ", ")))
-                          (t "")))
-            (concat (if base
-                        (format "from %s at %s · " (or (plist-get base :branch) "a detached HEAD")
-                                (substring (plist-get base :commit) 0 (min 7 (length (plist-get base :commit)))))
-                      "")
-                    (format (if merged "merged into %s" "merges into %s") into))))))
+(defun agent-workflow--pane-short (commit)
+  "COMMIT (a hash) shortened, as git shows it."
+  (substring commit 0 (min 7 (length commit))))
 
-(defun agent-workflow--pane-where (run where)
-  "RUN's WHERE (`agent-workflow-run-where') as elements under its header:
-its worktree and its reading jobs' snapshots (RET opens one), its base
-branch's commits its merge takes too, said. Their ids, all of them: where,
-where-note, nil each one not shown."
-  (let* ((project (agent-workflow-run-project run))
+(defun agent-workflow--pane-git-line (where)
+  "WHERE (`agent-workflow-run-where')'s branch, in a line: ⎇ BRANCH, where
+it started → what it merges into (merged, deleted once it is); nil if it
+has none yet."
+  (when-let* ((branch (plist-get where :branch)))
+    (let ((base (plist-get where :base))
+          (into (plist-get where :into)))
+      (concat "⎇ " branch "   "
+              (cond ((plist-get where :deleted) (format "deleted, merged into %s" into))
+                    ((plist-get where :merged) (format "merged into %s" into))
+                    (base (format "%s@%s → %s" (or (plist-get base :branch) "HEAD")
+                                  (agent-workflow--pane-short (plist-get base :commit)) into))
+                    (t (format "→ %s" into)))
+              (if (or (plist-get where :worktree) (plist-get where :deleted)) "" " · its worktree removed")
+              (mapconcat (lambda (snapshot)
+                           (format "\n%s reads its snapshot at %s" (nth 0 snapshot)
+                                   (agent-workflow--pane-short (or (nth 2 snapshot) ""))))
+                         (plist-get where :snapshots) "")))))
+
+(defun agent-workflow--pane-git (run where)
+  "RUN's WHERE (`agent-workflow-run-where') as the elements under its
+header, each nil if it isn't shown: git (its branch, buttons opening its
+worktree, magit), changes (its files changed since it started: RET opens
+one), commits (its latest), where-note (its base branch's commits its
+merge takes too)."
+  (let* ((line (agent-workflow--pane-git-line where))
          (worktree (plist-get where :worktree))
+         (files (plist-get where :files))
+         (commits (plist-get where :commits))
          (base (plist-get where :base))
-         (with (or (plist-get where :with) 0))
-         (files (append (when worktree
-                          (list (list :path (file-relative-name worktree project) :note "its worktree")))
-                        (mapcar (lambda (snapshot)
-                                  (list :path (file-relative-name (nth 1 snapshot) project)
-                                        :note (format "%s's snapshot, at %s" (nth 0 snapshot)
-                                                      (substring (or (nth 2 snapshot) "") 0
-                                                                 (min 7 (length (or (nth 2 snapshot) "")))))))
-                                (plist-get where :snapshots)))))
-    (list (and files (list :id "where" :type "files" :dir project :files files))
+         (with (or (plist-get where :with) 0)))
+    (ignore run)
+    (list (and line
+               (append (list :id "git" :type "text" :text line)
+                       (when worktree
+                         (list :actions '((:label "Worktree" :prompt "worktree")
+                                          (:label "Magit" :prompt "magit"))))))
+          (and worktree files
+               (list :id "changes" :type "files" :dir worktree :tree (if (> (length files) 12) t :false)
+                     :files (mapcar (lambda (file)
+                                      (append (list :path (plist-get file :path)
+                                                    :status (symbol-name (plist-get file :status)))
+                                              (and (plist-get file :added) (list :added (plist-get file :added)))
+                                              (and (plist-get file :removed) (list :removed (plist-get file :removed)))
+                                              (and (plist-get file :uncommitted) (list :note "not committed"))))
+                                    files)))
+          (and commits
+               (list :id "commits" :type "text" :face "muted"
+                     :text (mapconcat (lambda (commit) (format "%s  %s" (nth 0 commit) (nth 1 commit)))
+                                      commits "\n")))
           (and (> with 0) (not (plist-get where :merged))
                (list :id "where-note" :type "text" :face "warning"
                      :text (format "Started from %s, not %s: its %d %s not in %s %s merged too."
@@ -238,36 +367,53 @@ where-note, nil each one not shown."
                                    (if (= with 1) "commit" "commits") (plist-get where :into)
                                    (if (= with 1) "is" "are")))))))
 
-(defun agent-workflow--pane-header (run)
-  "The run, above its sections: its issue, its state, its time, its budget,
-where its work is."
-  (let* ((info (agent-workflow-run-info run))
-         (state (agent-workflow-run-state run))
+(defun agent-workflow--pane-money (dollars)
+  "DOLLARS as the header says them: $15, $1.24."
+  (if (and (numberp dollars) (= dollars (truncate dollars)))
+      (format "$%d" (truncate dollars))
+    (format "$%.2f" (or dollars 0))))
+
+(defun agent-workflow--pane-state-line (run)
+  "RUN's state in a line: its mark and state, its time, what it spent, its
+tokens, each against its budget if it has one."
+  (let* ((state (agent-workflow-run-state run))
          (spent (agent-workflow-run-spent-now run))
          (budget (agent-workflow-run-budget run))
-         (time (agent-workflow--duration-words (plist-get spent :time))))
-    (list :id "run" :type "text"
-          :title (format "%s: %s" (agent-workflow-run-issue run) (or (plist-get info :title) ""))
-          :face (pcase state ('waiting "warning") ('cancelled "muted") ('done "success") (_ "plain"))
-          :text (string-join
-                 (append
-                  (delq nil
-                        (list (format "%s · %s · %s"
-                                      (plist-get (agent-workflow-run-workflow run) :name)
-                                      (pcase state
-                                        ('waiting "waits for you")
-                                        ('queued (concat "queued" (if (agent-workflow-run-why run)
-                                                                      (concat ": " (agent-workflow-run-why run))
-                                                                    "")))
-                                        (_ (symbol-name state)))
-                                      time)
-                              (cond (budget (concat "spent " (agent-workflow--budget-words spent budget)
-                                                    (if (agent-workflow-run-warned run) " · near its budget" "")))
-                                    ((> (plist-get spent :cost) 0)
-                                     (format "spent $%.2f, %s tokens" (plist-get spent :cost)
-                                             (agent-ui-format-compact (plist-get spent :tokens)))))))
-                  (agent-workflow--pane-where-lines (agent-workflow-run-where run)))
-                 "\n"))))
+         (cost (or (plist-get spent :cost) 0))
+         (tokens (or (plist-get spent :tokens) 0)))
+    (string-join
+     (delq nil
+           (list (pcase state
+                   ('waiting "◆ needs you")
+                   ('queued (concat "○ queued" (if (agent-workflow-run-why run)
+                                                   (concat ": " (agent-workflow-run-why run))
+                                                 "")))
+                   ('done "✓ done")
+                   ('cancelled "✗ cancelled")
+                   (_ "● running"))
+                 (concat (agent-workflow--duration-words (plist-get spent :time))
+                         (if (plist-get budget :time)
+                             (concat " of " (agent-workflow--duration-words (plist-get budget :time)))
+                           ""))
+                 (cond ((plist-get budget :cost)
+                        (format "%s of %s" (agent-workflow--pane-money cost)
+                                (agent-workflow--pane-money (plist-get budget :cost))))
+                       ((> cost 0) (agent-workflow--pane-money cost)))
+                 (cond ((plist-get budget :tokens)
+                        (format "%s of %s tokens" (agent-ui-format-compact tokens)
+                                (agent-ui-format-compact (plist-get budget :tokens))))
+                       ((> tokens 0) (format "%s tokens" (agent-ui-format-compact tokens))))
+                 (and (agent-workflow-run-warned run) "near its budget")))
+     " · ")))
+
+(defun agent-workflow--pane-header (run)
+  "The run, above its sections: its issue, then its state in a line."
+  (list :id "run" :type "text"
+        :title (format "%s: %s" (agent-workflow-run-issue run)
+                       (or (plist-get (agent-workflow-run-info run) :title) ""))
+        :face (pcase (agent-workflow-run-state run)
+                ('waiting "warning") ('cancelled "muted") ('done "success") (_ "plain"))
+        :text (agent-workflow--pane-state-line run)))
 
 (defun agent-workflow--pane-step-name (step)
   "STEP of a job (a plist), as its checklist names it."
@@ -281,16 +427,16 @@ where its work is."
     (_ "a step")))
 
 (defun agent-workflow--pane-status (status)
-  "A job's STATUS as a checklist's."
+  "A job's STATUS as a checklist's: waiting for you, ◆."
   (pcase status
-    ('running "running") ('done "done") ('skipped "skipped") (_ "pending")))
+    ('running "running") ('waiting "waiting") ('done "done") ('skipped "skipped") (_ "pending")))
 
 (defun agent-workflow--pane-timed (item times status)
   "ITEM, a checklist's step, with its TIMES (:started :ended) for STATUS
 \(its checklist's): its start while it runs, how long it took once done."
   (let ((started (plist-get times :started))
         (ended (plist-get times :ended)))
-    (cond ((and started (equal status "running")) (append item (list :started started)))
+    (cond ((and started (member status '("running" "waiting"))) (append item (list :started started)))
           ((and started ended (equal status "done")) (append item (list :seconds (max 0 (- ended started)))))
           (t item))))
 
@@ -305,13 +451,15 @@ where its work is."
          (tries (alist-get index (plist-get state :tries)))
          (outcome (plist-get state :outcome))
          (detail (string-join
-                  (delq nil (list (and agent (format "agent %s" (plist-get agent :agent)))
+                  (delq nil (list (and (eq status 'skipped) (plist-get spec :if)
+                                       (format "its if: %s" (string-trim (plist-get spec :if))))
+                                  (and agent (not (eq status 'skipped)) (format "agent %s" (plist-get agent :agent)))
                                   (and (numberp (plist-get state :round)) (> (plist-get state :round) 1)
                                        (format "round %d" (plist-get state :round)))
                                   (and (numberp tries) (> tries 0) (memq status '(running waiting))
                                        (format "try %d" (1+ tries)))
                                   (and (eq status 'done) outcome (not (equal outcome "done")) outcome)
-                                  (and (eq status 'waiting) "◆ needs you")
+                                  (and (eq status 'waiting) "needs you")
                                   (and (eq status 'pending) (plist-get state :why)
                                        (format "waits: %s" (plist-get state :why)))))
                   " · "))
@@ -328,12 +476,35 @@ where its work is."
                              collect (let ((sub (cond ((memq status '(done skipped)) (if (eq status 'done) "done" "skipped"))
                                                       ((memq status '(running waiting))
                                                        (cond ((< i index) "done")
-                                                             ((= i index) (if (eq status 'running) "running" "pending"))
+                                                             ((= i index) (if (eq status 'running) "running" "waiting"))
                                                              (t "pending")))
                                                       (t "pending"))))
                                        (agent-workflow--pane-timed
                                         (list :name (agent-workflow--pane-step-name step) :status sub)
                                         (alist-get i (plist-get times :steps)) sub))))))))
+
+(defun agent-workflow--pane-graph (run)
+  "RUN's jobs as a graph: each a node, marked and coloured by its state (its
+round past 1 said), an arrow from each job to those needing it."
+  (let ((specs (plist-get (agent-workflow-run-workflow run) :jobs)))
+    (list :id "graph" :type "graph"
+          :nodes (mapcar (lambda (job)
+                           (let* ((state (cdr job))
+                                  (status (plist-get state :status))
+                                  (round (plist-get state :round)))
+                             (append
+                              (list :id (car job)
+                                    :label (concat (car job) " "
+                                                   (pcase status
+                                                     ('done "✓") ('running "●") ('waiting "◆")
+                                                     ('skipped "–") (_ "○"))
+                                                   (if (and (numberp round) (> round 1)) (format " r%d" round) "")))
+                              (pcase status
+                                ('done '(:status "ok")) ('running '(:status "active"))
+                                ('waiting '(:status "warning"))))))
+                         (agent-workflow-run-jobs run))
+          :edges (cl-loop for (job . spec) in specs
+                          append (mapcar (lambda (need) (list need job)) (plist-get spec :needs))))))
 
 (defun agent-workflow--pane-jobs (run over)
   "RUN's checklist: its jobs. OVER: the run over already when its pane was
@@ -369,14 +540,15 @@ at with it."
                             (:name "tokens" :label "More tokens" :type "integer" :min 0)
                             (:name "time" :label "More time (45m, 1h)")))))
      (t
+      ;; A line, its answers buttons; one ending in … asks its note.
       (let ((options (pcase kind
-                       ('approve '("Approve" "Reject"))
-                       ((or 'retries 'broke 'interrupted) '("Go on" "Skip its step" "Stop"))
+                       ('approve '("Approve" "Reject…"))
+                       ('retries '("Go on" "Go on, with a note…" "Skip its step" "Stop"))
+                       ((or 'broke 'interrupted) '("Go on" "Skip its step" "Stop"))
                        ((or 'merge 'moved 'protected) '("Go on" "Stop"))
                        ('closed '("Go on (the issue in progress again)" "Cancel the run"))
-                       (_ '("Run its step again" "Cancel the run")))))
-        (cons (list :id "ask" :type "choice" :question why :options options
-                    :note (if (memq kind '(approve retries)) t (if ask :false t)))
+                       (_ '("Run its step again" "Run it again, with a note…" "Cancel the run")))))
+        (cons (agent-workflow--pane-ask-line why options)
               (when (eq kind 'approve)
                 (let ((look (agent-workflow-to-look-at run job)))
                   (list (list :id "look" :type "text" :with "ask"
@@ -389,21 +561,163 @@ at with it."
                                                                                        (abbreviate-file-name (plist-get look :log))))))
                                      "\n")))))))))))
 
-(defconst agent-workflow--pane-go-to-it "Go to it (its session, at the question)"
+(defconst agent-workflow--pane-go-to-it "Go to it"
   "The option of an agent's question in Needs you showing its session.")
+
+(defun agent-workflow--pane-ask-line (text options)
+  "Needs you's question: TEXT in a line, ◆ before it, OPTIONS its buttons
+\(each its label, as its answer)."
+  (list :id "ask" :type "text" :face "warning" :text (concat "◆ " text)
+        :actions (mapcar (lambda (option) (list :label option :prompt option)) options)))
+
+;; AN AGENT'S QUESTION, ANSWERED HERE: its form in its session (agent-shell's
+;; elicitation: AskUserQuestion's), as Agent UI's own: one question with
+;; options a choice (several, a multi-select; a note, its free answer), more
+;; a form (selects, text, numbers, yes or no); answered as its form's Submit
+;; does (agent-shell's own: its required answers checked). One it can't draw
+;; (a multi-select among others): Go to it. Go to it, always too.
+
+(defun agent-workflow--pane-elicitation (run job asks)
+  "The form JOB of RUN's agent asks (ASKS: its :request) in its session,
+still waiting: (BUFFER STATE ELICITATION), or nil."
+  (when-let* ((request (plist-get asks :request))
+              (agent (plist-get (agent-workflow--job run job) :agent))
+              (buffer (agent-workflow-agent-buffer agent))
+              ((buffer-live-p buffer))
+              ((fboundp 'agent-shell-elicitation--get))
+              (state (buffer-local-value 'agent-shell--state buffer))
+              (elicitation (agent-shell-elicitation--get state request))
+              ((eq (map-elt elicitation :status) 'pending)))
+    (list buffer state elicitation)))
+
+(defun agent-workflow--pane-elicitation-fields (elicitation)
+  "ELICITATION's fields asked (a free answer's own folded into its select's)."
+  (seq-remove (lambda (field) (map-elt field :folded-into)) (map-elt elicitation :fields)))
+
+(defun agent-workflow--pane-option-label (option)
+  "An elicitation's OPTION as its label: its title, else its value."
+  (format "%s" (or (map-elt option :title) (map-elt option :value))))
+
+(defun agent-workflow--pane-elicitation-question (run job asks)
+  "JOB of RUN's agent's form (ASKS) as Agent UI's question (see above), or
+nil if it can't be drawn."
+  (when-let* ((found (agent-workflow--pane-elicitation run job asks))
+              (elicitation (nth 2 found))
+              (fields (agent-workflow--pane-elicitation-fields elicitation)))
+    (let* ((message (or (map-elt elicitation :message) (plist-get asks :what)))
+           (question (concat job " asks: " (or message "its question")))
+           (actions (list (list :label agent-workflow--pane-go-to-it :prompt agent-workflow--pane-go-to-it)))
+           (one (car fields)))
+      (cond
+       ((and (null (cdr fields)) (memq (map-elt one :type) '(single-select multi-select)))
+        (list :id "ask" :type "choice" :title (map-elt one :title)
+              :question (if (and (map-elt one :description) (not message))
+                            (concat job " asks: " (map-elt one :description))
+                          question)
+              :options (mapcar (lambda (option)
+                                 (append (list :label (agent-workflow--pane-option-label option))
+                                         (and (map-elt option :description)
+                                              (list :detail (map-elt option :description)))))
+                               (map-elt one :options))
+              :multiple (if (eq (map-elt one :type) 'multi-select) t :false)
+              :note (if (map-elt one :custom-key) t :false)
+              :actions actions))
+       ((seq-every-p (lambda (field) (memq (map-elt field :type) '(single-select boolean string number integer)))
+                     fields)
+        (list :id "ask" :type "form" :question question
+              :fields (mapcar (lambda (field)
+                                (append (list :name (map-elt field :key)
+                                              :label (or (map-elt field :title) (map-elt field :description)
+                                                         (map-elt field :key))
+                                              :type (pcase (map-elt field :type)
+                                                      ('single-select "select") ('boolean "boolean")
+                                                      ('number "number") ('integer "integer") (_ "text")))
+                                        (and (eq (map-elt field :type) 'single-select)
+                                             (list :options (mapcar #'agent-workflow--pane-option-label
+                                                                    (map-elt field :options))))
+                                        (and (map-elt field :required) (list :required t))))
+                              fields)
+              :actions actions))))))
+
+(defun agent-workflow--pane-elicitation-answer (elicitation element)
+  "ELEMENT's answer (a choice's, a form's: see above) as ELICITATION's
+values, ((KEY . VALUE)...); a user error if it gives none."
+  (let ((fields (agent-workflow--pane-elicitation-fields elicitation)))
+    (cl-flet ((value-of (field label)
+                (if-let* ((option (seq-find (lambda (option)
+                                              (equal (agent-workflow--pane-option-label option) label))
+                                            (map-elt field :options))))
+                    (map-elt option :value)
+                  label)))
+      (if (equal (plist-get element :type) "choice")
+          (let* ((field (car fields))
+                 (selected (plist-get element :selected))
+                 (note (let ((note (plist-get element :note-text)))
+                         (and (stringp note) (not (string-blank-p note)) (string-trim note)))))
+            (cond ((and note (map-elt field :custom-key)) (list (cons (map-elt field :custom-key) note)))
+                  (selected
+                   (let ((values (mapcar (lambda (label) (value-of field label)) selected)))
+                     (list (cons (map-elt field :key)
+                                 (if (eq (map-elt field :type) 'multi-select) values (car values))))))
+                  (t (user-error "Choose one first"))))
+        (let ((values (plist-get element :values)))
+          (or (delq nil
+                    (mapcar (lambda (field)
+                              (let ((value (plist-get values (intern (concat ":" (map-elt field :key))))))
+                                (unless (or (null value) (equal value ""))
+                                  (cons (map-elt field :key)
+                                        (pcase (map-elt field :type)
+                                          ('single-select (value-of field value))
+                                          ('boolean (if (memq value '(nil :false)) :false t))
+                                          (_ value))))))
+                            fields))
+              (user-error "Answer it first")))))))
+
+(defun agent-workflow--pane-answer-elicitation (run job asks answer)
+  "JOB of RUN's agent's form (ASKS) answered with ANSWER (its values), as
+its Submit does (agent-shell's: its required answers checked)."
+  (pcase-let ((`(,buffer ,state ,elicitation) (or (agent-workflow--pane-elicitation run job asks)
+                                                  (user-error "%s's agent no longer asks that" job))))
+    (ignore elicitation)
+    (with-current-buffer buffer
+      (let ((id (plist-get asks :request)))
+        (pcase-dolist (`(,key . ,value) answer)
+          (agent-shell-elicitation--set-values
+           state id (agent-shell-elicitation--clearing (agent-shell-elicitation--get state id) key value)))
+        (agent-shell-elicitation--submit :state state :id id)))))
+
+(defun agent-workflow--pane-agent-answer-action (run job element pressed)
+  "What answering JOB of RUN's agent's question with ELEMENT (PRESSED: the
+label of its button pressed, or its answer) does: a function of no
+argument (see `agent-workflow--pane-answer-action')."
+  (let ((asks (plist-get (agent-workflow--job run job) :agent-asks)))
+    (if (and (member (plist-get element :type) '("choice" "form"))
+             (not (equal pressed agent-workflow--pane-go-to-it)))
+        (let* ((found (or (agent-workflow--pane-elicitation run job asks)
+                          (user-error "%s's agent no longer asks that" job)))
+               (answer (agent-workflow--pane-elicitation-answer (nth 2 found) element)))
+          (lambda () (agent-workflow--pane-answer-elicitation run job asks answer)))
+      (lambda () (agent-workflow--pane-answer-agent run job (plist-get asks :kind) pressed)))))
 
 (defun agent-workflow--pane-agent-question (run job asks why)
   "What JOB of RUN's agent asks you in its session (ASKS, as
-`agent-workflow-agent-asking' has it), WHY in words: a choice, a
-permission's options agent-shell's own buttons, and Go to it."
-  (let* ((agent (plist-get (agent-workflow--job run job) :agent))
-         (buffer (and agent (agent-workflow-agent-buffer agent)))
-         (buttons (and (eq (plist-get asks :kind) 'permission)
-                       (buffer-live-p buffer)
-                       (fboundp '+my/agent-shell-permission-buttons)
-                       (mapcar #'car (+my/agent-shell-permission-buttons buffer)))))
-    (list (list :id "ask" :type "choice" :question why :note :false
-                :options (append buttons (list agent-workflow--pane-go-to-it))))))
+`agent-workflow-agent-asking' has it), WHY in words: its form as Agent
+UI's own (see above); else a line, a permission's options agent-shell's
+own buttons, and Go to it."
+  (ignore why)
+  (if-let* ((question (agent-workflow--pane-elicitation-question run job asks)))
+      (list question)
+    (let* ((agent (plist-get (agent-workflow--job run job) :agent))
+           (buffer (and agent (agent-workflow-agent-buffer agent)))
+           (what (plist-get asks :what))
+           (buttons (and (eq (plist-get asks :kind) 'permission)
+                         (buffer-live-p buffer)
+                         (fboundp '+my/agent-shell-permission-buttons)
+                         (mapcar #'car (+my/agent-shell-permission-buttons buffer)))))
+      (list (agent-workflow--pane-ask-line
+             (concat job (if (eq (plist-get asks :kind) 'permission) " asks for your permission" " asks you")
+                     (if what (concat ": " what) ""))
+             (append buttons (list agent-workflow--pane-go-to-it)))))))
 
 (defun agent-workflow--pane-answer-agent (run job kind picked)
   "JOB of RUN's agent's question (KIND: permission, question) answered in
@@ -458,22 +772,39 @@ shown again only when it's another), gone once it doesn't."
                            (agent-workflow--pane-question run job ask why)))
           (agent-ui-show element :canvas pane :section "needs-you")))))))
 
-(defun agent-workflow--pane-answer (_prompt _submit key)
-  "A question of a run's pane answered (`agent-ui-answer-function'): its
-answer, read from its element (KEY's), given to the run (approved,
-rejected, confirmed, sent back, cancelled) once the answer's own command is
-done (it marks its question answered first). An answer that can't be
-given: said, the question left as it was."
+(defun agent-workflow--pane-answer (prompt _submit key)
+  "A button of a run's pane pressed (`agent-ui-answer-function'): git's
+\(PROMPT worktree, magit: its worktree opened), or a question's answer
+\(PROMPT the button's label; a form's, read from its element, KEY's), given
+to the run (approved, rejected, confirmed, sent back, cancelled) once the
+button's own command is done. An answer that can't be given: said, the
+question left as it was."
   (let* ((run agent-workflow--pane-run)
-         (pane (current-buffer))
-         (element (agent-ui-get key :canvas pane))
-         (asked agent-workflow--pane-asked)
+         (pane (current-buffer)))
+    (if (equal key "git")
+        (agent-workflow--pane-open-worktree run prompt)
+      (agent-workflow--pane-answer-question run pane prompt key))))
+
+(defun agent-workflow--pane-open-worktree (run how)
+  "RUN's worktree opened, HOW: worktree (dired), magit (its status)."
+  (let ((dir (plist-get (agent-workflow-run-where run) :worktree)))
+    (unless (and dir (file-directory-p dir))
+      (user-error "%s has no worktree now" (agent-workflow-run-name run)))
+    (if (and (equal how "magit") (fboundp 'magit-status))
+        (magit-status dir)
+      (pop-to-buffer (dired-noselect dir)))))
+
+(defun agent-workflow--pane-answer-question (run pane prompt key)
+  "RUN's question in PANE answered with PROMPT, its button pressed on KEY's
+element (see `agent-workflow--pane-answer')."
+  (let* ((asked agent-workflow--pane-asked)
          (job (car asked))
          (kind (nth 1 asked))
          (by "you, in its pane")
-         (give (agent-workflow--pane-answer-action run job kind element by)))
-    (unless (and run asked (equal (agent-ui--key-section key) "needs-you"))
-      (user-error "This run asks nothing here"))
+         (give (progn
+                 (unless (and run asked (equal (agent-ui--key-section key) "needs-you"))
+                   (user-error "This run asks nothing here"))
+                 (agent-workflow--pane-answer-action run job kind (agent-ui-get key :canvas pane) by prompt))))
     ;; Answered: the next question shown, even if it's the same again.
     (setq agent-workflow--pane-asked nil)
     (run-at-time 0 nil (lambda ()
@@ -483,39 +814,47 @@ given: said, the question left as it was."
                                   (when (buffer-live-p pane)
                                     (agent-workflow--pane-changed run))))))))
 
-(defun agent-workflow--pane-answer-action (run job kind element by)
+(defun agent-workflow--pane-answer-action (run job kind element by &optional pressed)
   "What answering RUN's question on JOB (KIND: its :ask's, `guard' for the
 loop guard's, `agent' for its agent's, nil for a wait with no question) with
-ELEMENT (the question,
-answered) does: a function of no argument, BY you. A user error if the
-answer can't be given (nothing chosen, a rejection without a note)."
-  (if (equal (plist-get element :type) "form")
-      (let* ((values (plist-get element :values))
-             (choice (plist-get values :choice))
-             (text (lambda (key) (let ((value (plist-get values key)))
-                                   (and (stringp value) (not (string-blank-p value)) (string-trim value))))))
-        (if (eq kind 'budget)
-            (let ((more (list :cost (let ((n (plist-get values :cost))) (and (numberp n) n))
-                              :tokens (let ((n (plist-get values :tokens))) (and (numberp n) n))
-                              :time (let ((time (funcall text :time)))
-                                      (and time (agent-workflow--duration time))))))
-              (if (equal choice "stop")
-                  (lambda () (agent-workflow-confirm run "stop" :by by))
-                (lambda () (agent-workflow-confirm run "go" :by by :more more))))
-          (let* ((other (plist-get (cdr (agent-workflow-asking run)) :other))
-                 (notes (delq nil (list (and (funcall text :note-job) (cons job (funcall text :note-job)))
-                                        (and (funcall text :note-other) (cons other (funcall text :note-other))))))
-                 (choice (pcase choice ("accept it as it is" "accept") ("stop" "stop") (_ "go"))))
-            (lambda () (agent-workflow-confirm run choice :by by :notes notes)))))
-    (let* ((picked (car (plist-get element :selected)))
-           (note (let ((note (plist-get element :note-text)))
+ELEMENT (the question, answered; a line's: the label of the button
+PRESSED, one ending in … asking its note) does: a function of no argument,
+BY you. A user error if the answer can't be given (nothing chosen, a
+rejection without a note)."
+  (cond
+   ((eq kind 'agent) (agent-workflow--pane-agent-answer-action run job element pressed))
+   ((equal (plist-get element :type) "form")
+    (let* ((values (plist-get element :values))
+           (choice (plist-get values :choice))
+           (text (lambda (key) (let ((value (plist-get values key)))
+                                 (and (stringp value) (not (string-blank-p value)) (string-trim value))))))
+      (if (eq kind 'budget)
+          (let ((more (list :cost (let ((n (plist-get values :cost))) (and (numberp n) n))
+                            :tokens (let ((n (plist-get values :tokens))) (and (numberp n) n))
+                            :time (let ((time (funcall text :time)))
+                                    (and time (agent-workflow--duration time))))))
+            (if (equal choice "stop")
+                (lambda () (agent-workflow-confirm run "stop" :by by))
+              (lambda () (agent-workflow-confirm run "go" :by by :more more))))
+        (let* ((other (plist-get (cdr (agent-workflow-asking run)) :other))
+               (notes (delq nil (list (and (funcall text :note-job) (cons job (funcall text :note-job)))
+                                      (and (funcall text :note-other) (cons other (funcall text :note-other))))))
+               (choice (pcase choice ("accept it as it is" "accept") ("stop" "stop") (_ "go"))))
+          (lambda () (agent-workflow-confirm run choice :by by :notes notes))))))
+   (t
+    (let* ((line (equal (plist-get element :type) "text"))
+           (picked (if line pressed (car (plist-get element :selected))))
+           (note (let ((note (if (and line picked (string-suffix-p "…" picked))
+                                 (read-string (if (eq kind 'approve)
+                                                  (format "Why (%s's agent is told it): " job)
+                                                (format "Your note for %s: " job)))
+                               (plist-get element :note-text))))
                    (and (stringp note) (not (string-blank-p note)) (string-trim note)))))
       (unless picked
         (user-error "Choose one first"))
+      (when (and line (string-suffix-p "…" picked) (not note))
+        (user-error "No note: nothing answered"))
       (pcase kind
-        ('agent
-         (let ((asks (plist-get (agent-workflow--job run job) :agent-asks)))
-           (lambda () (agent-workflow--pane-answer-agent run job (plist-get asks :kind) picked))))
         ('approve
          (if (equal picked "Approve")
              (lambda () (agent-workflow-approve run :by by))
@@ -531,7 +870,7 @@ answer can't be given (nothing chosen, a rejection without a note)."
                              ((string-prefix-p "Skip" picked) "skip")
                              ((string-prefix-p "Cancel" picked) "cancel")
                              (t "stop"))))
-           (lambda () (agent-workflow-confirm run choice :by by :notes (and note (list (cons job note)))))))))))
+           (lambda () (agent-workflow-confirm run choice :by by :notes (and note (list (cons job note))))))))))))
 
 ;; ====== ITS AGENTS ======
 
@@ -599,10 +938,13 @@ countdown)."
       (agent-workflow--pane-draw-in run pane made))))
 
 (defun agent-workflow--pane-show-where (run pane)
-  "RUN's where under its header in PANE (`agent-workflow--pane-where'):
-each element shown, or removed once it isn't."
-  (cl-loop for id in '("where" "where-note")
-           for element in (agent-workflow--pane-where run (agent-workflow-run-where run))
+  "RUN's git under its header in PANE (`agent-workflow--pane-git'): each
+element shown, or removed once it isn't."
+  ;; A pane drawn before: its worktree's row, now git's buttons.
+  (when (gethash "where" agent-ui--entries)
+    (agent-ui-remove "where" :canvas pane))
+  (cl-loop for id in '("git" "changes" "commits" "where-note")
+           for element in (agent-workflow--pane-git run (agent-workflow-run-where run))
            do (cond (element (agent-ui-show element :canvas pane))
                     ;; The canvas's own: its key its id.
                     ((gethash id agent-ui--entries) (agent-ui-remove id :canvas pane)))))
@@ -636,8 +978,13 @@ events). Stopped once there's none."
         (setq agent-workflow--pane-where-timer
               (run-at-time agent-workflow-pane-where-every agent-workflow-pane-where-every
                            #'agent-workflow--pane-where-tick)))
+      (agent-ui-show (agent-workflow--pane-graph run) :canvas pane :section "run")
       (agent-ui-show (agent-workflow--pane-jobs run (and made (memq (agent-workflow-run-state run) agent-workflow--ended)))
                      :canvas pane :section "run")
+      (if-let* ((rounds (agent-workflow--pane-rounds-element)))
+          (agent-ui-show rounds :canvas pane :section "run")
+        (when (gethash "run/rounds" agent-ui--entries)
+          (agent-ui-remove "rounds" :canvas pane :section "run")))
       (agent-ui-section pane "run" :state (pcase (agent-workflow-run-state run)
                                             ('running 'running) ('waiting 'needs-you) ('queued 'waiting)
                                             ('done 'done) ('cancelled 'failed)))
@@ -653,14 +1000,6 @@ events). Stopped once there's none."
 
 (add-hook 'agent-workflow-run-functions #'agent-workflow--pane-changed)
 
-(defun agent-workflow--pane-log (run line)
-  "LINE in RUN's log: its pane's Log shows it. In
-`agent-workflow-log-functions'."
-  (when-let* ((pane (agent-workflow--pane-live run)))
-    (with-demoted-errors "agent workflow's pane: %S"
-      (agent-ui-append "log" (list :lines (list line)) :canvas pane :section "log"))))
-
-(add-hook 'agent-workflow-log-functions #'agent-workflow--pane-log)
 
 (defun agent-workflow--pane-started (run shell)
   "RUN started: its pane opened, unless from the SHELL. In

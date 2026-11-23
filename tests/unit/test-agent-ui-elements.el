@@ -538,7 +538,7 @@ detail's sake when the line fits. A step too long: wrapped, as a plan's
 
 (ert-deftest agent-ui-elements/steps-wrong ()
   (should (equal (+test-aue-error '(:type "steps" :steps ("a" (:name "b" :status "paused"))))
-                 "steps: step 2 has status \"paused\"; one of: pending, running, done, failed, skipped"))
+                 "steps: step 2 has status \"paused\"; one of: pending, running, waiting, done, failed, skipped"))
   (should (equal (+test-aue-error '(:type "steps" :steps ((:status "done"))))
                  "steps: step 1 has no name"))
   (should (equal (+test-aue-error '(:type "steps" :steps ((:name "a" :state "done"))))
@@ -648,7 +648,7 @@ detail's sake when the line fits. A step too long: wrapped, as a plan's
                                              :type 'agent-ui-error)))))
     ;; Wrong ones: where they are.
     (should (equal (+test-aue-error '(:type "steps" :steps ((:name "a" :steps ((:name "b" :status "x"))))))
-                   "steps: step 1.1 has status \"x\"; one of: pending, running, done, failed, skipped"))
+                   "steps: step 1.1 has status \"x\"; one of: pending, running, waiting, done, failed, skipped"))
     (should (string-match-p "step 1 has seconds -1" (+test-aue-error '(:type "steps" :steps ((:name "a" :seconds -1))))))
     (should (string-match-p "steps 5 deep: 4 at most"
                             (+test-aue-error '(:type "steps" :steps ((:name "1" :steps ((:name "2" :steps ((:name "3" :steps ((:name "4" :steps ("5")))))))))))))))

@@ -324,9 +324,12 @@ taller than MAX-HEIGHT pixels."
                                   ;; lane on its side, along it, down the corridor
                                   ;; before the target's, into it.
                                   (let* ((c1 (c-mid from))
-                                         ;; Into its target beside the middle (an
-                                         ;; edge from the layer before comes there).
-                                         (c2 (+ (c-mid to) (nth track '(-6 6 -10 10))))
+                                         ;; Into its target's middle, as every
+                                         ;; edge into it: their tips one over
+                                         ;; the other (beside it, they read as
+                                         ;; arrows to different places). Its own
+                                         ;; track up to its last corridor.
+                                         (c2 (c-mid to))
                                          (lane (if (< (/ (+ c1 c2) 2) (/ natural-across 2.0))
                                                    (* arc (+ 0.2 (* 0.18 track)))
                                                  (- natural-across (* arc (+ 0.2 (* 0.18 track))))))
