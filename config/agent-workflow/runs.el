@@ -71,7 +71,8 @@
   more                   ; what you added to its budget: (:cost :tokens :time)
   warned                 ; non-nil once told it's near its budget
   blocked                ; its issue's blockers, new since it started (watch.el)
-  pane)                  ; its pane's canvas, a buffer, while it has one (pane.el)
+  pane                   ; its pane's canvas, a buffer, while it has one (pane.el)
+  base)                  ; where its branch started: (:branch B :commit C); (:branch nil :commit nil) unknown
 
 (defvar agent-workflow--runs nil
   "Every run of this Emacs, as they were started.")
@@ -199,6 +200,7 @@ all it needs to come back after Emacs stops (resume.el)."
                       :spent (agent-workflow--to-json (agent-workflow-run-spent-now run))
                       :more (agent-workflow--to-json (agent-workflow-run-more run))
                       :warned (if (agent-workflow-run-warned run) t :false)
+                      :base (agent-workflow--to-json (agent-workflow-run-base run))
                       :info (agent-workflow--to-json (agent-workflow-run-info run))
                       :edges (vconcat (mapcar (lambda (edge) (list :edge (car edge)
                                                                    :count (plist-get (cdr edge) :count)
@@ -502,7 +504,10 @@ removed, if it has nothing not committed (its branch stays)."
   (agent-workflow--issue-summary run)
   (dolist (job (agent-workflow-run-jobs run))
     (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) (car job)))
-  (ignore-errors (agent-workflow-worktree-remove (agent-workflow-run-project run) (agent-workflow-run-issue run))))
+  (ignore-errors (agent-workflow-worktree-remove (agent-workflow-run-project run) (agent-workflow-run-issue run)))
+  ;; Where it is now (its worktree gone, merged), said.
+  (agent-workflow-run-where run t)
+  (agent-workflow--changed run))
 
 ;; ====== LIMITS ======
 ;; Under the pool's size: a workflow's concurrency, how many of the pool's
@@ -586,6 +591,11 @@ job's snapshot of its branch), the commit it sees there; its first step."
          (project (agent-workflow-run-project run))
          (issue (agent-workflow-run-issue run))
          (edits (agent-workflow--job-edits-p run job))
+         ;; Where its branch starts, before it's made: your checkout's
+         ;; branch and commit (unknown: a branch made before).
+         (_ (unless (agent-workflow-run-base run)
+              (setf (agent-workflow-run-base run)
+                    (or (agent-workflow-worktree-base project issue) (list :branch nil :commit nil)))))
          (where (if edits
                     (let ((worktree (agent-workflow-worktree project issue :type (plist-get info :type)
                                                              :title (plist-get info :title))))
@@ -887,6 +897,76 @@ stops."
        (agent-workflow--rerun-or-ask run job other)))))
 
 (add-hook 'agent-workflow-agent-event-functions #'agent-workflow--agent-event)
+
+;; ====== WHERE ITS WORK IS ======
+;; A run's work is on its issue's branch, in its worktree: where it started
+;; (your checkout's branch and commit then: its base), what its merge goes
+;; into (the main branch), its own commits, those of its base branch the
+;; merge takes too (a branch other than the main one), what isn't
+;; committed, the snapshots its reading jobs read. Read from git when asked,
+;; again a few seconds after.
+
+(defvar agent-workflow--where-cache (make-hash-table :test #'eq :weakness 'key)
+  "Each run's `agent-workflow-run-where' and when it was read: (TIME . WHERE).")
+
+(defconst agent-workflow--where-age 3
+  "Seconds after which a run's `agent-workflow-run-where' is read again.")
+
+(defun agent-workflow-run-where (run &optional fresh)
+  "Where RUN's work is: a plist, :worktree its folder (nil, gone), :branch
+its issue's (nil: none yet), :base where it started (:branch B :commit C;
+nil: unknown), :into what its merge goes into, :own its commits, :with
+its base branch's the merge takes too, :uncommitted the files changed and
+not committed, :merged non-nil once it's merged, :snapshots its reading
+jobs' ((JOB DIR COMMIT)...). Read from git if it was more than
+`agent-workflow--where-age' seconds ago, or FRESH; nil if git can't say."
+  (let ((cached (gethash run agent-workflow--where-cache)))
+    (if (and cached (not fresh) (< (- (float-time) (car cached)) agent-workflow--where-age))
+        (cdr cached)
+      (let ((where (ignore-errors (agent-workflow--where-read run))))
+        (puthash run (cons (float-time) where) agent-workflow--where-cache)
+        where))))
+
+(defun agent-workflow--where-read (run)
+  "Where RUN's work is, read from git (see `agent-workflow-run-where')."
+  (let* ((project (agent-workflow-run-project run))
+         (issue (agent-workflow-run-issue run))
+         (default-directory project)
+         (dir (agent-workflow-worktree-directory project issue))
+         (live (file-exists-p (expand-file-name ".git" dir)))
+         (branch (or (and live (let ((default-directory dir))
+                                 (car (agent-workflow--git-lines "branch" "--show-current"))))
+                     (agent-workflow-issue-branch-made project issue)))
+         (base (let ((base (agent-workflow-run-base run))) (and (plist-get base :commit) base)))
+         (into (agent-workflow-main-branch project))
+         (count (lambda (range)
+                  (string-to-number (or (car (agent-workflow--git-lines "rev-list" "--count" range)) "0"))))
+         (own (if branch (funcall count (concat (or (plist-get base :commit) into) ".." branch)) 0)))
+    (list :worktree (and live dir)
+          :branch branch
+          :base base
+          :into into
+          :own own
+          :with (if (and base (not (equal (plist-get base :branch) into)))
+                    (funcall count (concat into ".." (plist-get base :commit)))
+                  0)
+          :uncommitted (if live (let ((default-directory dir)) (length (agent-workflow--git-lines "status" "--porcelain")))
+                         0)
+          :merged (or (and branch (> own 0)
+                           (eql 0 (process-file "git" nil nil nil "merge-base" "--is-ancestor" branch into)))
+                      ;; Its own commits unknown (where it started is), its
+                      ;; merge done.
+                      (seq-some (lambda (job)
+                                  (and (eq (plist-get (cdr job) :status) 'done)
+                                       (seq-some (lambda (step) (equal (plist-get step :uses) "merge"))
+                                                 (plist-get (agent-workflow--job-spec run (car job)) :steps))))
+                                (agent-workflow-run-jobs run)))
+          :snapshots (delq nil (mapcar (lambda (job)
+                                         (when-let* (((memq (plist-get (cdr job) :status) '(running waiting)))
+                                                     (snapshot (plist-get (cdr job) :snapshot))
+                                                     ((file-directory-p (nth 0 snapshot))))
+                                           (list (car job) (nth 0 snapshot) (nth 2 snapshot))))
+                                       (agent-workflow-run-jobs run))))))
 
 ;; ====== ITS AGENT ASKS ======
 ;; An agent asking you in its session (agent-shell's permission-request: a

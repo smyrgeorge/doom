@@ -107,6 +107,7 @@ workflow it started with: a run, or nil if it can't be."
            :active (or (plist-get (plist-get saved :spent) :time) 0)
            :more (plist-get saved :more)
            :warned (plist-get saved :warned)
+           :base (plist-get saved :base)
            :edges (mapcar (lambda (edge) (cons (plist-get edge :edge)
                                                (list :count (plist-get edge :count) :notes (plist-get edge :notes))))
                           (plist-get saved :edges))

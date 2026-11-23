@@ -14,7 +14,7 @@ From the shell, `run` follows its runs: their logs printed as they go, a line pe
 started`), until they all end (exit 0 done, 1 one cancelled); what needs the user says the command answering it. An
 agent running it should start it with `--detach` (the reply only, at once) and read later: `agent-workflow logs ISSUE`
 (its log; `-f`: followed to its end; `--json`: its journal), `agent-workflow status [ISSUE]` (JSON: its state, jobs,
-question, spend; without ISSUE, every run not over).
+question, spend, where its work is: worktree, branch, base, what it merges into; without ISSUE, every run not over).
 
 Started from Emacs (`M-x agent-workflow-run`), each run opens its pane, an Agent UI canvas drawn by Emacs: the run,
 what needs the user (answered there), a section per agent (its own canvas), its log. `M-x agent-workflow-runs` lists

@@ -146,6 +146,25 @@ worktree for an issue, or nil if it can."
           ((not (eql 0 (process-file "git" nil nil nil "rev-parse" "--verify" "--quiet" "HEAD")))
            "no commit yet: an issue's worktree branches from one"))))
 
+(defun agent-workflow-issue-branch-made (project issue)
+  "ISSUE's branch in PROJECT, made before (TYPE/ISSUE-words, whatever its
+words): its name, or nil."
+  (let ((default-directory (file-name-as-directory project)))
+    (seq-find (lambda (name) (string-match-p (format "\\`[^/]+/%s\\(?:-\\|\\'\\)" (regexp-quote issue)) name))
+              (agent-workflow--git-lines "for-each-ref" "--format=%(refname:short)" "refs/heads/"))))
+
+(defun agent-workflow-worktree-base (project issue)
+  "Where ISSUE's worktree in PROJECT would branch from, made now: your
+checkout's branch (nil: detached) and its commit, (:branch B :commit C);
+nil if it's there already, or its branch was made before."
+  (let ((default-directory (file-name-as-directory project)))
+    (unless (or (file-exists-p (expand-file-name ".git" (agent-workflow-worktree-directory project issue)))
+                (agent-workflow-issue-branch-made project issue)
+                (agent-workflow-worktree-reason project))
+      (list :branch (let ((name (car (agent-workflow--git-lines "branch" "--show-current"))))
+                      (and name (not (string-empty-p name)) name))
+            :commit (agent-workflow--git "rev-parse" "HEAD")))))
+
 (cl-defun agent-workflow-worktree (project issue &key type title)
   "ISSUE's worktree in PROJECT, made if it isn't there yet, on its branch
 \(`agent-workflow-issue-branch' from its TYPE and TITLE; made from your
@@ -164,11 +183,7 @@ as its reason. Return (DIR . BRANCH), BRANCH the one it's on."
       (let* ((branch (agent-workflow-issue-branch issue type title))
              ;; One of its id's made before, under another name (its title
              ;; changed since): that one.
-             (made (seq-find (lambda (name) (string-match-p (format "\\`[^/]+/%s\\(?:-\\|\\'\\)"
-                                                                   (regexp-quote issue))
-                                                           name))
-                             (agent-workflow--git-lines "for-each-ref" "--format=%(refname:short)"
-                                                        "refs/heads/"))))
+             (made (agent-workflow-issue-branch-made project issue)))
         (if made
             (agent-workflow--git "worktree" "add" (directory-file-name dir) made)
           (agent-workflow--git "worktree" "add" "-b" branch (directory-file-name dir) "HEAD"))))

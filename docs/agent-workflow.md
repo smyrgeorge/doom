@@ -233,12 +233,16 @@ branch stays).
 ### Following a run
 
 Started from Emacs, a run opens its **pane**, an [Agent UI](agent-ui.md) canvas named `ISSUE · WORKFLOW`, a pane per
-run (tiling lays them out). Under the issue's title, its state, time and budget, its sections, each under its divider:
+run (tiling lays them out). Under the issue's title, its state, time and budget, where its work is, then its sections,
+each under its divider:
 
 ```text
 doom-a1b: Lexer escapes
 feature · running · 12m 30s
 spent $1.24 of $15, 12m 30s of 3h
+⎇ feat/doom-a1b-lexer-escapes: 2 commits, 3 files not committed
+from main at 9bf1963 · merges into main
+  .agent-shell/agent-workflow/worktrees/doom-a1b/  its worktree
 ▾ Run ● ──────────────────────────────────────
 ✓ build   4m 12s  agent build
 ● review  2m 05s  agent review · round 2
@@ -250,6 +254,11 @@ spent $1.24 of $15, 12m 30s of 3h
 10:42:07  doom-a1b  review  started
 ```
 
+- **Where its work is**, above them: its branch, its commits, the files changed and not committed; the branch and
+  commit of your checkout it started from, and what its merge goes into (merged, once it is). Under it, its worktree
+  and the snapshots its reading jobs read: `RET` opens one. Started from a branch other than the main one, it says so:
+  that branch's commits not in the main one are merged with it. Looked at again every 15 seconds while the pane is open
+  (`agent-workflow-pane-where-every`); its worktree gone once the run is done, its branch kept.
 - **Run:** its jobs, each a step of a checklist, its steps under it: status, agent, round, try, time.
 - **Needs you**, only while the run waits for you: what on, as a question you answer there: an approval (approve, or
   reject with a note), the loop guard (go on with a note for each agent, accept it as it is, or stop), retries used up,
@@ -285,7 +294,7 @@ Ctrl-C stops following, never the runs.
 cmd/agent-workflow run doom-a1b            # followed to its end
 cmd/agent-workflow run doom-a1b --detach   # started, the reply only
 cmd/agent-workflow logs doom-a1b -f        # its log, followed until it ends
-cmd/agent-workflow status                  # every run not over, as JSON
+cmd/agent-workflow status                  # every run not over, as JSON (where its work is too)
 ```
 
 ```text

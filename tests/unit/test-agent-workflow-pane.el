@@ -310,6 +310,86 @@ the question asked here again; answered there: running, Needs you gone."
       (should (eq (agent-workflow-run-state run) 'running))
       (should (+test-awr--wait (lambda () (not (member "needs-you" (+test-awp--sections pane t)))))))))
 
+;; ====== WHERE ITS WORK IS ======
+
+(ert-deftest agent-workflow-pane/where-in-words ()
+  "Where a run's work is, in its header's words: its branch, its commits,
+what isn't committed, where it started, what it merges into (merged once
+it is); under it, its worktree and its reading jobs' snapshots; started
+from another branch than the main one, said."
+  (should (equal (agent-workflow--pane-where-lines
+                  '(:branch "feat/demo-1-x" :into "main" :own 2 :uncommitted 1 :worktree "/p/w/"
+                    :base (:branch "main" :commit "abcdef1234")))
+                 '("⎇ feat/demo-1-x: 2 commits, 1 file not committed" "from main at abcdef1 · merges into main")))
+  (should (equal (agent-workflow--pane-where-lines '(:branch "feat/demo-1-x" :into "main" :own 1 :merged t
+                                                     :base (:branch nil :commit "abcdef1234")))
+                 '("⎇ feat/demo-1-x: 1 commit, its worktree removed" "from a detached HEAD at abcdef1 · merged into main")))
+  (should (equal (agent-workflow--pane-where-lines '(:branch "feat/demo-1-x" :into "main" :own 0 :worktree "/p/w/"))
+                 '("⎇ feat/demo-1-x: no commit yet" "merges into main")))
+  (should (equal (agent-workflow--pane-where-lines '(:branch "feat/demo-1-x" :into "main" :own 0 :merged t))
+                 '("⎇ feat/demo-1-x: its worktree removed" "merged into main")))
+  (should-not (agent-workflow--pane-where-lines '(:into "main")))
+  (let ((run (agent-workflow-run--make :project "/p/" :issue "demo-1")))
+    (should (equal (agent-workflow--pane-where
+                    run '(:worktree "/p/w/" :into "main" :with 0 :snapshots (("review" "/p/w@review/" "1234567890"))))
+                   '((:id "where" :type "files" :dir "/p/"
+                      :files ((:path "w/" :note "its worktree") (:path "w@review/" :note "review's snapshot, at 1234567")))
+                     nil)))
+    (should (equal (agent-workflow--pane-where run '(:into "main" :with 3 :base (:branch "side" :commit "abc")))
+                   '(nil (:id "where-note" :type "text" :face "warning"
+                          :text "Started from side, not main: its 3 commits not in main are merged too."))))
+    (should (equal (agent-workflow--pane-where run '(:into "main" :with 3 :merged t :base (:branch "side" :commit "abc")))
+                   '(nil nil)))))
+
+(ert-deftest agent-workflow-pane/where-its-work-is ()
+  "Started from a branch other than the main one: its header says its
+branch, where it started and what it merges into, its worktree under it,
+the start branch's commit merged too, said; a commit and a file changed by
+its agent, said once looked at again; status has the same; kept in its
+state.json. Done: its worktree removed, said."
+  (+test-awp "where"
+    (let* ((main (agent-workflow-main-branch project))
+           (agent-workflow--where-age 0)
+           (base (let ((default-directory project))
+                   (call-process "git" nil nil nil "checkout" "-q" "-b" "side")
+                   (+test-awr--commit project "side.txt" "a side commit")
+                   (agent-workflow--git "rev-parse" "HEAD")))
+           (issue (+test-awr--issue project "Where it is"))
+           (run (car (car (agent-workflow-run (list issue) nil project))))
+           (pane (agent-workflow-run-pane run))
+           (dir (progn (+test-awr--agent run "build") (agent-workflow-worktree-directory project issue)))
+           (branch (agent-workflow-issue-branch issue "feature" "Where it is"))
+           (text (lambda () (plist-get (agent-ui-get "run" :canvas pane) :text))))
+      (should (equal (agent-workflow-run-base run) (list :branch "side" :commit base)))
+      (should (string-search (format "⎇ %s: no commit yet" branch) (funcall text)))
+      (should (string-search (format "from side at %s · merges into %s" (substring base 0 7) main) (funcall text)))
+      (should (equal (plist-get (agent-ui-get "where" :canvas pane) :files)
+                     (list (list :path (file-relative-name dir project) :note "its worktree"))))
+      (should (equal (plist-get (agent-ui-get "where-note" :canvas pane) :text)
+                     (format "Started from side, not %s: its 1 commit not in %s is merged too." main main)))
+      ;; Its agent commits, changes a file: said once looked at again.
+      (+test-awr--commit dir "a.txt" "a commit of its own")
+      (write-region "x" nil (expand-file-name "b.txt" dir))
+      (agent-workflow--pane-where-tick)
+      (should (string-search ": 1 commit, 1 file not committed" (funcall text)))
+      (should (equal (plist-get (aref (plist-get (agent-workflow--request-status project nil) :runs) 0) :where)
+                     (list :worktree dir :branch branch
+                           :base (list :branch "side" :commit base) :into main
+                           :own 1 :with 1 :uncommitted 1 :merged :false)))
+      (should (equal (plist-get (with-temp-buffer
+                                  (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
+                                  (json-parse-buffer :object-type 'plist :array-type 'list))
+                                :base)
+                     (list :branch "side" :commit base)))
+      ;; Done (nothing left uncommitted): its worktree removed, said.
+      (delete-file (expand-file-name "b.txt" dir))
+      (+test-awr--finish run "build")
+      (+test-awr--finish run "review" "approved")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should-not (file-exists-p dir))
+      (should (string-search ": 1 commit, its worktree removed" (funcall text)))
+      (should-not (ignore-errors (agent-ui-get "where" :canvas pane))))))
+
 ;; ====== EVERY RUN ======
 
 (ert-deftest agent-workflow-pane/the-runs-listed ()

@@ -34,6 +34,7 @@
 (defvar agent-ui-answer-function)
 (defvar agent-ui-closes-with)
 (defvar agent-ui-display-function)
+(defvar agent-ui--entries)
 (declare-function agent-ui--session-name "agent-ui/agent")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")
@@ -53,6 +54,18 @@ or you opened it).")
 
 (defvar-local agent-workflow--pane-asked nil
   "In a run's pane: the question its Needs you shows, (JOB KIND WHY).")
+
+(defvar-local agent-workflow--pane-where-shown nil
+  "In a run's pane: where its work is, as its header shows it
+\(`agent-workflow-run-where').")
+
+(defvar agent-workflow-pane-where-every 15
+  "Seconds between looks at where the work of runs not over is (a commit,
+files changed), while their panes are open: their headers drawn again if it
+changed.")
+
+(defvar agent-workflow--pane-where-timer nil
+  "The timer looking at where runs' work is, while a pane of one not over is open.")
 
 (defvar-local agent-workflow--pane-ended nil
   "In a run's pane: its jobs that ended while it showed them: their sections
@@ -171,8 +184,60 @@ steps' times noted."
 
 ;; ====== WHAT IT SHOWS ======
 
+(defun agent-workflow--pane-where-lines (where)
+  "WHERE (`agent-workflow-run-where') in words, the header's lines: its
+branch, its commits, what isn't committed; where it started, what it merges
+into."
+  (when-let* ((branch (plist-get where :branch)))
+    (let* ((base (plist-get where :base))
+           (into (plist-get where :into))
+           (own (or (plist-get where :own) 0))
+           (uncommitted (or (plist-get where :uncommitted) 0))
+           (merged (plist-get where :merged))
+           (said (delq nil (list (pcase own
+                                   ;; Merged, where it started unknown: its
+                                   ;; commits too.
+                                   (0 (and (not merged) "no commit yet"))
+                                   (1 "1 commit")
+                                   (_ (format "%d commits" own)))
+                                 (and (> uncommitted 0)
+                                      (format "%d %s not committed" uncommitted (if (= uncommitted 1) "file" "files")))
+                                 (and (not (plist-get where :worktree)) "its worktree removed")))))
+      (list (concat "⎇ " branch (if said (concat ": " (string-join said ", ")) ""))
+            (concat (if base
+                        (format "from %s at %s · " (or (plist-get base :branch) "a detached HEAD")
+                                (substring (plist-get base :commit) 0 (min 7 (length (plist-get base :commit)))))
+                      "")
+                    (format (if merged "merged into %s" "merges into %s") into))))))
+
+(defun agent-workflow--pane-where (run where)
+  "RUN's WHERE (`agent-workflow-run-where') as elements under its header:
+its worktree and its reading jobs' snapshots (RET opens one), its base
+branch's commits its merge takes too, said. Their ids, all of them: where,
+where-note, nil each one not shown."
+  (let* ((project (agent-workflow-run-project run))
+         (worktree (plist-get where :worktree))
+         (base (plist-get where :base))
+         (with (or (plist-get where :with) 0))
+         (files (append (when worktree
+                          (list (list :path (file-relative-name worktree project) :note "its worktree")))
+                        (mapcar (lambda (snapshot)
+                                  (list :path (file-relative-name (nth 1 snapshot) project)
+                                        :note (format "%s's snapshot, at %s" (nth 0 snapshot)
+                                                      (substring (or (nth 2 snapshot) "") 0
+                                                                 (min 7 (length (or (nth 2 snapshot) "")))))))
+                                (plist-get where :snapshots)))))
+    (list (and files (list :id "where" :type "files" :dir project :files files))
+          (and (> with 0) (not (plist-get where :merged))
+               (list :id "where-note" :type "text" :face "warning"
+                     :text (format "Started from %s, not %s: its %d %s not in %s %s merged too."
+                                   (plist-get base :branch) (plist-get where :into) with
+                                   (if (= with 1) "commit" "commits") (plist-get where :into)
+                                   (if (= with 1) "is" "are")))))))
+
 (defun agent-workflow--pane-header (run)
-  "The run, above its sections: its issue, its state, its time, its budget."
+  "The run, above its sections: its issue, its state, its time, its budget,
+where its work is."
   (let* ((info (agent-workflow-run-info run))
          (state (agent-workflow-run-state run))
          (spent (agent-workflow-run-spent-now run))
@@ -182,21 +247,23 @@ steps' times noted."
           :title (format "%s: %s" (agent-workflow-run-issue run) (or (plist-get info :title) ""))
           :face (pcase state ('waiting "warning") ('cancelled "muted") ('done "success") (_ "plain"))
           :text (string-join
-                 (delq nil
-                       (list (format "%s · %s · %s"
-                                     (plist-get (agent-workflow-run-workflow run) :name)
-                                     (pcase state
-                                       ('waiting "waits for you")
-                                       ('queued (concat "queued" (if (agent-workflow-run-why run)
-                                                                     (concat ": " (agent-workflow-run-why run))
-                                                                   "")))
-                                       (_ (symbol-name state)))
-                                     time)
-                             (cond (budget (concat "spent " (agent-workflow--budget-words spent budget)
-                                                   (if (agent-workflow-run-warned run) " · near its budget" "")))
-                                   ((> (plist-get spent :cost) 0)
-                                    (format "spent $%.2f, %s tokens" (plist-get spent :cost)
-                                            (agent-ui-format-compact (plist-get spent :tokens)))))))
+                 (append
+                  (delq nil
+                        (list (format "%s · %s · %s"
+                                      (plist-get (agent-workflow-run-workflow run) :name)
+                                      (pcase state
+                                        ('waiting "waits for you")
+                                        ('queued (concat "queued" (if (agent-workflow-run-why run)
+                                                                      (concat ": " (agent-workflow-run-why run))
+                                                                    "")))
+                                        (_ (symbol-name state)))
+                                      time)
+                              (cond (budget (concat "spent " (agent-workflow--budget-words spent budget)
+                                                    (if (agent-workflow-run-warned run) " · near its budget" "")))
+                                    ((> (plist-get spent :cost) 0)
+                                     (format "spent $%.2f, %s tokens" (plist-get spent :cost)
+                                             (agent-ui-format-compact (plist-get spent :tokens)))))))
+                  (agent-workflow--pane-where-lines (agent-workflow-run-where run)))
                  "\n"))))
 
 (defun agent-workflow--pane-step-name (step)
@@ -528,11 +595,44 @@ countdown)."
     (with-current-buffer pane
       (agent-workflow--pane-draw-in run pane made))))
 
+(defun agent-workflow--pane-show-where (run pane)
+  "RUN's where under its header in PANE (`agent-workflow--pane-where'):
+each element shown, or removed once it isn't."
+  (cl-loop for id in '("where" "where-note")
+           for element in (agent-workflow--pane-where run (agent-workflow-run-where run))
+           do (cond (element (agent-ui-show element :canvas pane))
+                    ;; The canvas's own: its key its id.
+                    ((gethash id agent-ui--entries) (agent-ui-remove id :canvas pane)))))
+
+(defun agent-workflow--pane-where-tick ()
+  "Where the work of each run not over with a pane is looked at again: its
+pane drawn again if it changed (a commit, files changed between its run's
+events). Stopped once there's none."
+  (let ((any nil))
+    (dolist (run agent-workflow--runs)
+      (when-let* (((not (memq (agent-workflow-run-state run) agent-workflow--ended)))
+                  (pane (agent-workflow--pane-live run)))
+        (setq any t)
+        (with-demoted-errors "agent workflow's pane: %S"
+          (unless (equal (agent-workflow-run-where run) (buffer-local-value 'agent-workflow--pane-where-shown pane))
+            (agent-workflow--pane-draw run)))))
+    (unless any
+      (when (timerp agent-workflow--pane-where-timer)
+        (cancel-timer agent-workflow--pane-where-timer))
+      (setq agent-workflow--pane-where-timer nil))))
+
 (defun agent-workflow--pane-draw-in (run pane made)
   "RUN's PANE drawn again, PANE's buffer current (see
 `agent-workflow--pane-draw')."
   (let ((agent-ui-display-function (if made #'ignore agent-ui-display-function)))
+      (setq agent-workflow--pane-where-shown (agent-workflow-run-where run))
       (agent-ui-show (agent-workflow--pane-header run) :canvas pane)
+      (agent-workflow--pane-show-where run pane)
+      (unless (or (memq (agent-workflow-run-state run) agent-workflow--ended)
+                  (timerp agent-workflow--pane-where-timer))
+        (setq agent-workflow--pane-where-timer
+              (run-at-time agent-workflow-pane-where-every agent-workflow-pane-where-every
+                           #'agent-workflow--pane-where-tick)))
       (agent-ui-show (agent-workflow--pane-jobs run (and made (memq (agent-workflow-run-state run) agent-workflow--ended)))
                      :canvas pane :section "run")
       (agent-ui-section pane "run" :state (pcase (agent-workflow-run-state run)

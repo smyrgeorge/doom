@@ -45,8 +45,10 @@
 ;;        "state", "why", "jobs": [{"name", "status", "outcome", "round",
 ;;        "why"}...], "asking": {"job", "kind"} or null (kind agent: its
 ;;        agent asks in its session, "question" and "session" too),
-;;        "spent": {"cost", "tokens", "time"}, "budget": {...} or null,
-;;        "log"}...]}; any shell's
+;;        "where": {"worktree" (null: gone), "branch", "base": {"branch",
+;;        "commit"} or null, "into", "own", "with", "uncommitted",
+;;        "merged"} or null, "spent": {"cost", "tokens", "time"},
+;;        "budget": {...} or null, "log"}...]}; any shell's
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
 ;;        "project", "workflows": [names], "profiles": [names], "problems":
@@ -151,6 +153,20 @@ a user error if it has none."
                        (puthash dir run agent-workflow--read-runs)))))
       (user-error "%s has no run" issue)))
 
+(defun agent-workflow--where-reply (run)
+  "Where RUN's work is (`agent-workflow-run-where'), for status's reply."
+  (if-let* ((where (agent-workflow-run-where run)))
+      (let ((base (plist-get where :base)))
+        (list :worktree (or (plist-get where :worktree) :null)
+              :branch (or (plist-get where :branch) :null)
+              :base (if base (list :branch (or (plist-get base :branch) :null) :commit (plist-get base :commit)) :null)
+              :into (plist-get where :into)
+              :own (plist-get where :own)
+              :with (plist-get where :with)
+              :uncommitted (plist-get where :uncommitted)
+              :merged (if (plist-get where :merged) t :false)))
+    :null))
+
 (defun agent-workflow--request-status (directory payload)
   "The reply to status: PAYLOAD's issue's latest run, else DIRECTORY's
 project's runs not over."
@@ -188,6 +204,7 @@ project's runs not over."
                                                              :session (or (and agent (agent-workflow-agent-name agent))
                                                                           :null))))
                                                     (t :null))
+                                           :where (agent-workflow--where-reply run)
                                            :spent (list :cost (plist-get spent :cost) :tokens (plist-get spent :tokens)
                                                         :time (plist-get spent :time))
                                            :budget (if budget
