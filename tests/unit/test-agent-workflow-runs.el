@@ -195,6 +195,19 @@ the notes."
                            "done"))
             (should (equal (plist-get (agent-workflow--job run "review") :notes) "looks good to me"))))))))
 
+(ert-deftest agent-workflow-runs/an-agent-freed-by-a-cancel ()
+  "The pool full, a run waiting for an agent: another run cancelled, its
+agent freed: the waiting run gets it, nothing else happening."
+  (+test-awr "freed"
+    (let* ((agent-workflow-pool 1)
+           (a (agent-workflow-start-run project (+test-awr--issue project "A")))
+           (b (progn (+test-awr--agent a "build")
+                     (agent-workflow-start-run project (+test-awr--issue project "B")))))
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why b) "build: waiting for an agent: 1 of 1 work"))))
+      (agent-workflow-cancel a)
+      (should (+test-awr--agent b "build"))
+      (agent-workflow-cancel b))))
+
 ;; ====== PARALLEL JOBS ======
 
 (ert-deftest agent-workflow-runs/parallel-jobs ()

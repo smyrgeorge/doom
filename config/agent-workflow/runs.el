@@ -1173,6 +1173,14 @@ stops."
 
 (add-hook 'agent-workflow-agent-event-functions #'agent-workflow--agent-event)
 
+(defun agent-workflow--agent-freed (_agent)
+  "An agent stops (its job over, its run cancelled or failed, its budget
+used up, the watch, pause now...): the runs looked at soon, one waiting for
+an agent getting it. In `agent-workflow-agent-stop-functions'."
+  (agent-workflow--tick-soon))
+
+(add-hook 'agent-workflow-agent-stop-functions #'agent-workflow--agent-freed)
+
 ;; ====== WHERE ITS WORK IS ======
 ;; A run's work is on its issue's branch, in its worktree: where it started
 ;; (your checkout's branch and commit then: its base), what its merge goes
