@@ -377,32 +377,32 @@ it's merged for real."
       (agent-workflow--merge-into run job index branch main merged))))
 
 (defun agent-workflow--merge-into (run job index branch main merged)
-  "BRANCH merged into MAIN for real (MERGED: the merge as tried): where
-MAIN is checked out in your checkout, there, if no file it changes has a
-change of yours; where it's checked out elsewhere, it waits for you; where
-it isn't, its ref moved to MERGED, if it's still where the merge was tried
-\(else tried again on it)."
+  "BRANCH merged into MAIN for real (MERGED: the merge as tried), if MAIN
+is still where it was tried (else tried again on it): where MAIN is
+checked out in your checkout, fast-forwarded there to MERGED, if no file
+it changes has a change of yours; where it's checked out elsewhere, it
+waits for you; where it isn't, its ref moved to MERGED."
   (condition-case err
       (let* ((project (agent-workflow-run-project run))
              (default-directory project)
              (where (seq-find (lambda (worktree) (equal (plist-get worktree :branch) main))
-                              (agent-workflow--worktrees project))))
+                              (agent-workflow--worktrees project)))
+             ;; Where the merge was tried: its first parent.
+             (base (agent-workflow--git "rev-parse" (concat merged "^1"))))
         (cond
+         ;; Main moved since the merge was tried (another run merged, your
+         ;; commits while its suite ran): tried again on it, never merged
+         ;; blind nor overwritten.
+         ((let ((now (agent-workflow--git "rev-parse" (concat "refs/heads/" main))))
+            (unless (equal base now)
+              (agent-workflow--journal run "main-moved" :job job :step index :into main :from base :to now)
+              t))
+          (agent-workflow--merge-step run job (nth index (plist-get (agent-workflow--job-spec run job) :steps)) index))
          ((null where)
-          ;; Its ref moved to the merge only from where the merge was tried
-          ;; (its first parent): main moved meanwhile (another run merged
-          ;; while its suite ran), tried again on it, never overwritten.
-          (let ((base (agent-workflow--git "rev-parse" (concat merged "^1")))
-                (now (agent-workflow--git "rev-parse" (concat "refs/heads/" main))))
-            (if (not (equal base now))
-                (progn
-                  (agent-workflow--journal run "main-moved" :job job :step index :into main
-                                           :from base :to now)
-                  (agent-workflow--merge-step run job (nth index (plist-get (agent-workflow--job-spec run job) :steps))
-                                              index))
-              (agent-workflow--git "update-ref" "-m" (format "agent workflow: merge %s" branch)
-                                   (concat "refs/heads/" main) merged base)
-              (agent-workflow--merged run job index branch main nil))))
+          ;; Its ref moved to the merge, only from where it was tried.
+          (agent-workflow--git "update-ref" "-m" (format "agent workflow: merge %s" branch)
+                               (concat "refs/heads/" main) merged base)
+          (agent-workflow--merged run job index branch main nil))
          ((not (equal (file-truename (plist-get where :dir)) (file-truename project)))
           (agent-workflow--job-set run job :ask (list :kind 'merge :step index))
           (agent-workflow--wait run job (format "%s: its merge waits: %s is checked out in %s, not your checkout: \
@@ -418,9 +418,13 @@ merge it there, or check it out here, then go" job main (abbreviate-file-name (p
                   (agent-workflow--journal run "asked" :job job :step index :kind "merge" :files (vconcat both))
                   (agent-workflow--wait run job (format "%s: its merge waits: your checkout has changes in %s: \
 commit or stash them, then go" job (string-join both ", "))))
-              (agent-workflow--git "-c" "user.name=agent workflow" "-c" "user.email=agent-workflow@localhost"
-                                   "merge" "--no-ff" "--no-edit" "-m"
-                                   (format "Merge %s (%s)" branch (agent-workflow-run-issue run)) branch)
+              ;; The merge as tried (and its suite passed on), fast-forwarded
+              ;; to: main is its first parent. Failing, never left mid-merge.
+              (condition-case err
+                  (agent-workflow--git "merge" "--ff-only" merged)
+                (error (when (file-exists-p (expand-file-name (agent-workflow--git "rev-parse" "--git-path" "MERGE_HEAD")))
+                         (process-file "git" nil nil nil "merge" "--abort"))
+                       (signal (car err) (cdr err))))
               (agent-workflow--merged run job index branch main nil))))))
     (error (agent-workflow--broke run job index (format "its merge: %s" (error-message-string err))))))
 

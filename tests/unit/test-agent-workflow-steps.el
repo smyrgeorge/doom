@@ -392,6 +392,30 @@ waiting first for your change to a file it changes; the issue closed."
       (should (equal (alist-get 'status (+test-awr--shown project issue)) "closed"))
       (should-not (file-exists-p (agent-workflow-snapshot-directory project issue "merge-try"))))))
 
+(ert-deftest agent-workflow-steps/your-commit-while-its-suite-ran ()
+  "Main checked out in your checkout, your commit there while the merge's
+suite ran: never merged blind there: tried again on it (here a conflict:
+its agent asked to rebase); your checkout never left mid-merge."
+  (+test-awr "checkout-moved"
+    (+test-aws--workflow project (replace-regexp-in-string "suite: test -f lexer.el" "suite: sleep 2; test -f lexer.el"
+                                                           +test-aws--merge))
+    (let* ((issue (+test-awr--issue project "Yours meanwhile"))
+           (run (agent-workflow-start-run project issue))
+           (default-directory project))
+      (+test-aws--build run project issue "lexer.el" "theirs\n")
+      (should (+test-awr--wait (lambda () (process-live-p (plist-get (agent-workflow--job run "merge") :process)))))
+      (+test-awr--commit project "lexer.el" "your lexer")
+      (should (+test-awr--wait (lambda () (seq-some (lambda (prompt) (string-match-p "Rebase it onto" prompt))
+                                                    (+test-awr--prompts "checkout-moved")))
+                               30))
+      (should (member "main-moved" (+test-awr--journal run)))
+      (should-not (file-exists-p (expand-file-name (agent-workflow--git "rev-parse" "--git-path" "MERGE_HEAD"))))
+      ;; Nothing of a merge left there (the project's own workflow files
+      ;; aside, never committed here).
+      (should-not (seq-remove (lambda (line) (string-prefix-p "?? " line)) (agent-workflow--git-lines "status" "--porcelain")))
+      (should (equal (agent-workflow--git "log" "-1" "--format=%s") "your lexer"))
+      (agent-workflow-cancel run))))
+
 (ert-deftest agent-workflow-steps/merge-a-branch-not-checked-out ()
   "The main branch checked out nowhere: moved to the merge, no tree
 touched."
