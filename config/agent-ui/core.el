@@ -459,12 +459,13 @@ session's prompt).")
            do (unless (agent-ui--plist-p action)
                 (agent-ui--fail "actions: action %d must be {\"label\": ..., \"prompt\": ...}" i))
            (cl-loop for (k _) on action by #'cddr
-                    unless (memq k '(:label :prompt :submit))
-                    do (agent-ui--fail "actions: action %d has %s: an action has label, prompt, submit"
+                    unless (memq k '(:label :prompt :submit :help))
+                    do (agent-ui--fail "actions: action %d has %s: an action has label, prompt, submit, help"
                                        i (agent-ui--show-value (substring (symbol-name k) 1))))
-           (dolist (key '(:label :prompt))
+           (dolist (key '(:label :prompt :help))
              (let ((value (plist-get action key)))
-               (unless (and (stringp value) (not (string-blank-p value)))
+               (unless (or (and (eq key :help) (null value))
+                           (and (stringp value) (not (string-blank-p value))))
                  (agent-ui--fail "actions: action %d's %s must be text" i (substring (symbol-name key) 1)))))
            (unless (memq (plist-get action :submit) '(nil t :false))
              (agent-ui--fail "actions: action %d's submit is true or false" i)))
@@ -472,7 +473,9 @@ session's prompt).")
 
 (defun agent-ui--actions (actions width)
   "ACTIONS as a row of buttons, broken to WIDTH (`agent-ui-button-row'); nil
-if there are none (or they're wrong)."
+if there are none (or they're wrong). Hovered, each says what it does: its
+own :help (a canvas handling its buttons itself, `agent-ui-answer-function':
+RET: HELP), else the prompt it puts into the session's prompt, or sends."
   (when (and actions (ignore-errors (agent-ui-check-actions actions)))
     (agent-ui-button-row
      (mapcar
@@ -481,8 +484,10 @@ if there are none (or they're wrong)."
               (submit (eq (plist-get action :submit) t)))
           (agent-ui-button (propertize (concat "⏵ " (plist-get action :label)) 'face 'agent-ui-action)
                            (lambda () (funcall agent-ui-action-function prompt submit))
-                           (format "RET: %s \"%s\"" (if submit "send" "put into the prompt")
-                                   (truncate-string-to-width prompt 60 nil nil "…")))))
+                           (if-let* ((help (plist-get action :help)))
+                               (concat "RET: " help)
+                             (format "RET: %s \"%s\"" (if submit "send" "put into the prompt")
+                                     (truncate-string-to-width prompt 60 nil nil "…"))))))
       actions)
      width)))
 

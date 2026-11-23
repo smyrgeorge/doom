@@ -436,8 +436,9 @@ merge takes too)."
     (list (and line
                (append (list :id "git" :type "text" :text line)
                        (when worktree
-                         (list :actions '((:label "Worktree" :prompt "worktree")
-                                          (:label "Magit" :prompt "magit"))))))
+                         ;; Its own (`agent-workflow--pane-answer'): hovered, what they open.
+                         (list :actions '((:label "Worktree" :prompt "worktree" :help "open its worktree")
+                                          (:label "Magit" :prompt "magit" :help "magit on its worktree"))))))
           (and worktree files
                (list :id "changes" :type "files" :dir worktree :tree (if (> (length files) 12) t :false)
                      :files (mapcar (lambda (file)

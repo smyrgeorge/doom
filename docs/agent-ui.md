@@ -376,7 +376,9 @@ registered in `agent-shell-mcp-servers` with the session's name and directory; e
 
 Any element can have `actions`: buttons under it (a choice's, compare's or rank's, until it's answered, beside its
 Answer, on its row), each a `label` and the `prompt` it puts into the session's prompt when pressed (`RET` or a
-click), for you to read and send; with `"submit": true`, sent at once. At most 6; they're
+click), for you to read and send; with `"submit": true`, sent at once. Hovered, a button says the prompt it puts
+there (or sends); one with a `help` says that instead (`RET: HELP`): a canvas's own button, one its Lisp handles
+itself (`agent-ui-answer-function`: a run's pane's Worktree, *open its worktree*). At most 6; they're
 checked when the element is shown. While the agent works, a sent one is queued until it's done, and one for the
 prompt is offered to queue (change it first if you like). A snapshot leaves the buttons out: they stay on the canvas.
 

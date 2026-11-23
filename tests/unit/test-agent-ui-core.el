@@ -481,6 +481,20 @@ frozen)."
     ;; None: no line for them.
     (should (equal (agent-ui-render '(:type "plain") (agent-ui-context)) "body"))))
 
+(ert-deftest agent-ui-core/an-action-s-own-help ()
+  "An action with a help: hovered, RET: HELP, not the prompt it puts; one
+without, its prompt as before."
+  (+test-aui
+    (agent-ui-define plain "Text." :text (lambda (_p _c) "body"))
+    (let ((text (agent-ui-render '(:type "plain"
+                                   :actions ((:label "Worktree" :prompt "worktree" :help "open its worktree")
+                                             (:label "Retry" :prompt "Run it again")))
+                                 (agent-ui-context))))
+      (should (equal (get-text-property (string-search "⏵ Worktree" text) 'help-echo text)
+                     "RET: open its worktree"))
+      (should (equal (get-text-property (string-search "⏵ Retry" text) 'help-echo text)
+                     "RET: put into the prompt \"Run it again\"")))))
+
 (ert-deftest agent-ui-core/actions-fit-the-width ()
   "Actions broken between their buttons to the width (one line of 44 columns
 at 24: cut off by the canvas), each still a button."
@@ -507,6 +521,7 @@ at 24: cut off by the canvas), each still a button."
     (should (string-match-p "action 1's label must be text" (wrong '((:label " " :prompt "p")))))
     (should (string-match-p "action 2 has \"run\"" (wrong '((:label "a" :prompt "p") (:label "b" :prompt "q" :run t)))))
     (should (string-match-p "submit is true or false" (wrong '((:label "a" :prompt "p" :submit "yes")))))
+    (should (string-match-p "action 1's help must be text" (wrong '((:label "a" :prompt "p" :help 3)))))
     (should (string-match-p "at most 6" (wrong (make-list 7 '(:label "a" :prompt "p"))))))
   (should (agent-ui-check-actions '((:label "a" :prompt "p" :submit :false)))))
 

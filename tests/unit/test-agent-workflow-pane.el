@@ -671,6 +671,14 @@ said), its commits; started from another branch than the main one, said."
                      :text "Started from side, not main: its 3 commits not in main are merged too.")))
     (should-not (nth 3 (agent-workflow--pane-git run '(:into "main" :with 3 :merged t :base (:branch "side" :commit "abc")))))))
 
+(ert-deftest agent-workflow-pane/git-s-buttons-say-what-they-do ()
+  "Its git line's Worktree and Magit, hovered: what they open (the pane's
+own), not a prompt they'd put into a session's."
+  (let* ((element (car (agent-workflow--pane-git nil '(:branch "feature/x" :worktree "/w/" :into "main"))))
+         (text (agent-ui-render element (agent-ui-context))))
+    (should (equal (get-text-property (string-search "⏵ Worktree" text) 'help-echo text) "RET: open its worktree"))
+    (should (equal (get-text-property (string-search "⏵ Magit" text) 'help-echo text) "RET: magit on its worktree"))))
+
 (ert-deftest agent-workflow-pane/where-its-work-is ()
   "Started from a branch other than the main one: its git line says its
 branch, where it started and what it merges into, the start branch's
