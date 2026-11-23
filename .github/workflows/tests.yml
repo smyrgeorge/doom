@@ -217,17 +217,11 @@ jobs:
         env:
           TEST_LOGS: ${{ runner.temp }}/test-logs
 
-      # CFLOG_FORCE_STDERR: what macOS's frameworks log (NSLog, an uncaught
-      # exception's reason before they abort) in each Emacs's log too, not
-      # only in the system's: they write it to stderr only when it's a
-      # terminal. An Emacs aborted by them (exit 134) left nothing in its log;
-      # Emacs's own aborts say "Fatal error" and a backtrace there.
       - name: End-to-end tests
         if: ${{ !cancelled() && steps.unit.outcome != 'skipped' }}
         run: tests/run.sh e2e
         env:
           TEST_LOGS: ${{ runner.temp }}/test-logs
-          CFLOG_FORCE_STDERR: "YES"
 
       # An Emacs that crashed (an end-to-end test file's exit 134: SIGABRT,
       # nothing in its log): macOS's crash report, its backtrace, and what
