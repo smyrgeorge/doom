@@ -1,5 +1,5 @@
 ;;; tests/unit/test-agent-workflow-pick.el -*- lexical-binding: t; -*-
-;; config/agent-workflow/runs.el's issue picker (M-x agent-workflow-run's
+;; config/agent-workflow/runs.el's issue picker (M-x agent-workflow-run-ticket's
 ;; "Run on:"), keys typed into it, vertico on as in Doom and without it: a
 ;; title with a comma picked with RET (the comma no longer cutting it in
 ;; two), several separated by what no title has, an epic for its issues;

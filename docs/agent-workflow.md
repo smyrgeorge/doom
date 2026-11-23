@@ -79,6 +79,7 @@ jobs:
 |---|---|
 | `name` | Its file's name, if given |
 | `description` | What it's for |
+| `ticket` | `false`: it runs on no ticket, and only so (`M-x agent-workflow-run`; see [Runs](#runs)); `true` by default |
 | `for` | The issue types it's offered for |
 | `concurrency` | How many agents work on its runs at once |
 | `budget` | `cost` (dollars), `tokens`, `time` (`3h`) a run may spend |
@@ -174,14 +175,14 @@ Their merges run no suite: a project's own copy adds its tests with `with: {suit
 
 ## This config's own
 
-This config has two of its own in `.agent-workflow/`, samples to start a project's from. They have no `for`: an issue
-gets one by its label (`workflow:screenshots`, `workflow:github`), or by `--workflow` (`M-x agent-workflow-run` offers
-them for any issue). They run once you trust this config (see [Trust](#trust)).
+This config has two of its own in `.agent-workflow/`, samples to start a project's from. They take no ticket
+(`ticket: false`): `M-x agent-workflow-run` picks one and starts it, `cmd/agent-workflow run --workflow NAME` from the
+shell. They run once you trust this config (see [Trust](#trust)).
 
 | Workflow | Jobs |
 |---|---|
 | screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` profile looks at each changed one and commits the good ones; review (changes: capture again); merge |
-| github | green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits, and the job runs again from its push (`retry-from`), 5 times at most; sync: your main fast-forwarded to what was pushed, the fixes with it (`github-sync.sh`); close (a merge: the issue closed) |
+| github | green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits, and the job runs again from its push (`retry-from`), 5 times at most; sync: your main fast-forwarded to what was pushed, the fixes with it (`github-sync.sh`); merge (merged already: its branch deleted) |
 
 The `screenshots` profile (`.agent-workflow/profiles/`) may read, look at images and commit; it never takes them
 again, nor changes anything else. The `ci` profile may read, edit, run the tests and commit; it never pushes (the
@@ -201,9 +202,8 @@ from Emacs's environment (`(setenv "GITHUB_POLL" "60")`):
 | `GITHUB_LOG_LINES` | 150 | a failed job's last lines given to the agent |
 
 ```sh
-bd label add doom-a1b workflow:screenshots
-cmd/agent-workflow run doom-a1b
-cmd/agent-workflow run doom-a2c --workflow github
+cmd/agent-workflow run --workflow screenshots
+cmd/agent-workflow run --workflow github
 cmd/agent-workflow dry-run screenshots    # what it would do, nothing run
 ```
 
@@ -237,8 +237,8 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 
 ## Runs
 
-`M-x agent-workflow-run` starts runs: it asks for the issues (several at once; an epic: its open issues), then each
-one's workflow, asked only when several fit it. The issues are shown as in [their list](issues.md): status,
+`M-x agent-workflow-run-ticket` starts runs on tickets: it asks for the issues (several at once; an epic: its open
+issues), then each one's workflow, asked only when several fit it. The issues are shown as in [their list](issues.md): status,
 priority and type before each, its labels after. `RET` picks one; for several, `TAB` adds one and a separator starts
 the next: a comma, or `;` when a title has a comma (the prompt says which). From the shell:
 
@@ -248,7 +248,16 @@ cmd/agent-workflow run doom-epic --workflow quick  # an epic's open issues, with
 ```
 
 An issue's workflow is its `workflow:NAME` label's, else the one whose `for` has its type. An issue is refused, the
-others started, when it's closed, has a run already, or no workflow fits it (or several). One that's blocked is
+others started, when it's closed, has a run already, or no workflow fits it (or several), or its workflow takes no
+ticket.
+
+`M-x agent-workflow-run` starts a workflow that takes no ticket (`ticket: false`): it asks which, each with its
+description. From the shell, `cmd/agent-workflow run --workflow NAME`, no issue. Its run is named by the workflow and
+its number (`github · run 3`); its workflow's name stands where an issue's id would (its folder, its worktree, its
+log, `{issue}`: the run's name), its branch is its own, `run/github-3`, cut from your checkout's HEAD. No Beads: no
+status, notes or labels, its merge closes nothing; it runs in a project without Beads too. One run of a workflow at a
+time; its last run's worktree, if it's still there (cancelled, failed), is removed first, its branch kept (one with
+changes not committed: refused, nothing lost). One that's blocked is
 queued until its blockers close, saying by what. Runs on different issues go at once, as the pool allows: a free agent
 goes to the highest priority first, then to the run started first.
 
@@ -445,7 +454,7 @@ pushing:
 4. Into the main branch: in your checkout, if it's checked out there and none of the files it changes has a change of
    yours, else it waits for you, naming them (go: try again). Where it isn't checked out, the branch is moved to the
    merge, and no tree is touched.
-5. The issue is closed.
+5. The issue is closed (a workflow's own run has none).
 
 ### Going back
 

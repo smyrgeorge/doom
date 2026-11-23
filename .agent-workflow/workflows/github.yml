@@ -5,19 +5,21 @@
 # to an agent with the ci profile, which finds why, fixes the code or its
 # test and commits; the job runs again from its push (retry-from): the fix
 # pushed, watched again, 5 times at most (then the run asks you). Green:
-# your main fast-forwarded to what was pushed, the fixes with it (sync), the
-# issue closed. No for: picked by its label (workflow:github), or --workflow
-# github.
+# your main fast-forwarded to what was pushed, the fixes with it (sync). No
+# ticket: M-x agent-workflow-run, or agent-workflow run --workflow github.
 
-# The workflow's name: its file's (github.yml), said again. An issue gets it
-# by its label, workflow:github.
+# The workflow's name: its file's (github.yml), said again.
 name: github
 
-# What it's for, in a line: shown where you pick a workflow for an issue.
+# What it's for, in a line: shown where you pick a workflow to run.
 description: Your main pushed to GitHub, its Actions watched until they pass; a failure fixed (the code or its test), pushed, watched again.
 
-# How many agents may work on its runs at once, every issue's together: one,
-# so two runs never push to main at the same time.
+# ticket: false: it runs on no ticket (M-x agent-workflow-run). Its run is
+# "github · run N", on a branch of its own (run/github-N); no Beads.
+ticket: false
+
+# How many agents may work on its runs at once: one (a workflow with no
+# ticket has one run at a time anyway).
 concurrency: 1
 
 # What a run may spend: the cost of its agents' tokens (dollars) and its time
@@ -32,8 +34,8 @@ jobs:
   # green: main pushed and its GitHub Actions passing.
   green:
 
-    # Its steps, run one after another in the issue's worktree (its branch:
-    # your main, as the run started).
+    # Its steps, run one after another in the run's worktree (its branch,
+    # run/github-N: your main, as the run started).
     steps:
 
       # name: the step's own name in its job: the run's pane and log say it,
@@ -84,11 +86,12 @@ jobs:
     # your main; it moved on meanwhile, 2: the run asks you.
     run: .agent-workflow/scripts/github-sync.sh
 
-  # close: the issue closed. Your main has the branch now (sync): merged
-  # already, no commit made (none to push again); the branch deleted.
-  close:
+  # merge: the run's branch in the main branch. Your main has it now
+  # (sync): merged already, no commit made (none to push again); once the
+  # run's over, the branch deleted.
+  merge:
     needs: sync
 
-    # uses: a built-in step. merge: the issue's branch merged into the main
-    # branch (never pushed), the issue closed.
+    # uses: a built-in step. merge: the run's branch merged into the main
+    # branch (never pushed); on a ticket, the ticket closed (none here).
     uses: merge

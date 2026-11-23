@@ -7,7 +7,11 @@ is refused, but an agent the user asks (in its own session) does it.
 
 `agent-workflow run ISSUE...` (an epic's id: its open issues): each with its `workflow:NAME` label's workflow, else the
 one whose `for` has its type, else `--workflow NAME`. Refused (the others started): closed, a run already, no workflow
-or several fitting, a project whose workflows the user doesn't trust. Blocked: queued until its blockers close. The
+or several fitting, a workflow that takes no ticket, a project whose workflows the user doesn't trust.
+
+`agent-workflow run --workflow NAME`, no issue: a workflow that takes no ticket (`ticket: false`), its own run (`NAME ·
+run N`; `NAME` where an issue's id goes: `logs NAME`, `status NAME`). One at a time; no Beads; its branch
+`run/NAME-N`, cut from the user's HEAD. Blocked: queued until its blockers close. The
 queue: priority, then the order started.
 
 From the shell, `run` follows its runs: their logs printed as they go, a line per event (`10:42:07  doom-a1b  review
@@ -16,7 +20,8 @@ agent running it should start it with `--detach` (the reply only, at once) and r
 (its log; `-f`: followed to its end; `--json`: its journal), `agent-workflow status [ISSUE]` (JSON: its state, jobs,
 question, spend, where its work is: worktree, branch, base, what it merges into; without ISSUE, every run not over).
 
-Started from Emacs (`M-x agent-workflow-run`), each run opens its pane, an Agent UI canvas drawn by Emacs: the run,
+Started from Emacs (`M-x agent-workflow-run-ticket` on tickets, `M-x agent-workflow-run` a workflow with no ticket),
+each run opens its pane, an Agent UI canvas drawn by Emacs: the run,
 what needs the user (answered there), a section per agent (its own canvas), its log. `M-x agent-workflow-runs` lists
 every run, `RET` opening its pane.
 

@@ -184,7 +184,10 @@ project's (to tell the jobs that edit; default: the current project's)."
                        (put job :outcome said)
                        (push (format "%s: done (%s)" job said) (car lines))))))))
             (when (and (agent-workflow--uses-merge-p (spec job)) (eq (get job :status) 'done))
-              (push (format "%s: merged, the issue closed" job) (car lines))))
+              (push (if (plist-get workflow :ticketless)
+                        (format "%s: merged (no ticket to close)" job)
+                      (format "%s: merged, the issue closed" job))
+                    (car lines))))
           (push (nreverse (car lines)) waves)))
       (list :waves (nreverse waves)
             :end (mapcar (lambda (job) (cons (car job) (plist-get (cdr job) :status))) state)
@@ -224,6 +227,13 @@ project's (to tell the jobs that edit; default: the current project's)."
                             (split-string (or (cadr parts) "") "," t)))))
           (split-string (or text "") "[ \t]+" t)))
 
+(defun agent-workflow--dry-info (project spec issue)
+  "The issue a dry run of SPEC in PROJECT reads: ISSUE's (an id), else one
+of the first type it's for; SPEC with no ticket: its own (ISSUE left)."
+  (cond ((plist-get spec :ticketless) (agent-workflow--workflow-info spec))
+        (issue (agent-workflow-issue project issue))
+        (t (list :id "(none)" :title "(a dry run)" :type (or (car (plist-get spec :for)) "task")))))
+
 (defun agent-workflow-dry-run-command (workflow issue outcomes exits)
   "Dry run of WORKFLOW (M-x agent-workflow-dry-run) on ISSUE (its id, or
 nil: one of the first type it's for), OUTCOMES and EXITS as typed
@@ -231,17 +241,18 @@ nil: one of the first type it's for), OUTCOMES and EXITS as typed
 buffer."
   (interactive
    (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
-          (names (mapcar #'car (agent-workflow-workflows project))))
-     (list (completing-read "Dry run of the workflow: " names nil t)
-           (let ((id (read-string "On the issue (empty: none): "))) (and (not (string-empty-p id)) id))
+          (workflows (agent-workflow-workflows project))
+          (name (completing-read "Dry run of the workflow: " (mapcar #'car workflows) nil t)))
+     (list name
+           ;; One with no ticket: none asked.
+           (unless (plist-get (cdr (assoc name workflows)) :ticketless)
+             (let ((id (read-string "On the issue (empty: none): "))) (and (not (string-empty-p id)) id)))
            (read-string "Agents' outcomes, a round each (review=changes,approved): ")
            (read-string "Scripts' exit codes, a try each (build.2=1,0): "))))
   (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
          (spec (or (alist-get workflow (agent-workflow-workflows project) nil nil #'equal)
                    (user-error "No workflow %s" workflow)))
-         (info (if issue
-                   (agent-workflow-issue project issue)
-                 (list :id "(none)" :title "(a dry run)" :type (or (car (plist-get spec :for)) "task"))))
+         (info (agent-workflow--dry-info project spec issue))
          (result (agent-workflow-dry-run spec :info info :outcomes (agent-workflow--parse-chosen outcomes)
                                          :exits (agent-workflow--parse-chosen exits)
                                          :profiles (agent-workflow-profiles project)))

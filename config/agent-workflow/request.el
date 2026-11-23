@@ -8,7 +8,8 @@
 ;; reply JSON in `reply'.
 ;;
 ;;   run {"issues": ["doom-a1b", "doom-c3d"], "workflow": "feature"}
-;;        (workflow: optional; an epic's id: its open issues) -> {"ok":
+;;        (workflow: optional; an epic's id: its open issues; no issues: the
+;;        workflow's own run, one with no ticket) -> {"ok":
 ;;        true when one started, "started": [{"issue", "workflow", "run",
 ;;        "state", "why"}...], "refused": [{"issue", "error"}...]}
 ;;   done {"outcome": "changes", "notes": "..."} (outcome: optional, done)
@@ -95,7 +96,8 @@ the reply, a plist."
                               problems))))))
 
 (defun agent-workflow--request-run (directory payload)
-  "Start runs on PAYLOAD's issues in DIRECTORY's project: the reply."
+  "Start runs on PAYLOAD's issues in DIRECTORY's project, or its workflow's
+own run (no issues, a workflow with no ticket): the reply."
   (let* ((default-directory (file-name-as-directory directory))
          (project (or (agent-workflow-project) (user-error "Not in a git repository")))
          (issues (append (plist-get payload :issues) nil))
@@ -109,10 +111,13 @@ the reply, a plist."
                                        (list issue))
                                    (user-error (push (cons issue (error-message-string err)) refused) nil)))
                                issues)))
-    (unless issues (user-error "run: which issues? agent-workflow run ISSUE..."))
+    (unless (or issues workflow)
+      (user-error "run: which issues? agent-workflow run ISSUE..., or a workflow with no ticket: agent-workflow run --workflow NAME"))
     (pcase-let ((`(,started . ,more) (let ((inhibit-message t)
                                            (agent-workflow-from-shell t))
-                                       (agent-workflow-run expanded workflow project))))
+                                       (if issues
+                                           (agent-workflow-run-ticket expanded workflow project)
+                                         (agent-workflow-run workflow project)))))
       (setq refused (append (nreverse refused) more))
       (list :ok (if started t :false)
             :error (if started :null (format "nothing started: %s"
@@ -340,9 +345,7 @@ DIRECTORY's project): the reply."
          (spec (or (alist-get name (agent-workflow-workflows project) nil nil #'equal)
                    (user-error "dry-run: no workflow %s" name)))
          (issue (plist-get payload :issue))
-         (info (if (and (stringp issue) (not (string-empty-p issue)))
-                   (agent-workflow-issue project issue)
-                 (list :id "(none)" :title "(a dry run)" :type (or (car (plist-get spec :for)) "task"))))
+         (info (agent-workflow--dry-info project spec (and (stringp issue) (not (string-empty-p issue)) issue)))
          (chosen (lambda (object)
                    (cl-loop for (key value) on object by #'cddr
                             collect (cons (substring (symbol-name key) 1) (append value nil)))))

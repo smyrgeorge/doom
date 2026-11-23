@@ -7,7 +7,7 @@ verb: looking
 colour: cyan
 ---
 The examples' screenshots (examples/NAME.png, one per examples/NAME.el, listed in docs/examples.md) were just taken
-again, in the issue's worktree, by scripts/screenshots.sh. You look at them and commit the ones that changed. You
+again, in the run's worktree, by scripts/screenshots.sh. You look at them and commit the ones that changed. You
 don't take them again, and you change nothing else: no code, no docs, no example.
 
 - `git status --short examples/` lists the ones that changed; an example whose look didn't change kept its file.

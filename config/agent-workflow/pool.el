@@ -119,15 +119,16 @@ or its lock held by an Emacs alive (this one or another)."
 ;; ====== ITS PROFILE, FILLED IN ======
 
 (defun agent-workflow--agent-values (agent)
-  "AGENT's variables' values: where it works, then those it was given."
+  "AGENT's variables' values: those it was given, then where it works (a
+run with no ticket gives its {issue}: its name)."
   (let ((project (directory-file-name (agent-workflow-agent-project agent))))
-    (append (list (cons "issue" (agent-workflow-agent-issue agent))
+    (append (agent-workflow-agent-values agent)
+            (list (cons "issue" (agent-workflow-agent-issue agent))
                   (cons "branch" (agent-workflow-agent-branch agent))
                   (cons "worktree" (directory-file-name (agent-workflow-agent-worktree agent)))
                   (cons "main" project)
                   (cons "main-branch" (agent-workflow-main-branch (file-name-as-directory project)))
-                  (cons "project" (file-name-nondirectory project)))
-            (agent-workflow-agent-values agent))))
+                  (cons "project" (file-name-nondirectory project))))))
 
 (defun agent-workflow-profile-filled (agent)
   "AGENT's profile (a copy), its tools and deny with their variables
@@ -253,11 +254,11 @@ never."
                 client))))
     config))
 
-(cl-defun agent-workflow-start-agent (&key project issue job profile type title values outcomes prompt
+(cl-defun agent-workflow-start-agent (&key project issue job profile type title branch values outcomes prompt
                                            snapshot resume)
   "Start an agent of the pool for the JOB of ISSUE's run in PROJECT, with
 the PROFILE (a name): its session, fresh, in ISSUE's worktree (made on its
-branch from TYPE and TITLE if it isn't there). VALUES: its variables'
+branch from TYPE and TITLE, or BRANCH, if it isn't there). VALUES: its variables'
 values (an alist); OUTCOMES: those it may give besides done; PROMPT: its
 first message, its variables filled in, sent once it's ready. SNAPSHOT:
 \(DIR BRANCH COMMIT), a reading job's snapshot it works in instead of the
@@ -278,7 +279,7 @@ full or PROFILE isn't one."
                   (agent-workflow--listed (mapcar #'car (agent-workflow-profiles project)))))
     (pcase-let* ((`(,dir . ,branch) (if snapshot
                                         (cons (nth 0 snapshot) (nth 1 snapshot))
-                                      (agent-workflow-worktree project issue :type type :title title)))
+                                      (agent-workflow-worktree project issue :type type :title title :branch branch)))
                  (agent (agent-workflow-agent--make :project project :issue issue :job job :profile profile
                                                     :worktree dir :branch branch :commit (nth 2 snapshot)
                                                     :values values :outcomes outcomes :resumed resume

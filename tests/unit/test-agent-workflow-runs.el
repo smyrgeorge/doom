@@ -166,7 +166,7 @@ agent's session."
         (should (equal (plist-get (request "done" "{\"notes\":\"x\"}" (emacs-pid)) :error)
                        "done: only an agent of a run ends its step, from its own session"))
         (should (equal (plist-get (request "run" "{\"issues\":[]}") :error)
-                       "run: which issues? agent-workflow run ISSUE..."))))))
+                       "run: which issues? agent-workflow run ISSUE..., or a workflow with no ticket: agent-workflow run --workflow NAME"))))))
 
 ;; ====== PARALLEL JOBS ======
 

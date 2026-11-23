@@ -49,7 +49,7 @@
 ;;    waits for you, naming them (go: try again); checked out in another
 ;;    worktree, it waits for you; where it isn't, the branch is moved to the
 ;;    merge, no tree touched.
-;; 5. The issue closed.
+;; 5. The issue closed (a workflow's own run: there's none).
 
 (require 'cl-lib)
 (require 'seq)
@@ -97,6 +97,7 @@ waits for you."
                  (agent (agent-workflow-start-agent
                          :project (agent-workflow-run-project run) :issue (agent-workflow-run-issue run)
                          :job job :profile profile :type (plist-get info :type) :title (plist-get info :title)
+                         :branch (agent-workflow--run-branch run)
                          :values (append (agent-workflow--job-values run job) (agent-workflow--run-values run))
                          :prompt message :snapshot snapshot)))
             (agent-workflow--job-set run job :agent agent)
@@ -425,15 +426,17 @@ and commit." branch main main main)
 
 (defun agent-workflow--merged (run job index branch main already)
   "BRANCH is merged into MAIN (ALREADY: it was; with no commit since its run
-started, nothing to merge): the issue closed, the step over."
+started, nothing to merge): the issue closed (a run with no ticket: none),
+the step over."
   (let ((empty (and already (agent-workflow--branch-empty-p run branch))))
     (agent-workflow--journal run "merged" :job job :step index :branch branch :into main
                              :already (if already t :false) :empty (if empty t :false))
-    (agent-workflow--bd (agent-workflow-run-project run)
-                        (list "close" (agent-workflow-run-issue run) "--reason"
-                              (if empty
-                                  (format "Nothing to merge: %s has no commit" branch)
-                                (format "Merged %s into %s" branch main)))))
+    (when (agent-workflow-run-ticket-p run)
+      (agent-workflow--bd (agent-workflow-run-project run)
+                          (list "close" (agent-workflow-run-issue run) "--reason"
+                                (if empty
+                                    (format "Nothing to merge: %s has no commit" branch)
+                                  (format "Merged %s into %s" branch main))))))
   (agent-workflow-step-ended run job))
 
 (setq agent-workflow-step-functions

@@ -12,6 +12,9 @@
 ;; it is. It's locked with the issue as its reason, so `git worktree prune'
 ;; and `remove' leave it alone, and kept until its run ends.
 ;;
+;; A workflow's own run (no ticket, runs.el) has its workflow's name for
+;; ISSUE and a branch of its own, run/NAME-N, made anew each run.
+;;
 ;; The branch's name as agent-workspace makes an issue's (copied from
 ;; config/agent-workspace/worktree.el, never required).
 
@@ -153,23 +156,27 @@ words): its name, or nil."
     (seq-find (lambda (name) (string-match-p (format "\\`[^/]+/%s\\(?:-\\|\\'\\)" (regexp-quote issue)) name))
               (agent-workflow--git-lines "for-each-ref" "--format=%(refname:short)" "refs/heads/"))))
 
-(defun agent-workflow-worktree-base (project issue)
+(defun agent-workflow-worktree-base (project issue &optional branch)
   "Where ISSUE's worktree in PROJECT would branch from, made now: your
 checkout's branch (nil: detached) and its commit, (:branch B :commit C);
-nil if it's there already, or its branch was made before."
+nil if it's there already, or its branch (BRANCH, else the issue's) was
+made before."
   (let ((default-directory (file-name-as-directory project)))
     (unless (or (file-exists-p (expand-file-name ".git" (agent-workflow-worktree-directory project issue)))
-                (agent-workflow-issue-branch-made project issue)
+                (if branch
+                    (agent-workflow--git-lines "rev-parse" "--verify" "--quiet" (concat "refs/heads/" branch))
+                  (agent-workflow-issue-branch-made project issue))
                 (agent-workflow-worktree-reason project))
       (list :branch (let ((name (car (agent-workflow--git-lines "branch" "--show-current"))))
                       (and name (not (string-empty-p name)) name))
             :commit (agent-workflow--git "rev-parse" "HEAD")))))
 
-(cl-defun agent-workflow-worktree (project issue &key type title)
+(cl-defun agent-workflow-worktree (project issue &key type title branch)
   "ISSUE's worktree in PROJECT, made if it isn't there yet, on its branch
-\(`agent-workflow-issue-branch' from its TYPE and TITLE; made from your
-checkout's HEAD if there's none), else reused as it is; locked with ISSUE
-as its reason. Return (DIR . BRANCH), BRANCH the one it's on."
+\(`agent-workflow-issue-branch' from its TYPE and TITLE, or BRANCH: a
+workflow's own run's; made from your checkout's HEAD if there's none),
+else reused as it is; locked with ISSUE as its reason. Return (DIR .
+BRANCH), BRANCH the one it's on."
   (let* ((project (file-name-as-directory project))
          (dir (agent-workflow-worktree-directory project issue))
          (default-directory project))
@@ -180,10 +187,13 @@ as its reason. Return (DIR . BRANCH), BRANCH the one it's on."
       ;; Its folder gone by hand: git's note of it pruned first.
       (process-file "git" nil nil nil "worktree" "prune")
       (make-directory (file-name-directory (directory-file-name dir)) t)
-      (let* ((branch (agent-workflow-issue-branch issue type title))
+      (let* ((own branch)
+             (branch (or own (agent-workflow-issue-branch issue type title)))
              ;; One of its id's made before, under another name (its title
-             ;; changed since): that one.
-             (made (agent-workflow-issue-branch-made project issue)))
+             ;; changed since): that one. Its own: that one, if it's there.
+             (made (if own
+                       (and (agent-workflow--git-lines "rev-parse" "--verify" "--quiet" (concat "refs/heads/" own)) own)
+                     (agent-workflow-issue-branch-made project issue))))
         (if made
             (agent-workflow--git "worktree" "add" (directory-file-name dir) made)
           (agent-workflow--git "worktree" "add" "-b" branch (directory-file-name dir) "HEAD"))))
@@ -215,12 +225,12 @@ user error if it has changes not committed (git refuses)."
    (expand-file-name (concat issue "@" job)
                      (expand-file-name "worktrees" (expand-file-name agent-workflow-local-directory project)))))
 
-(cl-defun agent-workflow-snapshot (project issue job &key type title)
+(cl-defun agent-workflow-snapshot (project issue job &key type title branch)
   "A snapshot for JOB of ISSUE in PROJECT: a worktree detached at the
 issue's branch's commit now (the issue's worktree made if it isn't there,
-on its branch from TYPE and TITLE). One there from before is replaced.
-Return (DIR BRANCH COMMIT)."
-  (pcase-let* ((`(,worktree . ,branch) (agent-workflow-worktree project issue :type type :title title))
+on its branch from TYPE and TITLE, or BRANCH). One there from before is
+replaced. Return (DIR BRANCH COMMIT)."
+  (pcase-let* ((`(,worktree . ,branch) (agent-workflow-worktree project issue :type type :title title :branch branch))
                (dir (agent-workflow-snapshot-directory project issue job))
                (default-directory project)
                (commit (let ((default-directory worktree)) (agent-workflow--git "rev-parse" "HEAD"))))

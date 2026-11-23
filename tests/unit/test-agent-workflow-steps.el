@@ -371,6 +371,63 @@ deleted, its log saying so; its pane's where and status's too."
         (should (plist-get where :deleted))
         (should (equal (agent-workflow--pane-git-line where) (format "⎇ %s   deleted, merged into %s" branch main)))))))
 
+(ert-deftest agent-workflow-steps/a-run-without-a-ticket ()
+  "A workflow with ticket: false, run on no ticket (M-x agent-workflow-run),
+in a project with no Beads: named by its workflow and number, {issue} that
+name; its worktree on run/NAME-N from your HEAD; merged, its branch
+deleted; bd never called. Refused: a second run of it at once, a workflow
+on tickets, it on a ticket; the next run on a branch of its own."
+  (+test-awr "noticket"
+    (delete-directory (expand-file-name ".beads" project) t)
+    (write-region "description: x
+ticket: false
+jobs:
+  build:
+    agent: build
+    prompt: Build {issue}, on {branch}.
+  merge:
+    needs: build
+    uses: merge
+" nil (expand-file-name ".agent-workflow/workflows/solo.yml" project))
+    (let* ((bd nil)
+           (main (agent-workflow-main-branch project))
+           (agent-workflow-from-shell t))
+      (cl-letf (((symbol-function 'agent-workflow--bd)
+                 (lambda (_project args &optional _actor) (push args bd) (cons 0 "[]"))))
+        (pcase-let* ((`(,started . ,refused) (agent-workflow-run "solo" project))
+                     (run (car started)))
+          (should-not refused)
+          (should (equal (agent-workflow-run-name run) "solo · run 1"))
+          (should-not (agent-workflow-run-ticket-p run))
+          ;; One at a time; not on a ticket; a workflow on tickets not here.
+          (should (equal (cdr (car (cdr (agent-workflow-run "solo" project))))
+                         "solo has a run already (solo · run 1)"))
+          (should (string-prefix-p "feature runs on a ticket"
+                                   (cdr (car (cdr (agent-workflow-run "feature" project))))))
+          (should (string-prefix-p "solo runs without a ticket"
+                                   (cdr (car (cdr (agent-workflow-run-ticket '("demo-x1") "solo" project))))))
+          (let ((agent (+test-awr--agent run "build")))
+            (should (+test-awr--wait
+                     (lambda () (member "Build solo · run 1, on run/solo-1." (+test-awr--prompts "noticket")))))
+            (should (equal (agent-workflow-agent-branch agent) "run/solo-1"))
+            (+test-awr--commit (agent-workflow-worktree-directory project "solo") "solo.txt" "solo")
+            (+test-awr--finish run "build"))
+          (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+          (should (file-exists-p (expand-file-name "solo.txt" project)))
+          (should (equal (agent-workflow-run-branch-end run) (list :branch "run/solo-1" :deleted t :into main)))
+          (should (member "merged" (+test-awr--journal run)))
+          (should (equal (plist-get (agent-workflow--pane-header run) :title) "solo · run 1"))
+          ;; The next run, from the shell (no issue, --workflow): a branch of
+          ;; its own.
+          (let* ((reply (agent-workflow--request-run project (list :issues [] :workflow "solo")))
+                 (next (car (last (agent-workflow-runs-of project)))))
+            (should (eq (plist-get reply :ok) t))
+            (should (equal (plist-get (aref (plist-get reply :started) 0) :issue) "solo"))
+            (should (equal (agent-workflow-run-name next) "solo · run 2"))
+            (should (equal (agent-workflow-agent-branch (+test-awr--agent next "build")) "run/solo-2"))
+            (agent-workflow-cancel next)))
+        (should-not bd)))))
+
 (ert-deftest agent-workflow-steps/its-branch-kept ()
   "A run done, its branch not merged (no merge in its workflow): kept,
 saying why. branch: keep: kept, merged or not."

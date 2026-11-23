@@ -4,9 +4,11 @@
 # step. See docs/agent-workflow.md.
 #
 #   agent-workflow run ISSUE... [--workflow NAME] [--detach] [--json]
+#   agent-workflow run --workflow NAME [--detach] [--json]
 #                                runs started on the issues (an epic's id: its
 #                                open issues), each with NAME, else its own
-#                                workflow; their logs printed as they go (a
+#                                workflow; no issue: NAME's own run (a
+#                                workflow with no ticket, ticket: false); their logs printed as they go (a
 #                                line an event: time, issue, job, what
 #                                happened; what needs you says how to answer),
 #                                until they all end. Ctrl-C stops following,
@@ -154,7 +156,7 @@ case "$op" in
         *) issues="$issues${issues:+,}$(json_string "$1")"; shift ;;
       esac
     done
-    [ -z "$issues" ] && fail 2 "run: which issues? agent-workflow run ISSUE... [--workflow NAME]"
+    [ -z "$issues" ] && [ -z "$workflow" ] && fail 2 "run: which issues? agent-workflow run ISSUE... [--workflow NAME], or agent-workflow run --workflow NAME (a workflow with no ticket)"
     payload=$(printf '{"issues":[%s],"workflow":%s}' "$issues" "$(json_string "$workflow")") ;;
   logs)
     issue=""

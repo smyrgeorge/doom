@@ -70,7 +70,8 @@ killed."
   :group 'agent-workflow)
 
 ;; RUNS
-;; You start them (M-x agent-workflow-run, cmd/agent-workflow run): their
+;; You start them (M-x agent-workflow-run-ticket on tickets, M-x
+;; agent-workflow-run a workflow with no ticket; cmd/agent-workflow run): their
 ;; jobs in order, Emacs the engine (config/agent-workflow/runs.el). A run
 ;; whose issue is blocked is queued, looked at again this often.
 (defcustom agent-workflow-queue-check 30

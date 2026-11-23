@@ -134,7 +134,7 @@ log, log.txt and the pane's. Done: it stays, nothing counting down, until
 closed (q)."
   (+test-awp "pane"
     (let* ((issue (+test-awr--issue project "A pane"))
-           (run (car (car (agent-workflow-run (list issue) nil project))))
+           (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
            (pane (agent-workflow-run-pane run)))
       (should (buffer-live-p pane))
       (should (equal (buffer-name pane) (format "Agent UI: %s · feature" issue)))
@@ -249,7 +249,7 @@ again, approved: the run done."
     (let* ((issue (+test-awr--issue project "A gate" "--type" "task"))
            (said nil)
            (agent-workflow-needs-you-functions (list (lambda (run why) (push (cons run why) said))))
-           (run (car (car (let ((agent-workflow-from-shell t)) (agent-workflow-run (list issue) nil project))))))
+           (run (car (car (let ((agent-workflow-from-shell t)) (agent-workflow-run-ticket (list issue) nil project))))))
       (should-not (agent-workflow-run-pane run))
       (let ((pane (agent-workflow-pane run)))
         (should (buffer-live-p pane))
@@ -306,7 +306,7 @@ the question asked here again; answered there: running, Needs you gone."
     (let* ((issue (+test-awr--issue project "Ask for a permission"))
            (said nil)
            (agent-workflow-needs-you-functions (list (lambda (_run why) (push why said))))
-           (run (car (car (agent-workflow-run (list issue) nil project))))
+           (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
            (pane (agent-workflow-run-pane run))
            (agent (+test-awr--agent run "build"))
            (why "build: its agent asks for your permission: npm install"))
@@ -386,7 +386,7 @@ note), several a form; answered there as its Submit does, the run goes
 on; Go to it, beside."
   (+test-awp "agent-form"
     (let* ((issue (+test-awr--issue project "Ask a question"))
-           (run (car (car (agent-workflow-run (list issue) nil project))))
+           (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
            (pane (agent-workflow-run-pane run))
            (agent (+test-awr--agent run "build"))
            (custom agent-shell-elicitation--custom-answer-meta-key)
@@ -627,7 +627,7 @@ status has the same; kept in its state.json. Done: its worktree removed
                    (+test-awr--commit project "side.txt" "a side commit")
                    (agent-workflow--git "rev-parse" "HEAD")))
            (issue (+test-awr--issue project "Where it is"))
-           (run (car (car (agent-workflow-run (list issue) nil project))))
+           (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
            (pane (agent-workflow-run-pane run))
            (dir (progn (+test-awr--agent run "build") (agent-workflow-worktree-directory project issue)))
            (branch (agent-workflow-issue-branch issue "feature" "Where it is"))
@@ -671,7 +671,7 @@ status has the same; kept in its state.json. Done: its worktree removed
 their folders; RET opens a run's pane, selected."
   (+test-awp "list"
     (let* ((one (+test-awr--issue project "One"))
-           (run (car (car (let ((agent-workflow-from-shell t)) (agent-workflow-run (list one) nil project))))))
+           (run (car (car (let ((agent-workflow-from-shell t)) (agent-workflow-run-ticket (list one) nil project))))))
       (agent-workflow-cancel run)
       ;; Read from its folder, as after Emacs started again.
       (let ((agent-workflow--runs nil))

@@ -347,6 +347,32 @@ jobs:
                      (error 15 "retry-from 9: no such step of its job (one, two)")
                      (warning 17 "retry-from: an agent step isn't retried (its script's are): ignored"))))))
 
+(ert-deftest agent-workflow-files/ticket-false ()
+  "ticket: false read (:ticketless); true, or none: on tickets; another
+value an error. Its prompts' {issue.title}... warned (empty without a
+ticket), {issue} not."
+  (should-not (plist-get (car (+test-awf--workflow "description: x\njobs:\n  a:\n    run: x\n")) :ticketless))
+  (should-not (plist-get (car (+test-awf--workflow "description: x\nticket: true\njobs:\n  a:\n    run: x\n")) :ticketless))
+  (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow "description: x
+ticket: false
+jobs:
+  a:
+    agent: build
+    prompt: Build {issue}, {issue.title}.
+  b:
+    steps:
+      - run: x
+      - agent: build
+        prompt: '{issue.description}'
+" '("build"))))
+    (should (plist-get workflow :ticketless))
+    (should (equal (+test-awf--said problems)
+                   '((warning 6 "prompt: {issue.title}: empty, its workflow has no ticket (ticket: false)")
+                     (warning 11 "prompt: {issue.description}: empty, its workflow has no ticket (ticket: false)")))))
+  (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow "description: x\nticket: maybe\njobs:\n  a:\n    run: x\n")))
+    (should-not workflow)
+    (should (equal (+test-awf--said problems) '((error 2 "ticket maybe: true or false"))))))
+
 (ert-deftest agent-workflow-files/a-check-an-agent-can-change ()
   "A run: of a file of the branch: warned (its agents can change it); one of
 .agent-workflow/, a command, a script: not."
@@ -576,9 +602,9 @@ end, its branch deleted once merged."
                            (expand-file-name (format ".agent-workflow/workflows/%s.yml" name) +test-root)))
             (should-not (plist-get workflow :for))
             (should-not (plist-get result :stopped))
-            ;; Its merge job (merge, close) merged, the issue closed.
-            (should (seq-find (lambda (line) (string-match-p "\\`[a-z]+: merged, the issue closed\\'" line))
-                              (+test-awf--dry-lines result)))
+            ;; No ticket: its merge merged, nothing to close.
+            (should (plist-get workflow :ticketless))
+            (should (member "merge: merged (no ticket to close)" (+test-awf--dry-lines result)))
             (should (equal (plist-get result :branch) "deleted, merged into the main branch"))))))
     (should (assoc "screenshots" (agent-workflow-profiles +test-root)))
     (should (assoc "ci" (agent-workflow-profiles +test-root)))))

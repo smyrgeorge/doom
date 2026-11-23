@@ -55,4 +55,4 @@ The issue's branch into the main branch (origin's HEAD, else `main`, else `maste
 3. Its `with: {suite: ...}` runs there, on the merge: 1 goes to the `on-fail` agent, as a script's.
 4. Into the main branch: in the user's checkout if it's there and none of the files it changes has a change of the
    user's (else it waits, naming them); not checked out anywhere: the branch moved, no tree touched.
-5. The issue closed.
+5. The issue closed (a workflow's own run, no ticket: none).

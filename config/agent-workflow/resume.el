@@ -6,7 +6,7 @@
 ;; starting, the runs not over of the projects that had some (noted in
 ;; `agent-workflow-projects-file') are read back, each with the workflow it
 ;; started with (its workflow.yml); a project's are read back too when you
-;; use it before (M-x agent-workflow-run, continue...). A job that was
+;; use it before (M-x agent-workflow-run-ticket, continue...). A job that was
 ;; running is interrupted: it waits for you, as does its run. Continue it
 ;; (M-x agent-workflow-continue: every run of the project at once; one, with
 ;; its issue, from the shell): an agent step's session resumed in the same
@@ -239,7 +239,7 @@ the run over, its issue open again; its branch and worktree kept."
   (agent-workflow--stop-all run)
   (agent-workflow--journal run "cancelled" :by by)
   (agent-workflow--set-state run 'cancelled)
-  (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) "--status" "open")
+  (agent-workflow--run-bd-write run "--status" "open")
   (agent-workflow--issue-summary run)
   run)
 
@@ -256,7 +256,7 @@ run needing you is (`agent-workflow-needs-you-functions')."
     (agent-workflow--job-set run job :status 'failed :why why))
   (agent-workflow--journal run "failed" :job job :step step :why why)
   (agent-workflow--set-state run 'failed why)
-  (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) "--status" "open")
+  (agent-workflow--run-bd-write run "--status" "open")
   (agent-workflow--issue-summary run)
   (run-hook-with-args 'agent-workflow-needs-you-functions run (concat "failed: " why))
   run)

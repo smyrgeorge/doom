@@ -2,15 +2,19 @@
 # (.agent-workflow/scripts/screenshots.sh, macOS, Emacs with the Screen
 # Recording permission: its frames on top of your windows a minute or two),
 # each changed one looked at by an agent (the screenshots profile) and
-# committed, then reviewed, merged. No for: picked by its label
-# (workflow:screenshots), or --workflow screenshots.
+# committed, then reviewed, merged. No ticket: M-x agent-workflow-run, or
+# agent-workflow run --workflow screenshots.
 
-# The workflow's name: its file's (screenshots.yml), said again. An issue
-# gets it by its label, workflow:screenshots.
+# The workflow's name: its file's (screenshots.yml), said again.
 name: screenshots
 
-# What it's for, in a line: shown where you pick a workflow for an issue.
+# What it's for, in a line: shown where you pick a workflow to run.
 description: The examples' screenshots taken again, each changed one looked at and committed, reviewed, merged.
+
+# ticket: false: it runs on no ticket (M-x agent-workflow-run). Its run is
+# "screenshots · run N", on a branch of its own (run/screenshots-N); no
+# Beads.
+ticket: false
 
 # What a run may spend: the cost of its agents' tokens (dollars) and its time
 # (while it runs or waits for an agent, not for you). Used up, it asks you:
@@ -24,8 +28,8 @@ jobs:
   # capture: the screenshots taken again, the changed ones committed.
   capture:
 
-    # Its steps, run one after another in the issue's worktree (its branch,
-    # cut from your checkout as the run started).
+    # Its steps, run one after another in the run's worktree (its branch,
+    # run/screenshots-N, cut from your checkout as the run started).
     steps:
 
       # run: a script, in bash; one naming a file of .agent-workflow/ runs
@@ -44,12 +48,12 @@ jobs:
       # with its notes.
       - agent: screenshots
 
-        # prompt: its first message. {issue}, {issue.title},
-        # {issue.description}: the issue's, filled in as it starts.
+        # prompt: its first message; {branch}: the run's branch, filled in
+        # as it starts. (No ticket: {issue} is the run's name, its title and
+        # description empty.)
         prompt: |
-          The examples' screenshots were just taken again, for {issue}: {issue.title}.
-
-          {issue.description}
+          The examples' screenshots were just taken again, on {branch}: look at each changed one and
+          commit the good ones.
 
   # review: an agent reads what capture committed.
   review:
@@ -61,11 +65,11 @@ jobs:
     # profile reads, never edits: it works on a snapshot of the branch.
     agent: review
 
-    # prompt: its first message. {branch}: the issue's branch;
+    # prompt: its first message. {branch}: the run's branch;
     # {main-branch}: the branch it merges into; {jobs.capture.notes}: what
     # capture's agent said as it ended.
     prompt: |
-      Review {branch}: the examples' screenshots taken again, for {issue}.
+      Review {branch}: the examples' screenshots taken again.
 
       Look at each examples/*.png it changes (Read it; git show {main-branch}:examples/NAME.png for the one
       before): it shows its example as docs/examples.md says, in the dark theme, nothing left from another
@@ -84,17 +88,18 @@ jobs:
       # review's notes; counted, the run asks you after 10 rounds.
       changes: rerun capture
 
-  # merge: the branch into the main branch, the issue closed.
+  # merge: the run's branch into the main branch.
   merge:
     needs: review
 
-    # concurrency: how many runs may be in this job at once, every issue's:
-    # one merge at a time.
+    # concurrency: how many runs may be in this job at once, every
+    # workflow's: one merge at a time.
     concurrency: 1
 
-    # uses: a built-in step. merge: the issue's branch merged into the main
+    # uses: a built-in step. merge: the run's branch merged into the main
     # branch (never pushed), into your checkout where it's checked out (only
-    # if no file it changes has a change of yours), the issue closed.
+    # if no file it changes has a change of yours); on a ticket, the ticket
+    # closed (none here).
     uses: merge
 
     # on-fail: the profile of the agent sent a conflict to resolve (it

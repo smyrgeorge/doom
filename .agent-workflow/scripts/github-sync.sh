@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Your main brought to what was pushed, green: the github workflow's last
 # step (.agent-workflow/workflows/github.yml), run on a snapshot of the
-# issue's branch (its HEAD: your main as the run started, and the fixes
+# run's branch (its HEAD: your main as the run started, and the fixes
 # pushed since). Your checkout on main ($MAIN_BRANCH), fast-forwarded to it.
 #
 # Exit status: 0 your main is it (fast-forwarded, or it was); 2 it can't

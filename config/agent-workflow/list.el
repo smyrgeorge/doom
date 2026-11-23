@@ -81,7 +81,9 @@ those not over first, then the latest."
                   (let ((spent (agent-workflow-run-spent-now run))
                         (state (agent-workflow-run-state run)))
                     (list run
-                          (vector (agent-workflow-run-issue run)
+                          (vector (if (agent-workflow-run-ticket-p run)
+                                      (agent-workflow-run-issue run)
+                                    (propertize "–" 'face 'shadow))
                                   (number-to-string (agent-workflow-run-n run))
                                   (or (plist-get (agent-workflow-run-workflow run) :name) "")
                                   (propertize (symbol-name state)

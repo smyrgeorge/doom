@@ -20,8 +20,9 @@
 ;;   divider opens its session.
 ;; - Log: its last events (log.el).
 ;;
-;; Started from Emacs (M-x agent-workflow-run), its pane opens; from the
-;; shell, it's made when you look (M-x agent-workflow-runs, RET), and opens
+;; Started from Emacs (M-x agent-workflow-run-ticket, agent-workflow-run),
+;; its pane opens; from the shell, it's made when you look (M-x
+;; agent-workflow-runs, RET), and opens
 ;; by itself only once you did. Done, failed, cancelled, waiting: it stays,
 ;; until you close it (q); nothing counts down to close it (what it showed
 ;; went with it). Closing it stops nothing.
@@ -490,10 +491,13 @@ tokens, each against its budget if it has one."
      " · ")))
 
 (defun agent-workflow--pane-header (run)
-  "The run, above its sections: its issue, then its state in a line."
+  "The run, above its sections: its issue (no ticket: its name), then its
+state in a line."
   (list :id "run" :type "text"
-        :title (format "%s: %s" (agent-workflow-run-issue run)
-                       (or (plist-get (agent-workflow-run-info run) :title) ""))
+        :title (if (agent-workflow-run-ticket-p run)
+                   (format "%s: %s" (agent-workflow-run-issue run)
+                           (or (plist-get (agent-workflow-run-info run) :title) ""))
+                 (agent-workflow-run-name run))
         :face (pcase (agent-workflow-run-state run)
                 ('waiting "warning") ('cancelled "muted") ('failed "error") ('done "success") (_ "plain"))
         :text (agent-workflow--pane-state-line run)))

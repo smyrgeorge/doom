@@ -56,9 +56,11 @@
               (seq-some (lambda (job) (memq (plist-get (plist-get (cdr job) :ask) :kind) '(closed moved)))
                         (agent-workflow-run-jobs run)))
     (let* ((before (agent-workflow-run-info run))
-           (now (condition-case nil
-                    (agent-workflow-issue (agent-workflow-run-project run) (agent-workflow-run-issue run))
-                  (user-error nil))))
+           ;; No ticket: no issue to look at, its branch only.
+           (now (and (agent-workflow-run-ticket-p run)
+                     (condition-case nil
+                         (agent-workflow-issue (agent-workflow-run-project run) (agent-workflow-run-issue run))
+                       (user-error nil)))))
       (when now
         ;; Its text: the next steps read it anew.
         (dolist (key '(:title :description :acceptance :notes))

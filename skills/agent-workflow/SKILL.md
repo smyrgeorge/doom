@@ -88,7 +88,7 @@ jobs:
     on-fail: build                # a conflict: an agent with the build profile rebases
 ```
 
-Its keys, in a line each: `name` (its file's), `description`, `for`, `concurrency`, `budget` (`cost`, `tokens`,
+Its keys, in a line each: `name` (its file's), `description`, `ticket` (`false`: it runs on no ticket), `for`, `concurrency`, `budget` (`cost`, `tokens`,
 `time`), `max-rounds`, `branch` (`delete` once merged, the default, or `keep`), `jobs`. A job: `needs`, `if`, `steps` (or one step's keys on the job itself), `approve`,
 `outcomes`, `max-rounds`, `concurrency`. A step: one of `agent` (with `prompt`), `run` (with `shell`), `elisp`, `uses`
 (with `with`); and `name`, `timeout`, `retries`, `retry-from`, `on-fail`, `approve`.

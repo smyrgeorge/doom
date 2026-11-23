@@ -3,10 +3,13 @@
 ;; say, Emacs the engine. Loaded from config/agent-workflow.el, after
 ;; beads.el. No Doom here.
 ;;
-;; You start a run (M-x agent-workflow-run, cmd/agent-workflow run): an
-;; issue, open, without a run of its own, with its workflow (yours, its
+;; You start a run (M-x agent-workflow-run-ticket, cmd/agent-workflow run):
+;; an issue, open, without a run of its own, with its workflow (yours, its
 ;; workflow:NAME label's, or the one for its type). A blocked one is queued
-;; until its blockers close. Runs on different issues go at once, as the
+;; until its blockers close. A workflow that takes no ticket (ticket: false)
+;; has its own run (M-x agent-workflow-run, cmd/agent-workflow run
+;; --workflow NAME): its name where an issue's id goes (its folder,
+;; worktree, log), its branch run/NAME-N, no Beads; one at a time. Runs on different issues go at once, as the
 ;; pool allows; the first in line is the highest priority, then the one you
 ;; started first.
 ;;
@@ -54,8 +57,8 @@
 (cl-defstruct (agent-workflow-run (:constructor agent-workflow-run--make)
                                   (:copier nil))
   project                ; its project's main checkout
-  issue                  ; its issue's id
-  n                      ; which run of the issue: 1, 2...
+  issue                  ; its issue's id; a workflow's own run (ticket: false): its workflow's name
+  n                      ; which run of the issue (or workflow): 1, 2...
   dir                    ; its folder: its journal, state, workflow
   workflow               ; its workflow, as it started (a plist)
   info                   ; its issue as it started (a plist: beads.el)
@@ -89,8 +92,9 @@
 is in the run's journal.")
 
 (defvar agent-workflow-started-functions nil
-  "Called with each run `agent-workflow-run' started, and whether it was
-started from the shell (`agent-workflow-from-shell').")
+  "Called with each run `agent-workflow-run-ticket' or `agent-workflow-run'
+started, and whether it was started from the shell
+\(`agent-workflow-from-shell').")
 
 (defvar agent-workflow-from-shell nil
   "Non-nil while runs are started from the shell (cmd/agent-workflow run):
@@ -133,8 +137,45 @@ commit as its round started."
   (alist-get job (plist-get (agent-workflow-run-workflow run) :jobs) nil nil #'equal))
 
 (defun agent-workflow-run-name (run)
-  "How RUN is known: \"doom-a1b · feature\"."
-  (format "%s · %s" (agent-workflow-run-issue run) (plist-get (agent-workflow-run-workflow run) :name)))
+  "How RUN is known: \"doom-a1b · feature\"; a workflow's own run (no
+ticket): \"github · run 3\"."
+  (if (agent-workflow-run-ticket-p run)
+      (format "%s · %s" (agent-workflow-run-issue run) (plist-get (agent-workflow-run-workflow run) :name))
+    (format "%s · run %d" (agent-workflow-run-issue run) (agent-workflow-run-n run))))
+
+(defun agent-workflow-run-ticket-p (run)
+  "Non-nil if RUN is on a ticket (an issue of Beads'); nil for a workflow's
+own run (ticket: false): its workflow's name stands for the issue's id (its
+folder, worktree, log), its branch run/NAME-N, no Beads."
+  (not (plist-get (agent-workflow-run-workflow run) :ticketless)))
+
+(defun agent-workflow--run-bd-write (run &rest args)
+  "bd update RUN's issue with ARGS (`agent-workflow--bd-write'); a run with
+no ticket: nothing."
+  (when (agent-workflow-run-ticket-p run)
+    (apply #'agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) args)))
+
+(defun agent-workflow--run-branch (run)
+  "The branch RUN's worktree is made on, if it's its own: run/NAME-N for a
+run with no ticket; nil for one on a ticket (its issue's)."
+  (unless (agent-workflow-run-ticket-p run)
+    (format "run/%s-%d" (agent-workflow-run-issue run) (agent-workflow-run-n run))))
+
+(defun agent-workflow--run-branch-made (run)
+  "RUN's branch, made: its name, or nil."
+  (let ((project (agent-workflow-run-project run)))
+    (if-let* ((own (agent-workflow--run-branch run)))
+        (let ((default-directory project))
+          (and (agent-workflow--git-lines "rev-parse" "--verify" "--quiet" (concat "refs/heads/" own)) own))
+      (agent-workflow-issue-branch-made project (agent-workflow-run-issue run)))))
+
+(defun agent-workflow--run-worktree (run)
+  "RUN's worktree, made if it isn't there (`agent-workflow-worktree'):
+\(DIR . BRANCH)."
+  (let ((info (agent-workflow-run-info run)))
+    (agent-workflow-worktree (agent-workflow-run-project run) (agent-workflow-run-issue run)
+                             :type (plist-get info :type) :title (plist-get info :title)
+                             :branch (agent-workflow--run-branch run))))
 
 ;; ====== ITS JOURNAL ======
 
@@ -257,7 +298,12 @@ changes."
 
 (defun agent-workflow--issue-summary (run)
   "RUN's summary written on its issue: its metadata, the label of the job
-running (job:NAME), the others' taken off."
+running (job:NAME), the others' taken off. No ticket: nothing."
+  (when (agent-workflow-run-ticket-p run)
+    (agent-workflow--issue-summary-write run)))
+
+(defun agent-workflow--issue-summary-write (run)
+  "RUN's summary written on its issue (`agent-workflow--issue-summary')."
   (let* ((running (car (seq-find (lambda (job) (eq (plist-get (cdr job) :status) 'running))
                                  (agent-workflow-run-jobs run))))
          (labels (seq-filter (lambda (label) (string-prefix-p "job:" label))
@@ -289,11 +335,15 @@ type. Their names."
   (let ((workflows (agent-workflow-workflows project)))
     (if-let* ((label (seq-find (lambda (label) (string-prefix-p "workflow:" label)) (plist-get info :labels))))
         (let ((name (string-remove-prefix "workflow:" label)))
-          (if (assoc name workflows)
-              (list name)
-            (agent-workflow--refuse "%s's label %s: no such workflow (%s)" (plist-get info :id) label
-                        (agent-workflow--listed (mapcar #'car workflows)))))
-      (mapcar #'car (seq-filter (lambda (workflow) (member (plist-get info :type) (plist-get (cdr workflow) :for)))
+          (cond ((not (assoc name workflows))
+                 (agent-workflow--refuse "%s's label %s: no such workflow (%s)" (plist-get info :id) label
+                                         (agent-workflow--listed (mapcar #'car workflows))))
+                ((plist-get (cdr (assoc name workflows)) :ticketless)
+                 (agent-workflow--refuse "%s's label %s: %s runs without a ticket (M-x agent-workflow-run)"
+                                         (plist-get info :id) label name))
+                (t (list name))))
+      (mapcar #'car (seq-filter (lambda (workflow) (and (not (plist-get (cdr workflow) :ticketless))
+                                                        (member (plist-get info :type) (plist-get (cdr workflow) :for))))
                                 workflows)))))
 
 (defun agent-workflow--next-run-number (project issue)
@@ -310,8 +360,11 @@ no workflow or several, an agent-workspace crew there, a project's
 workflow you don't trust (ASK: you're asked, trust.el). A blocked issue's
 run is queued until its blockers close."
   (let* ((project (file-name-as-directory project))
-         (info (agent-workflow-issue project issue))
-         (workflows (agent-workflow-workflows project)))
+         (workflows (agent-workflow-workflows project))
+         (_ (when (and workflow (plist-get (cdr (assoc workflow workflows)) :ticketless))
+              (user-error "%s runs without a ticket: M-x agent-workflow-run, or agent-workflow run --workflow %s"
+                          workflow workflow)))
+         (info (agent-workflow-issue project issue)))
     (cond
      ((equal (plist-get info :status) "closed") (user-error "%s is closed" issue))
      ((equal (plist-get info :type) "epic") (user-error "%s is an epic: its issues are run, not it" issue))
@@ -332,26 +385,76 @@ run is queued until its blockers close."
                               (user-error "Several workflows fit %s, a %s: %s (--workflow NAME)" issue
                                           (plist-get info :type) (string-join fitting ", ")))
                              (t (car fitting)))))))
-           (spec (cdr (assoc name workflows)))
-           (_ (agent-workflow--check-trust project spec ask))
-           (n (agent-workflow--next-run-number project issue))
-           (dir (file-name-as-directory (expand-file-name (format "%s/%d" issue n) (agent-workflow--runs-directory project))))
-           (run (agent-workflow-run--make
-                 :project project :issue issue :n n :dir dir :workflow spec :info info :state 'queued
-                 :jobs (mapcar (lambda (job) (cons (car job) (list :status 'pending :step 0)))
-                               (plist-get spec :jobs))
-                 :order (cl-incf agent-workflow--run-count))))
-      (make-directory dir t)
-      (copy-file (plist-get spec :file) (expand-file-name "workflow.yml" dir) t)
-      (agent-workflow--journal run "run-started" :workflow name :by by
-                               :main (let ((default-directory project))
-                                       (car (agent-workflow--git-lines "rev-parse" "HEAD"))))
-      (setq agent-workflow--runs (append agent-workflow--runs (list run)))
-      (agent-workflow--bd-write project issue "--status" "in_progress")
-      (agent-workflow--issue-summary run)
-      (agent-workflow--changed run)
-      (agent-workflow--tick-soon)
-      run)))
+           (spec (cdr (assoc name workflows))))
+      (agent-workflow--check-trust project spec ask)
+      (agent-workflow--new-run project issue spec info by))))
+
+(defun agent-workflow--new-run (project id spec info by)
+  "A new run of PROJECT on ID (an issue's id; a workflow's own run: its
+name) with the workflow SPEC, INFO its issue (a plist), started BY: made,
+journaled, queued. Its issue in progress, if it's on one."
+  (let* ((n (agent-workflow--next-run-number project id))
+         (dir (file-name-as-directory (expand-file-name (format "%s/%d" id n) (agent-workflow--runs-directory project))))
+         (run (agent-workflow-run--make
+               :project project :issue id :n n :dir dir :workflow spec :info info :state 'queued
+               :jobs (mapcar (lambda (job) (cons (car job) (list :status 'pending :step 0)))
+                             (plist-get spec :jobs))
+               :order (cl-incf agent-workflow--run-count))))
+    (make-directory dir t)
+    (copy-file (plist-get spec :file) (expand-file-name "workflow.yml" dir) t)
+    (agent-workflow--journal run "run-started" :workflow (plist-get spec :name) :by by
+                             :ticket (if (agent-workflow-run-ticket-p run) t :false)
+                             :main (let ((default-directory project))
+                                     (car (agent-workflow--git-lines "rev-parse" "HEAD"))))
+    (setq agent-workflow--runs (append agent-workflow--runs (list run)))
+    (agent-workflow--run-bd-write run "--status" "in_progress")
+    (agent-workflow--issue-summary run)
+    (agent-workflow--changed run)
+    (agent-workflow--tick-soon)
+    run))
+
+(defun agent-workflow--workflow-info (spec)
+  "What a run of SPEC (a workflow with no ticket) has for its issue: its
+name for an id, its description for a title; no type, no labels."
+  (list :id (plist-get spec :name) :title (or (plist-get spec :description) (plist-get spec :name))
+        :description "" :acceptance "" :notes "" :type nil :priority 2 :status "open" :labels nil :blockers nil))
+
+(cl-defun agent-workflow-start-workflow-run (project workflow &key (by "you") ask)
+  "Start a run of WORKFLOW (a name) in PROJECT, on no ticket (its ticket:
+false), started BY (you, shell): the run. Its workflow's name stands for an
+issue's id (its folder, worktree, log), its branch run/NAME-N made from your
+checkout's HEAD; no Beads. A user error, nothing started, if it can't: no
+such workflow, one on tickets, a run of it already, its last run's worktree
+left with changes not committed, an agent-workspace crew there, a project's
+workflow you don't trust (ASK: you're asked, trust.el)."
+  (let* ((project (file-name-as-directory project))
+         (workflows (agent-workflow-workflows project))
+         (spec (or (cdr (assoc workflow workflows))
+                   (user-error "No workflow %s (%s)" workflow (agent-workflow--listed (mapcar #'car workflows))))))
+    (cond
+     ((not (plist-get spec :ticketless))
+      (user-error "%s runs on a ticket: M-x agent-workflow-run-ticket, or agent-workflow run ISSUE --workflow %s"
+                  workflow workflow))
+     ((agent-workflow-run-of project workflow)
+      (user-error "%s has a run already (%s)" workflow (agent-workflow-run-name (agent-workflow-run-of project workflow))))
+     ((agent-workflow-crew-running-p project)
+      (user-error "The agent-workspace crew of %s runs: its agents would take the same issues"
+                  (file-name-nondirectory (directory-file-name project)))))
+    (agent-workflow--check-trust project spec ask)
+    (agent-workflow--fresh-worktree project workflow)
+    (agent-workflow--new-run project workflow spec (agent-workflow--workflow-info spec) by)))
+
+(defun agent-workflow--fresh-worktree (project workflow)
+  "WORKFLOW's last run's worktree in PROJECT (one cancelled, failed, or
+done with changes not committed) removed, its branch kept: a new run's is
+made anew, on its own branch. A user error if it has changes not
+committed: nothing lost."
+  (let ((dir (agent-workflow-worktree-directory project workflow)))
+    (when (file-exists-p (expand-file-name ".git" dir))
+      (when (let ((default-directory dir)) (agent-workflow--git-lines "status" "--porcelain"))
+        (user-error "%s's last run left changes not committed in %s: commit them or remove it first"
+                    workflow (abbreviate-file-name (directory-file-name dir))))
+      (agent-workflow-worktree-remove project workflow))))
 
 ;; ====== THE QUEUE ======
 
@@ -455,7 +558,7 @@ does."
   "RUN looked at: its blockers (queued), its next job started if none
 runs, it's over once every job is done or skipped."
   (catch 'wait
-    (when (eq (agent-workflow-run-state run) 'queued)
+    (when (and (eq (agent-workflow-run-state run) 'queued) (agent-workflow-run-ticket-p run))
       (let ((blockers (plist-get (agent-workflow-issue (agent-workflow-run-project run) (agent-workflow-run-issue run))
                                  :blockers)))
         (when blockers
@@ -536,7 +639,7 @@ kept, saying why. Journaled, kept in RUN."
   (let* ((project (agent-workflow-run-project run))
          (issue (agent-workflow-run-issue run))
          (default-directory project)
-         (branch (agent-workflow-issue-branch-made project issue))
+         (branch (agent-workflow--run-branch-made run))
          (into (agent-workflow-main-branch project)))
     (when branch
       (let ((empty nil)
@@ -604,7 +707,7 @@ job's concurrency reached, or (it needs an agent) its workflow's."
     `(let* ((,run-var ,run)
             (,info (agent-workflow-run-info ,run-var)))
        (cl-letf (((symbol-function 'issue-id) (lambda () (plist-get ,info :id)))
-                 ((symbol-function 'issue-type) (lambda () (intern (plist-get ,info :type))))
+                 ((symbol-function 'issue-type) (lambda () (and (plist-get ,info :type) (intern (plist-get ,info :type)))))
                  ((symbol-function 'issue-labels) (lambda () (plist-get ,info :labels)))
                  ((symbol-function 'issue-priority) (lambda () (plist-get ,info :priority)))
                  ((symbol-function 'issue-title) (lambda () (plist-get ,info :title)))
@@ -646,19 +749,17 @@ job's snapshot of its branch), the commit it sees there; its first step."
          ;; branch and commit (unknown: a branch made before).
          (_ (unless (agent-workflow-run-base run)
               (setf (agent-workflow-run-base run)
-                    (or (agent-workflow-worktree-base project issue) (list :branch nil :commit nil)))))
+                    (or (agent-workflow-worktree-base project issue (agent-workflow--run-branch run))
+                        (list :branch nil :commit nil)))))
          (where (if edits
-                    (let ((worktree (agent-workflow-worktree project issue :type (plist-get info :type)
-                                                             :title (plist-get info :title))))
+                    (let ((worktree (agent-workflow--run-worktree run)))
                       (list (car worktree) (cdr worktree)
                             (let ((default-directory (car worktree))) (agent-workflow--git "rev-parse" "HEAD"))))
                   (agent-workflow-snapshot project issue job :type (plist-get info :type)
-                                           :title (plist-get info :title)))))
+                                           :title (plist-get info :title) :branch (agent-workflow--run-branch run)))))
     ;; The branch where this round of it starts: what discarding goes back to.
     (agent-workflow--job-set run job :start-commit
-                             (let ((default-directory (car (agent-workflow-worktree project issue
-                                                                                    :type (plist-get info :type)
-                                                                                    :title (plist-get info :title)))))
+                             (let ((default-directory (car (agent-workflow--run-worktree run))))
                                (agent-workflow--git "rev-parse" "HEAD")))
     (agent-workflow--job-set run job :status 'running :step 0 :why nil :dir (nth 0 where) :commit (nth 2 where)
                              :snapshot (and (not edits) where)
@@ -692,7 +793,10 @@ job's snapshot of its branch), the commit it sees there; its first step."
   "RUN's variables' values for an agent step: its issue's, what its jobs
 said."
   (let ((info (agent-workflow-run-info run)))
-    (append (list (cons "issue.title" (plist-get info :title))
+    (append (and (not (agent-workflow-run-ticket-p run))
+                 ;; No ticket: {issue} is the run's name; its fields empty.
+                 (list (cons "issue" (agent-workflow-run-name run))))
+            (list (cons "issue.title" (if (agent-workflow-run-ticket-p run) (plist-get info :title) ""))
                   (cons "issue.description" (plist-get info :description))
                   (cons "issue.acceptance" (plist-get info :acceptance))
                   (cons "issue.notes" (plist-get info :notes))
@@ -769,6 +873,7 @@ one started for it. The pool full: the run waits, queued, for an agent."
                            :project (agent-workflow-run-project run) :issue (agent-workflow-run-issue run)
                            :job job :profile (plist-get step :agent)
                            :type (plist-get info :type) :title (plist-get info :title)
+                           :branch (agent-workflow--run-branch run)
                            :values values :outcomes outcomes
                            :prompt (agent-workflow--prompt run job step)
                            :snapshot (plist-get (agent-workflow--job run job) :snapshot)
@@ -810,8 +915,7 @@ one."
                              :finished t :session (agent-workflow-agent-session agent))
     (agent-workflow--journal run "step-ended" :job job :step (plist-get (agent-workflow--job run job) :step)
                              :outcome outcome :notes notes :session (agent-workflow-agent-session agent))
-    (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run)
-                              "--append-notes" (format "%s (%s): %s" job outcome (if (string-empty-p notes) "-" notes)))
+    (agent-workflow--run-bd-write run "--append-notes" (format "%s (%s): %s" job outcome (if (string-empty-p notes) "-" notes)))
     (agent-workflow--changed run)
     ;; Its turn over already (it said so outside one, or after its hand
     ;; was raised): on at once, once this reply's sent.
@@ -1001,7 +1105,7 @@ since its base (`agent-workflow--where-files'), :commits its latest
          (live (file-exists-p (expand-file-name ".git" dir)))
          (made (or (and live (let ((default-directory dir))
                                (car (agent-workflow--git-lines "branch" "--show-current"))))
-                   (agent-workflow-issue-branch-made project issue)))
+                   (agent-workflow--run-branch-made run)))
          (end (agent-workflow-run-branch-end run))
          (deleted (and (not made) (plist-get end :deleted) (plist-get end :branch)))
          (branch (or made deleted))
@@ -1219,7 +1323,7 @@ JOB hasn't run, or STEP isn't one."
       (agent-workflow--journal run "went-back" :job job :step step :note note :by by
                                :replaced (vconcat replaced) :discarded (if discard t :false)
                                :lost (and lost (vconcat (append (car lost) (cdr lost)))))
-      (agent-workflow--bd-write project issue "--append-notes"
+      (agent-workflow--run-bd-write run "--append-notes"
                                 (format "Sent back to %s by %s%s%s" job by
                                         (if (and note (not (string-empty-p note))) (concat ": " note) "")
                                         (if discard ", the work since discarded" "")))
@@ -1343,8 +1447,7 @@ script's stops the run."
                (step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
                (agent (plist-get (agent-workflow--job run job) :agent)))
     (agent-workflow--journal run "answered" :job job :choice "reject" :note note :by by)
-    (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) "--append-notes"
-                              (format "%s's result rejected by %s: %s" job by note))
+    (agent-workflow--run-bd-write run "--append-notes" (format "%s's result rejected by %s: %s" job by note))
     (cond
      ((not (eq (plist-get step :kind) 'agent))
       (agent-workflow--job-set run job :ask (list :kind 'broke :step index :what "its result rejected"))
@@ -1518,8 +1621,7 @@ the run's pane" (agent-workflow-run-name run) (car agent)))
                  (when (eq kind 'budget)
                    (agent-workflow--budget-more run more))
                  (when (eq kind 'closed)
-                   (agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run)
-                                             "--status" "in_progress"))
+                   (agent-workflow--run-bd-write run "--status" "in_progress"))
                  (when (eq kind 'moved)
                    (dolist (other (agent-workflow-run-jobs run))
                      (agent-workflow--job-set run (car other) :end-commit nil)))
@@ -1721,13 +1823,61 @@ several do (or none: all of them)."
     (if (and fitting (null (cdr fitting)))
         (car fitting)
       (completing-read (format "Workflow for %s (a %s): " issue (plist-get info :type))
-                       (or fitting (mapcar #'car (agent-workflow-workflows project))) nil t))))
+                       (or fitting (mapcar #'car (seq-remove (lambda (workflow) (plist-get (cdr workflow) :ticketless))
+                                                             (agent-workflow-workflows project))))
+                       nil t))))
 
-(defun agent-workflow-run (issues &optional workflow project)
+(defun agent-workflow--started (started refused)
+  "STARTED runs said to `agent-workflow-started-functions', and with those
+REFUSED ((ID . WHY)...) in the echo area."
+  (dolist (run started)
+    (run-hook-with-args 'agent-workflow-started-functions run agent-workflow-from-shell))
+  (message "%s" (string-join
+                 (delq nil (list (and started (concat "Started: " (mapconcat #'agent-workflow-run-name started ", ")))
+                                 (and refused (concat "refused: " (mapconcat (lambda (r) (format "%s (%s)" (car r) (cdr r)))
+                                                                             refused "; ")))))
+                 "; ")))
+
+(defun agent-workflow--read-ticketless (project)
+  "A workflow of PROJECT that runs without a ticket, picked (its
+description beside it): its name."
+  (let* ((workflows (seq-filter (lambda (workflow) (plist-get (cdr workflow) :ticketless))
+                                (agent-workflow-workflows project)))
+         (completion-extra-properties
+          (list :annotation-function
+                (lambda (name)
+                  (when-let* ((description (plist-get (cdr (assoc name workflows)) :description)))
+                    (concat (propertize " " 'display '(space :align-to 24))
+                            (propertize description 'face 'completions-annotations)))))))
+    (unless workflows
+      (user-error "No workflow of %s runs without a ticket (ticket: false); on a ticket: M-x agent-workflow-run-ticket"
+                  (file-name-nondirectory (directory-file-name project))))
+    (completing-read "Run the workflow: " (mapcar #'car workflows) nil t)))
+
+(defun agent-workflow-run (workflow &optional project)
+  "Start a run of WORKFLOW (a name) of PROJECT (default: the current
+one's), on no ticket: a workflow that says ticket: false (see
+`agent-workflow-start-workflow-run'). Interactively, picked among them.
+Return (STARTED . REFUSED), as `agent-workflow-run-ticket' does. On a
+ticket: \[agent-workflow-run-ticket]."
+  (interactive (let ((project (or (agent-workflow-project) (user-error "Not in a git repository"))))
+                 (list (agent-workflow--read-ticketless project) project)))
+  (let ((project (or project (agent-workflow-project) (user-error "Not in a git repository")))
+        started refused)
+    (agent-workflow--ensure-restored project)
+    (condition-case err
+        (push (agent-workflow-start-workflow-run project workflow :by "you" :ask (called-interactively-p 'any))
+              started)
+      (user-error (push (cons workflow (error-message-string err)) refused)))
+    (agent-workflow--started started refused)
+    (cons started refused)))
+
+(defun agent-workflow-run-ticket (issues &optional workflow project)
   "Start runs on ISSUES (ids) of PROJECT (default: the current one's), each
 with WORKFLOW, else its own: those started and those refused, said.
 Interactively, the issues picked, several at once (an epic: its open
-issues), then each one's workflow, asked only when several fit. Return
+issues), then each one's workflow, asked only when several fit (those that
+run without a ticket left out: \[agent-workflow-run]). Return
 \(STARTED . REFUSED): runs, and (ISSUE . WHY) each."
   (interactive (let ((project (or (agent-workflow-project) (user-error "Not in a git repository"))))
                  (list (agent-workflow--read-issues project) nil project)))
@@ -1744,11 +1894,5 @@ issues), then each one's workflow, asked only when several fit. Return
                 started)
         (user-error (push (cons issue (error-message-string err)) refused))))
     (setq started (nreverse started) refused (nreverse refused))
-    (dolist (run started)
-      (run-hook-with-args 'agent-workflow-started-functions run agent-workflow-from-shell))
-    (message "%s" (string-join
-                   (delq nil (list (and started (concat "Started: " (mapconcat #'agent-workflow-run-name started ", ")))
-                                   (and refused (concat "refused: " (mapconcat (lambda (r) (format "%s (%s)" (car r) (cdr r)))
-                                                                               refused "; ")))))
-                   "; "))
+    (agent-workflow--started started refused)
     (cons started refused)))

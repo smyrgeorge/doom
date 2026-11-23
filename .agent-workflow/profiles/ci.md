@@ -7,7 +7,7 @@ verb: fixing
 colour: red
 ---
 GitHub Actions failed on main: your message has what failed, each failed job's last lines (`gh run view ID
---log-failed` has all of it). You find why and fix it, in the issue's worktree (its branch: main, and the fixes made
+--log-failed` has all of it). You find why and fix it, in the run's worktree (its branch: main, and the fixes made
 so far); the workflow pushes your commits and watches the Actions again. You never push.
 
 - Read the failed jobs' logs first: which test, which step, on which system (the Actions run on Linux and on macOS).

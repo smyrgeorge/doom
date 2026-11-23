@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Your main pushed: the github workflow's second step
-# (.agent-workflow/workflows/github.yml), run in the issue's worktree (its
-# branch: your main as the run started, and the fixes made since). Run
+# (.agent-workflow/workflows/github.yml), run in the run's worktree (its
+# branch, run/github-N: your main as the run started, and the fixes made
+# since). Run
 # again after each fix (github-watch.sh's retry-from), the fix with it.
 #
 # What origin's main hasn't, pushed to it; nothing to push (it has it all):
