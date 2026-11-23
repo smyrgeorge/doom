@@ -537,12 +537,17 @@ jobs:
 ;; ====== BUDGET ======
 
 (defun +test-awr--spend (agent cost tokens)
-  "AGENT's session as if it spent COST dollars and TOKENS tokens."
+  "AGENT's session as Claude Code says what it spent: COST dollars so far
+\(its running total), a turn of TOKENS tokens over (its usage, a turn's)."
   (with-current-buffer (agent-workflow-agent-buffer agent)
-    (map-put! agent-shell--state :usage (list (cons :cost-amount cost) (cons :total-tokens tokens)))))
+    (let ((usage (copy-alist (map-elt agent-shell--state :usage))))
+      (setf (alist-get :cost-amount usage) cost)
+      (map-put! agent-shell--state :usage usage))
+    (agent-shell--save-usage :state agent-shell--state :acp-usage `((totalTokens . ,tokens)))))
 
 (ert-deftest agent-workflow-runs/budget ()
-  "What a run spent: its agents', kept as they stop, and its time not
+  "What a run spent: its agents' (a session's cost its running total, its
+tokens every turn's, added up), kept as they stop, and its time not
 waiting for you. Near its budget: said once. At it: its running steps
 stopped, asked; go on with more: continued; kept with the run."
   (+test-awr "budget"
@@ -560,10 +565,18 @@ stopped, asked; go on with more: continued; kept with the run."
       (let ((review (+test-awr--agent run "review")))
         (should (+test-awr--wait (lambda () (agent-workflow-agent-session review))))
         (+test-awr--spend review 5.5 2000)
+        (should (equal (butlast (agent-workflow-run-spent-now run) 2) '(:cost 8.5 :tokens 3000)))
         (agent-workflow-check-budget run)
         (should (agent-workflow-run-warned run))
         (should (member "budget-near" (+test-awr--journal run)))
+        ;; Another turn: its tokens added to the first's (Claude Code says
+        ;; a turn's), its cost the session's total so far.
         (+test-awr--spend review 7.5 3000)
+        (should (equal (butlast (agent-workflow-run-spent-now run) 2) '(:cost 10.5 :tokens 6000)))
+        ;; A turn without its total: nothing more.
+        (with-current-buffer (agent-workflow-agent-buffer review)
+          (agent-shell--save-usage :state agent-shell--state :acp-usage '((inputTokens . 4))))
+        (should (equal (butlast (agent-workflow-run-spent-now run) 2) '(:cost 10.5 :tokens 6000)))
         (agent-workflow-check-budget run)
         (should (equal (agent-workflow-run-why run)
                        "review: its run's budget is used up ($10.50 of $10): go on with more, or stop?"))
@@ -579,7 +592,9 @@ stopped, asked; go on with more: continued; kept with the run."
                      (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
                      (json-parse-buffer :object-type 'plist))))
         (should (equal (plist-get (plist-get saved :more) :cost) 5))
-        (should (>= (plist-get (plist-get saved :spent) :cost) 10.5))))))
+        (should (>= (plist-get (plist-get saved :spent) :cost) 10.5))
+        ;; Every turn's tokens, review's kept as it stopped at its budget.
+        (should (equal (plist-get (plist-get saved :spent) :tokens) 6000))))))
 
 ;; ====== CHANGED BY HAND ======
 

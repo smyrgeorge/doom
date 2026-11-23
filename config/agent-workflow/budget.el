@@ -6,7 +6,11 @@
 ;; each of its runs: its cost (dollars, as agent-shell's usage reports have
 ;; them), its tokens, its time (the run's, while it runs or waits for an
 ;; agent: not while it waits for you). What it spent is its agents', those
-;; gone kept with the run, those working read from their sessions. At 80% of
+;; gone kept with the run, those working read from their sessions: a
+;; session's cost as its agent says it, a running total (Claude Code's
+;; total_cost_usd: what its tokens would cost on the API); its tokens each
+;; turn's, added up as each turn ends (a session says its last turn's only:
+;; Claude Code's usage is a turn's, agent-shell keeps the last). At 80% of
 ;; any, it's said, once (in its journal, and as a message). At its budget,
 ;; its running steps are stopped (their work kept, their agents' sessions
 ;; kept to resume them) and the run asks you: go on, with more (cost, tokens
@@ -26,13 +30,31 @@
 ;; ====== WHAT A RUN SPENT ======
 
 (defun agent-workflow--agent-usage (agent)
-  "What AGENT's session spent so far: (:cost N :tokens N)."
-  (let ((buffer (agent-workflow-agent-buffer agent)))
+  "What AGENT's session spent so far: (:cost N :tokens N), its tokens its
+turns' (`agent-workflow--turn-tokens')."
+  (let ((buffer (agent-workflow-agent-buffer agent))
+        (tokens (or (agent-workflow-agent-tokens agent) 0)))
     (if (and buffer (buffer-live-p buffer))
         (with-current-buffer buffer
           (let ((usage (and (local-variable-p 'agent-shell--state) (map-elt agent-shell--state :usage))))
-            (list :cost (or (map-elt usage :cost-amount) 0) :tokens (or (map-elt usage :total-tokens) 0))))
-      (list :cost 0 :tokens 0))))
+            (list :cost (or (map-elt usage :cost-amount) 0) :tokens tokens)))
+      (list :cost 0 :tokens tokens))))
+
+(defun agent-workflow--turn-tokens (&rest args)
+  "A turn of an agent of a run over, its usage saved (agent-shell's
+`agent-shell--save-usage', ARGS its :state and :acp-usage): the turn's
+tokens added to its agent's. Once a turn: a turn without usage adds none."
+  (let* ((state (plist-get args :state))
+         (buffer (map-elt state :buffer))
+         (total (map-elt (plist-get args :acp-usage) 'totalTokens)))
+    (when-let* (((numberp total))
+                ((buffer-live-p buffer))
+                (agent (buffer-local-value 'agent-workflow--agent buffer))
+                ((eq (agent-workflow-agent-buffer agent) buffer)))
+      (setf (agent-workflow-agent-tokens agent) (+ (or (agent-workflow-agent-tokens agent) 0) total)))))
+
+(advice-add 'agent-shell--save-usage :after #'agent-workflow--turn-tokens
+            '((name . agent-workflow-turn-tokens)))
 
 (defun agent-workflow--agent-gone (agent)
   "AGENT stops: what it spent kept with its run. In

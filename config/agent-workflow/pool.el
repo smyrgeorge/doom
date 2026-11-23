@@ -62,7 +62,8 @@
   pending                ; its first message, sent once its session is ready
   values                 ; its variables' values: an alist
   outcomes               ; the outcomes it may give, besides done
-  stopping)              ; non-nil while it's stopped by us
+  stopping               ; non-nil while it's stopped by us
+  (tokens 0))            ; its turns' tokens so far, each turn's added as it ends (budget.el)
 
 (defvar agent-workflow--agents nil
   "Every agent of the pool, in every project, as they started.")

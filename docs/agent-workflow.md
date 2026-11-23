@@ -364,9 +364,13 @@ agents`, `merge: waiting: merge at its limit, 1 of 1`. Runs of several workflows
 
 ### Budget
 
-A workflow's `budget` (`agent-workflow-budget` for one without) caps each of its runs: its cost in dollars (as
-agent-shell's usage reports have it), its tokens, its time (while it runs or waits for an agent, not while it waits for
-you). What it spent is its agents': those gone are kept with the run, those working read from their sessions.
+A workflow's `budget` (`agent-workflow-budget` for one without) caps each of its runs: its cost in dollars, its tokens,
+its time (while it runs or waits for an agent, not while it waits for you). What it spent is its agents': those gone are
+kept with the run, those working read from their sessions.
+
+- **Its cost** is each agent's session's, as Claude Code says it: what its tokens would cost on the API, at its list
+  prices (a running total). On a subscription, an estimate: nothing is billed by the run.
+- **Its tokens** are every turn's of each agent, added up as each turn ends (cache reads, most of them, included).
 
 - At 80% of any, it's said once, in its journal and as a message.
 - At its budget, its running steps are stopped (their work kept, their agents' sessions kept to resume them), and the
