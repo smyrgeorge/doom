@@ -340,6 +340,43 @@ jobs:
       (should-not (plist-get (agent-workflow--job run "check") :process))
       (agent-workflow-cancel run))))
 
+(ert-deftest agent-workflow-steps/a-fix-interrupted ()
+  "A failed step's agent fixing it, interrupted (budget, pause now):
+continued, the step runs afresh, once, then the next; skipped, the next at
+once (not the step again)."
+  (dolist (answer '(continue skip))
+    (+test-awr (format "fix-interrupted-%s" answer)
+      (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    steps:
+      - name: test
+        run: test -f ok.txt || { echo missing; exit 1; }
+        retries: 1
+        on-fail: build
+      - name: next
+        run: echo next
+")
+      (let* ((issue (+test-awr--issue project "Fix interrupted"))
+             (run (agent-workflow-start-run project issue)))
+        (+test-awr--agent run "check")
+        (agent-workflow--interrupt run "check")
+        (should-not (plist-get (agent-workflow--job run "check") :retry))
+        (write-region "x" nil (expand-file-name "ok.txt" (agent-workflow-worktree-directory project issue)))
+        (pcase answer
+          ('continue (agent-workflow-continue run))
+          ('skip (agent-workflow-confirm run "skip")))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        ;; After the interrupt: test run once (continued) or not (skipped).
+        (let ((after (cdr (member "interrupted" (mapcar (lambda (event)
+                                                          (if (equal (plist-get event :ev) "step-started")
+                                                              (format "started %s" (plist-get event :step))
+                                                            (plist-get event :ev)))
+                                                        (agent-workflow--journal-events (agent-workflow-run-dir run)))))))
+          (should (equal (seq-filter (lambda (ev) (string-prefix-p "started" ev)) after)
+                         (if (eq answer 'continue) '("started 0" "started 1") '("started 1")))))))))
+
 (ert-deftest agent-workflow-steps/environment-shell-and-your-copy ()
   "A script's environment; shell: its interpreter; a script of
 .agent-workflow/ run from your checkout, not the branch."
