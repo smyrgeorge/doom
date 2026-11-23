@@ -628,6 +628,27 @@ each does after its name."
                              (plist-get item :steps))
                      '(("check" "done" "run: check.sh") ("push" "failed" "run: push.sh") ("run: watch.sh" "pending" nil)))))))
 
+(ert-deftest agent-workflow-pane/a-cancelled-run ()
+  "A cancelled run's job (its own status cancelled): no spinner, grey
+\(skipped), its line saying cancelled; its steps done before the one it was
+on, the rest grey; ⊘ in the graph, not coloured."
+  (let* ((workflow '(:name "github"
+                     :jobs (("green" :name "green"
+                             :steps ((:kind run :run "push.sh" :name "push")
+                                     (:kind run :run "watch.sh" :name "watch"))))))
+         (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'cancelled
+                                        :workflow workflow :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "green" (list :status 'cancelled :step 1))))))
+    (let ((node (car (plist-get (agent-workflow--pane-graph run) :nodes))))
+      (should (equal (plist-get node :label) "green ⊘"))
+      (should-not (plist-get node :status)))
+    (let ((item (with-temp-buffer
+                  (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+                  (agent-workflow--pane-job run "green" (cdr (assoc "green" (agent-workflow-run-jobs run)))))))
+      (should (equal (plist-get item :status) "skipped"))
+      (should (equal (plist-get item :detail) "cancelled"))
+      (should (equal (mapcar (lambda (step) (plist-get step :status)) (plist-get item :steps)) '("done" "skipped"))))))
+
 (ert-deftest agent-workflow-pane/where-in-words ()
   "Its state in a line: its mark, its time, what it spent, its tokens, each
 against its budget. Where its work is: ⎇ its branch, where it started →

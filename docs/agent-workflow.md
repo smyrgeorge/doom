@@ -335,7 +335,9 @@ review asks: Should the escape table also cover Unicode escapes?
   (`agent-workflow-pane-where-every`); once the run is done, its worktree gone, its branch deleted or kept (above).
 - **Run:** a graph of its jobs and their `needs`, each marked and coloured by its state, its round past 1; its
   checklist, each job a step, its steps under it (status, agent, round, try, time; a job waiting for you ◆, timed;
-  one skipped, its `if`; one that edits and committed nothing, `no commit`; the merge, `merged` or `nothing to merge`);
+  one skipped, its `if`; one that edits and committed nothing, `no commit`; the merge, `merged` or `nothing to merge`;
+  a step that failed while an agent fixes it, ✗ and who and its try, `ci fixing it · try 1 of 6`, its job `fixing`;
+  a job its run's cancel or failure stopped, grey, `cancelled`, ⊘ in the graph);
   its rounds as a timeline, each job's runs as bars, one sent back said (`review → changes`),
   the one running growing.
 - **Needs you**, only while the run waits for you: what on, a line coloured, its answers buttons: an approval
@@ -549,8 +551,8 @@ some are read back, each with the workflow it started with; a job that was runni
   can't be); a script runs again from its start. Steps already done never run again. With `C-u`, the run takes its
   workflow as it is now (its jobs kept by their names). `agent-workflow-continue-on-start` continues them by itself.
 - Or skip the step (`confirm ISSUE skip`), go back to a job, or cancel the run.
-- `M-x agent-workflow-cancel`: its agents stop, its scripts are killed, its issue is open again; its branch and
-  worktree are kept.
+- `M-x agent-workflow-cancel`: its agents stop, its scripts are killed, its jobs running or waiting end `cancelled`
+  (in its pane, `status`, and read back so), its issue is open again; its branch and worktree are kept.
 - `M-x agent-workflow-pause`: nothing new starts, running steps finish; with `C-u`, they stop at once, interrupted.
   `M-x agent-workflow-unpause`: on again.
 

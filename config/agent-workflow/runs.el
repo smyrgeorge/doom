@@ -118,7 +118,7 @@ no pane opens for them.")
             (agent-workflow-runs-of project)))
 
 (defun agent-workflow--job (run job)
-  "RUN's state of JOB: a plist (:status pending|running|waiting|done|skipped
+  "RUN's state of JOB: a plist (:status pending|running|waiting|done|skipped|failed|cancelled
 :step :agent :outcome :notes :finished :session :why :dir :commit :snapshot
 :pool :round :back :start-commit). :why: what it waits for (for you, or
 pending: for an agent, the branch); :dir: where it works; :commit: the one

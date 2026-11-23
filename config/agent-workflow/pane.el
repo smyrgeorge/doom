@@ -205,6 +205,11 @@ steps' times noted."
       (pcase event
         ("job-started" (setq times (list :started time)))
         ("job-done" (setq times (plist-put times :ended time)))
+        ;; Its run over: when its jobs running stopped (their section's time).
+        ((or "cancelled" "failed")
+         (dolist (name (append (plist-get data :jobs) (plist-get data :cancelled) nil))
+           (when-let* ((times (gethash name agent-workflow--pane-times)))
+             (puthash name (plist-put times :cancelled time) agent-workflow--pane-times))))
         ("step-started" (when (numberp index) (step-set :started)))
         ((or "step-ended" "script-ended" "step-skipped") (when (numberp index) (step-set :ended))))
       (when job
@@ -530,9 +535,10 @@ it does (`agent-workflow--pane-step-does')."
     (_ "a step")))
 
 (defun agent-workflow--pane-status (status)
-  "A job's STATUS as a checklist's: waiting for you, ◆."
+  "A job's STATUS as a checklist's: waiting for you, ◆; cancelled (its run
+over), as skipped (–, grey: no spinner), its detail saying it."
   (pcase status
-    ('running "running") ('waiting "waiting") ('done "done") ('skipped "skipped") ('failed "failed")
+    ('running "running") ('waiting "waiting") ('done "done") ((or 'skipped 'cancelled) "skipped") ('failed "failed")
     (_ "pending")))
 
 (defun agent-workflow--pane-timed (item times status)
@@ -579,6 +585,7 @@ it does (`agent-workflow--pane-step-does')."
                                               (equal (plist-get state :start-commit) (plist-get state :end-commit))
                                               "no commit")))
                                   (and (eq status 'waiting) "needs you")
+                                  (and (eq status 'cancelled) "cancelled")
                                   (and (eq status 'pending) (plist-get state :why)
                                        (format "waits: %s" (plist-get state :why)))))
                   " · "))
@@ -600,6 +607,8 @@ it does (`agent-workflow--pane-step-does')."
                                                         (cond ((< i index) "done")
                                                               ((= i index) (symbol-name status))
                                                               (t "pending")))
+                                                       ;; Its run cancelled: those it didn't end, grey.
+                                                       ((eq status 'cancelled) (if (< i index) "done" "skipped"))
                                                        (t "pending")))
                                             (does (and (plist-get step :name) (agent-workflow--pane-step-does step))))
                                        (agent-workflow--pane-timed
@@ -641,7 +650,7 @@ round past 1 said), an arrow from each job to those needing it."
                                     :label (concat (car job) " "
                                                    (pcase status
                                                      ('done "✓") ('running "●") ('waiting "◆")
-                                                     ('skipped "–") ('failed "✗") (_ "○"))
+                                                     ('skipped "–") ('failed "✗") ('cancelled "⊘") (_ "○"))
                                                    (if (and (numberp round) (> round 1)) (format " r%d" round) "")))
                               (pcase status
                                 ('done '(:status "ok")) ('running '(:status "active"))
@@ -1034,10 +1043,12 @@ there; a job over, its section folded once, its mark done."
              (times (gethash name agent-workflow--pane-times))
              (started (plist-get times :started))
              (note (and started (agent-workflow--duration-words
-                                 (round (- (or (and (memq status '(done skipped)) (plist-get times :ended))
+                                 (round (- (or (and (memq status '(done skipped cancelled))
+                                                    (or (plist-get times :ended) (plist-get times :cancelled)))
                                                (float-time))
                                            started)))))
-             (mark (pcase status ('running 'running) ('waiting 'needs-you) ('done 'done) ('skipped 'done) (_ 'waiting))))
+             (mark (pcase status ('running 'running) ('waiting 'needs-you) ('done 'done) ('skipped 'done)
+                          ('cancelled 'failed) (_ 'waiting))))
         (when (and agent (not (agent-ui--find-section section)))
           (agent-ui-section pane section :title name :state mark :note note
                             :after (or (car (last (seq-filter (lambda (s) (string-prefix-p "job." s))
@@ -1055,7 +1066,7 @@ there; a job over, its section folded once, its mark done."
                       ((not (equal (agent-ui--section-hosts (agent-ui--find-section section)) canvas))))
             (agent-ui-host canvas pane section))
           ;; Over: folded, once; running again (sent back), unfolded.
-          (cond ((and (memq status '(done skipped)) (not (member name agent-workflow--pane-ended)))
+          (cond ((and (memq status '(done skipped cancelled)) (not (member name agent-workflow--pane-ended)))
                  (push name agent-workflow--pane-ended)
                  (agent-ui-section pane section :folded t))
                 ((and (eq status 'running) (member name agent-workflow--pane-ended))
@@ -1167,13 +1178,13 @@ pane drawn again from its journal)."
           (let ((status (plist-get (agent-workflow--job run job) :status)))
             (agent-ui-section pane section :title job
                               :state (pcase status ('running 'running) ('waiting 'needs-you) ('done 'done)
-                                       ('skipped 'done) (_ 'waiting))
-                              :folded (memq status '(done skipped))
+                                       ('skipped 'done) ('cancelled 'failed) (_ 'waiting))
+                              :folded (memq status '(done skipped cancelled))
                               :after (or (car (last (seq-filter (lambda (s) (string-prefix-p "job." s))
                                                                 (mapcar #'agent-ui--section-name agent-ui--sections))))
                                          "notes")
                               :open (lambda () (agent-workflow--pane-open-session run job)))
-            (when (memq status '(done skipped))
+            (when (memq status '(done skipped cancelled))
               (push job agent-workflow--pane-ended))))
         (with-demoted-errors "agent workflow's pane: %S"
           (agent-ui-show element :canvas pane :section section))))))

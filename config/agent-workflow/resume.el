@@ -23,7 +23,8 @@
 ;; agent-workflow-unpause: on again.
 ;;
 ;; Cancel (M-x agent-workflow-cancel): its agents stopped, its scripts
-;; killed, the run over; its issue open again, its branch and worktree kept.
+;; killed, its jobs running or waiting cancelled, the run over; its issue
+;; open again, its branch and worktree kept.
 
 (require 'cl-lib)
 (require 'seq)
@@ -233,11 +234,24 @@ script killed; interrupted, waiting for you."
         (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) (car job)))
       (agent-workflow--job-set run (car job) :agent nil :process nil :snapshot nil))))
 
+(defun agent-workflow--cancel-jobs (run &optional except)
+  "RUN's jobs running or waiting (but EXCEPT) cancelled, their run over:
+their own status, kept in its state.json (no spinner left in its pane or
+status). Return their names."
+  (let ((cancelled nil))
+    (dolist (job (agent-workflow-run-jobs run))
+      (when (and (memq (plist-get (cdr job) :status) '(running waiting))
+                 (not (equal (car job) except)))
+        (agent-workflow--job-set run (car job) :status 'cancelled :why nil :finished nil :retry nil :resolving nil)
+        (push (car job) cancelled)))
+    (nreverse cancelled)))
+
 (cl-defun agent-workflow-cancel (run &key (by "you"))
-  "Cancel RUN: its agents stopped, its scripts killed, its snapshots gone;
-the run over, its issue open again; its branch and worktree kept."
+  "Cancel RUN: its agents stopped, its scripts killed, its snapshots gone,
+its jobs running or waiting cancelled (journaled: :jobs); the run over, its
+issue open again; its branch and worktree kept."
   (agent-workflow--stop-all run)
-  (agent-workflow--journal run "cancelled" :by by)
+  (agent-workflow--journal run "cancelled" :by by :jobs (vconcat (agent-workflow--cancel-jobs run)))
   (agent-workflow--set-state run 'cancelled)
   (agent-workflow--run-bd-write run "--status" "open")
   (agent-workflow--issue-summary run)
@@ -249,12 +263,14 @@ the run over, its issue open again; its branch and worktree kept."
   "RUN failed, WHY (words): a step of JOB (STEP, from 0) said it can't go
 on (exit 3; an elisp: step's `agent-workflow-abort'). As cancelled: its
 agents stopped, its scripts killed, its snapshots gone, its issue open
-again, its branch and worktree kept; JOB failed, the run over, said as a
-run needing you is (`agent-workflow-needs-you-functions')."
+again, its branch and worktree kept; JOB failed, its other jobs running or
+waiting cancelled (journaled: :cancelled), the run over, said as a run
+needing you is (`agent-workflow-needs-you-functions')."
   (agent-workflow--stop-all run)
   (when job
     (agent-workflow--job-set run job :status 'failed :why why))
-  (agent-workflow--journal run "failed" :job job :step step :why why)
+  (agent-workflow--journal run "failed" :job job :step step :why why
+                           :cancelled (vconcat (agent-workflow--cancel-jobs run job)))
   (agent-workflow--set-state run 'failed why)
   (agent-workflow--run-bd-write run "--status" "open")
   (agent-workflow--issue-summary run)

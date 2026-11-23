@@ -532,7 +532,22 @@ jobs:
       (should (eq (agent-workflow-run-state run) 'cancelled))
       (should-not (buffer-live-p (agent-workflow-agent-buffer agent)))
       (should (equal (alist-get 'status (+test-awr--shown project issue)) "open"))
-      (should-not (agent-workflow-run-of project issue)))))
+      (should-not (agent-workflow-run-of project issue))
+      ;; Its job running: cancelled (not left running), journaled, in status,
+      ;; read back so after a restart; those that hadn't started, pending.
+      (should (eq (+test-awr--job run "build") 'cancelled))
+      (should (eq (+test-awr--job run "review") 'pending))
+      (should (equal (plist-get (car (last (seq-filter (lambda (event) (equal (plist-get event :ev) "cancelled"))
+                                                       (agent-workflow--journal-events (agent-workflow-run-dir run)))))
+                                :jobs)
+                     '("build")))
+      (should (equal (mapcar (lambda (job) (list (plist-get job :name) (plist-get job :status)))
+                             (plist-get (aref (plist-get (agent-workflow--request-status project (list :issue issue)) :runs) 0)
+                                        :jobs))
+                     '(("build" "cancelled") ("docs" "pending") ("review" "pending"))))
+      (let ((back (agent-workflow--read-run (agent-workflow-run-dir run))))
+        (should (eq (agent-workflow-run-state back) 'cancelled))
+        (should (eq (plist-get (cdr (assoc "build" (agent-workflow-run-jobs back))) :status) 'cancelled))))))
 
 ;; ====== BUDGET ======
 
