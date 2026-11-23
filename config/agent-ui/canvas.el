@@ -987,19 +987,22 @@ its session (unless `agent-ui-close-emptied-functions' say, once it's
 emptied: `agent-ui--close-emptied'); the next element shown opens a pane
 again."
   (when (agent-ui--empty-p)
-    (let ((canvas (current-buffer)))
-      (dolist (window (get-buffer-window-list canvas nil t))
-        (let* ((other (lambda (test)
-                        (seq-some (lambda (entry) (and (buffer-live-p (car entry)) (not (eq (car entry) canvas))
-                                                       (funcall test (car entry))))
-                                  (window-prev-buffers window))))
-               (made (eq (car-safe (window-parameter window 'quit-restore)) 'window))
-               (before (funcall other #'always))
-               (canvas-before (funcall other (lambda (b) (eq (buffer-local-value 'major-mode b)
-                                                             'agent-ui-canvas-mode)))))
-          (cond ((and (not canvas-before) (or made (not before)) (eq (window-deletable-p window) t))
-                 (delete-window window))
-                (before (switch-to-prev-buffer window 'bury))))))))
+    ;; The current buffer kept: deleting a selected window selects another,
+    ;; its buffer current then (what called this goes on in the canvas).
+    (save-current-buffer
+      (let ((canvas (current-buffer)))
+        (dolist (window (get-buffer-window-list canvas nil t))
+          (let* ((other (lambda (test)
+                          (seq-some (lambda (entry) (and (buffer-live-p (car entry)) (not (eq (car entry) canvas))
+                                                         (funcall test (car entry))))
+                                    (window-prev-buffers window))))
+                 (made (eq (car-safe (window-parameter window 'quit-restore)) 'window))
+                 (before (funcall other #'always))
+                 (canvas-before (funcall other (lambda (b) (eq (buffer-local-value 'major-mode b)
+                                                               'agent-ui-canvas-mode)))))
+            (cond ((and (not canvas-before) (or made (not before)) (eq (window-deletable-p window) t))
+                   (delete-window window))
+                  (before (switch-to-prev-buffer window 'bury)))))))))
 
 (defun agent-ui--close-emptied (canvas)
   "CANVAS, left without elements, killed if `agent-ui-close-emptied-functions'
@@ -1063,17 +1066,22 @@ only. CANVAS emptied: its panes closed, it killed if it's to be
   (when (agent-ui--live-canvas-p canvas)
     (let ((buffer (agent-ui--buffer canvas)))
       (agent-ui--within (canvas section)
-        (if agent-ui--in-section
-            (dolist (key (agent-ui--section-keys agent-ui--in-section))
-              (agent-ui--remove key))
-          (dolist (section (copy-sequence agent-ui--sections))
-            (agent-ui--remove-section section))
-          (dolist (id (copy-sequence agent-ui--order))
-            (agent-ui--remove id))
-          (let ((inhibit-read-only t))
-            (erase-buffer))
-          (run-hooks 'agent-ui-cleared-hook)
-          (agent-ui--close-if-empty)))
+        ;; Each step in the canvas's own buffer, whatever the one before
+        ;; made current (a hook selecting a window): its erase never
+        ;; another's (an agent-shell session was erased whole so).
+        (let ((self (current-buffer)))
+          (if agent-ui--in-section
+              (dolist (key (agent-ui--section-keys agent-ui--in-section))
+                (with-current-buffer self (agent-ui--remove key)))
+            (dolist (section (copy-sequence agent-ui--sections))
+              (with-current-buffer self (agent-ui--remove-section section)))
+            (dolist (id (copy-sequence agent-ui--order))
+              (with-current-buffer self (agent-ui--remove id)))
+            (with-current-buffer self
+              (let ((inhibit-read-only t))
+                (erase-buffer))
+              (run-hooks 'agent-ui-cleared-hook)
+              (agent-ui--close-if-empty)))))
       (agent-ui--close-emptied buffer)))
   nil)
 

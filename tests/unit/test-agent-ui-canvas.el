@@ -51,6 +51,36 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
 
 ;; ====== THE CANVAS ======
 
+(ert-deftest agent-ui-canvas/cleared-in-its-selected-window-it-alone ()
+  "A canvas cleared in its window, selected (its pane, made for it, closing
+as it's emptied: the window selected next another buffer's, a session's):
+the canvas alone erased, the other buffer left as it was, its read-only
+text too (it was erased whole: the clear's erase went on in the buffer
+current after the window closed)."
+  (+test-auc
+    (let ((session (get-buffer-create "*test-auc-session*")))
+      (unwind-protect
+          (progn
+            (with-current-buffer session
+              (let ((inhibit-read-only t)) (erase-buffer))
+              (insert (propertize "The conversation so far.\nClaude> " 'read-only t)))
+            (save-window-excursion
+              (delete-other-windows)
+              (switch-to-buffer session)
+              (let ((window (split-window-right)))
+                (set-window-buffer window canvas)
+                (set-window-prev-buffers window nil)
+                (set-window-parameter window 'quit-restore (list 'window 'window (selected-window) canvas))
+                (select-window window)
+                (agent-ui-show '(:id "a" :type "meter" :value 1))
+                (agent-ui-show '(:id "b" :type "meter" :value 2))
+                (agent-ui-clear :canvas canvas)
+                (should-not (window-live-p window))
+                (should (equal (with-current-buffer session (buffer-substring-no-properties (point-min) (point-max)))
+                               "The conversation so far.\nClaude> "))
+                (should (equal (+test-auc-text canvas) "")))))
+        (kill-buffer session)))))
+
 (ert-deftest agent-ui-canvas/settings ()
   (should (= (default-value 'agent-ui-redraw-delay) 0.1))
   (should (= (default-value 'agent-ui-max-elements) 100))
