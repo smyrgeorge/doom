@@ -4,24 +4,66 @@
 # each changed one looked at by an agent (the screenshots profile) and
 # committed, then reviewed, merged. No for: picked by its label
 # (workflow:screenshots), or --workflow screenshots.
+
+# The workflow's name: its file's (screenshots.yml), said again. An issue
+# gets it by its label, workflow:screenshots.
 name: screenshots
+
+# What it's for, in a line: shown where you pick a workflow for an issue.
 description: The examples' screenshots taken again, each changed one looked at and committed, reviewed, merged.
+
+# What a run may spend: the cost of its agents' tokens (dollars) and its time
+# (while it runs or waits for an agent, not for you). Used up, it asks you:
+# more, or stop.
 budget: {cost: 5, time: 1h}
 
+# Its jobs, each named by its key. A job starts once the jobs it needs are
+# done; one that needs none starts first.
 jobs:
+
+  # capture: the screenshots taken again, the changed ones committed.
   capture:
+
+    # Its steps, run one after another in the issue's worktree (its branch,
+    # cut from your checkout as the run started).
     steps:
+
+      # run: a script, in bash; one naming a file of .agent-workflow/ runs
+      # your checkout's copy, never the branch's. Exit 0: the next step; 1:
+      # fixed by the job's agent, run again; 3: the run fails; another code
+      # (Emacs without the Screen Recording permission): the run asks you.
       - run: .agent-workflow/scripts/screenshots.sh
+
+        # timeout: how long the step may run; past it, it broke (the run
+        # asks you).
         timeout: 20m
+
+      # agent: an LLM in its own agent-shell session, with a profile (its
+      # tools, what it may do, its instructions): screenshots looks at each
+      # changed one, commits the good ones. It ends its step saying done,
+      # with its notes.
       - agent: screenshots
+
+        # prompt: its first message. {issue}, {issue.title},
+        # {issue.description}: the issue's, filled in as it starts.
         prompt: |
           The examples' screenshots were just taken again, for {issue}: {issue.title}.
 
           {issue.description}
 
+  # review: an agent reads what capture committed.
   review:
+
+    # needs: the jobs it waits for: capture done.
     needs: capture
+
+    # agent: one step's keys on the job itself (no steps: list). The review
+    # profile reads, never edits: it works on a snapshot of the branch.
     agent: review
+
+    # prompt: its first message. {branch}: the issue's branch;
+    # {main-branch}: the branch it merges into; {jobs.capture.notes}: what
+    # capture's agent said as it ended.
     prompt: |
       Review {branch}: the examples' screenshots taken again, for {issue}.
 
@@ -30,12 +72,32 @@ jobs:
       example (a frame, a notice, its mode line). Nothing but examples/*.png changed.
 
       The one who took them said: {jobs.capture.notes}
+
+    # outcomes: what the agent may end with (done, OUTCOME), and what each
+    # does next.
     outcomes:
+
+      # approved: on to the next jobs.
       approved: continue
+
+      # changes: capture runs again (and every job after it), told the
+      # review's notes; counted, the run asks you after 10 rounds.
       changes: rerun capture
 
+  # merge: the branch into the main branch, the issue closed.
   merge:
     needs: review
+
+    # concurrency: how many runs may be in this job at once, every issue's:
+    # one merge at a time.
     concurrency: 1
+
+    # uses: a built-in step. merge: the issue's branch merged into the main
+    # branch (never pushed), into your checkout where it's checked out (only
+    # if no file it changes has a change of yours), the issue closed.
     uses: merge
+
+    # on-fail: the profile of the agent sent a conflict to resolve (it
+    # rebases the branch); the run then goes back to capture, its review
+    # again on what was resolved.
     on-fail: screenshots

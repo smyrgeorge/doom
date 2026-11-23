@@ -8,33 +8,87 @@
 # your main fast-forwarded to what was pushed, the fixes with it (sync), the
 # issue closed. No for: picked by its label (workflow:github), or --workflow
 # github.
+
+# The workflow's name: its file's (github.yml), said again. An issue gets it
+# by its label, workflow:github.
 name: github
+
+# What it's for, in a line: shown where you pick a workflow for an issue.
 description: Your main pushed to GitHub, its Actions watched until they pass; a failure fixed (the code or its test), pushed, watched again.
+
+# How many agents may work on its runs at once, every issue's together: one,
+# so two runs never push to main at the same time.
 concurrency: 1
+
+# What a run may spend: the cost of its agents' tokens (dollars) and its time
+# (while it runs or waits for an agent, not for you). Used up, it asks you:
+# more, or stop.
 budget: {cost: 20, time: 4h}
 
+# Its jobs, each named by its key. A job starts once the jobs it needs are
+# done; one that needs none starts first.
 jobs:
+
+  # green: main pushed and its GitHub Actions passing.
   green:
+
+    # Its steps, run one after another in the issue's worktree (its branch:
+    # your main, as the run started).
     steps:
+
+      # name: the step's own name in its job: the run's pane and log say it,
+      # retry-from points at it.
       - name: check
+
+        # run: a script, in bash; one naming a file of .agent-workflow/ runs
+        # your checkout's copy, never the branch's. Exit 0: the next step;
+        # 1: fixed by an agent, run again; 3: the run fails; another code:
+        # the run asks you. Here: gh installed and logged in, your checkout
+        # on main, a remote to push to; else 3.
         run: .agent-workflow/scripts/github-check.sh
 
+      # push: what origin's main hasn't, pushed (nothing: on); refused
+      # (origin has commits you haven't), 2: the run asks you.
       - name: push
         run: .agent-workflow/scripts/github-push.sh
 
+      # watch: the Actions of origin's main watched until they're done; one
+      # failed, 1, its failed jobs' logs printed.
       - name: watch
         run: .agent-workflow/scripts/github-watch.sh
+
+        # timeout: how long the step may run; past it, it broke (the run
+        # asks you). The Actions can take a while.
         timeout: 2h
+
+        # retries: how many times a failure (exit 1) is fixed and the step
+        # run again; past them, the run asks you.
         retries: 5
+
+        # retry-from: where a fixed failure runs the job again from: the
+        # push, so the fix is pushed, then watched again.
         retry-from: push
+
+        # on-fail: the profile of the agent sent the failure (the script's
+        # output) to fix it, in a job with no agent of its own: ci reads the
+        # logs, fixes the code or its test, commits; it never pushes.
         on-fail: ci
 
+  # sync: your main brought to what was pushed (the fixes with it).
   sync:
+
+    # needs: the jobs it waits for: green done, all passing.
     needs: green
+
+    # run: one step's keys on the job itself (no steps: list). Fast-forwards
+    # your main; it moved on meanwhile, 2: the run asks you.
     run: .agent-workflow/scripts/github-sync.sh
 
-  # Your main has the branch now (sync): merged already, no commit made (none
-  # to push again); the issue closed, the branch deleted.
+  # close: the issue closed. Your main has the branch now (sync): merged
+  # already, no commit made (none to push again); the branch deleted.
   close:
     needs: sync
+
+    # uses: a built-in step. merge: the issue's branch merged into the main
+    # branch (never pushed), the issue closed.
     uses: merge
