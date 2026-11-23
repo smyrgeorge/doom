@@ -176,7 +176,28 @@ jobs:
 ")
     (let ((run (agent-workflow-start-run project (+test-awr--issue project "Aborts"))))
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'failed))))
-      (should (string-match-p "no gh here" (agent-workflow-run-why run))))))
+      (should (string-match-p "no gh here" (agent-workflow-run-why run)))))
+  ;; Another job startable beside it: the run failed stays failed, the
+  ;; other not started after (it never came back to life, running).
+  (+test-awr "aborts-beside"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  a:
+    elisp: (signal 'agent-workflow-abort '(\"no gh here\"))
+  b:
+    run: echo b
+")
+    (let ((run (agent-workflow-start-run project (+test-awr--issue project "Aborts beside"))))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'failed))))
+      (+test-awr--wait (lambda () nil) 1)
+      (should (eq (agent-workflow-run-state run) 'failed))
+      (should (eq (+test-awr--job run "a") 'failed))
+      (should (eq (+test-awr--job run "b") 'pending))
+      (should-not (member "job-started" (cdr (member "failed" (+test-awr--journal run)))))
+      ;; Set running again: refused, it's over.
+      (agent-workflow--set-state run 'running)
+      (should (eq (agent-workflow-run-state run) 'failed)))))
 
 (ert-deftest agent-workflow-steps/broke-timeout-skip ()
   "Another exit code: it broke, asked (no agent sent); skip goes on. A

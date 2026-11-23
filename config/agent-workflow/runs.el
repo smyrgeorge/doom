@@ -314,8 +314,10 @@ all it needs to come back after Emacs stops (resume.el)."
 
 (defun agent-workflow--set-state (run state &optional why)
   "RUN now in STATE, waiting for WHY (words) if it waits; journaled when it
-changes."
-  (unless (and (eq (agent-workflow-run-state run) state) (equal (agent-workflow-run-why run) why))
+changes. Over (done, cancelled, failed), it stays so: only sending it back
+\(`agent-workflow-back', a done run) brings it back."
+  (unless (or (and (eq (agent-workflow-run-state run) state) (equal (agent-workflow-run-why run) why))
+              (memq (agent-workflow-run-state run) agent-workflow--ended))
     ;; Its time: counted while it runs or waits for an agent, not for you.
     (let ((active (memq state '(running queued))))
       (cond ((and active (not (agent-workflow-run-active-since run)))
@@ -611,6 +613,8 @@ does."
   "RUN looked at: its blockers (queued), its next job started if none
 runs, it's over once every job is done or skipped."
   (catch 'wait
+    (when (memq (agent-workflow-run-state run) agent-workflow--ended)
+      (throw 'wait nil))
     (when (and (eq (agent-workflow-run-state run) 'queued) (agent-workflow-run-ticket-p run))
       (let ((blockers (plist-get (agent-workflow-issue (agent-workflow-run-project run) (agent-workflow-run-issue run))
                                  :blockers)))
@@ -646,6 +650,10 @@ runs, it's over once every job is done or skipped."
       (while again
         (setq again nil)
         (dolist (job (agent-workflow--startable run))
+          ;; Over meanwhile (a job before failed as it started: an elisp
+          ;; step's abort): nothing more starts.
+          (when (memq (agent-workflow-run-state run) agent-workflow--ended)
+            (throw 'wait nil))
           (cond
            ((not (agent-workflow--if-holds run job))
             (agent-workflow--job-set run job :status 'skipped :why nil)
