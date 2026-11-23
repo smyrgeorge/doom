@@ -971,9 +971,17 @@ with; a file of its folder alone; wrong uses: 2, without Emacs."
         (should (equal (car (+test-awf--run)) 2))
         (should (equal (+test-awf--run "check" "a" "b")
                        '(2 . "{\"ok\":false,\"error\":\"check: unknown argument \\\"b\\\"; agent-workflow check [FILE]\"}")))
+        (should (equal (+test-awf--run "confirm" "demo-1" "nope")
+                       '(2 . "{\"ok\":false,\"error\":\"confirm: \\\"nope\\\" isn't go, accept, skip, stop or cancel\"}")))
         (should (equal (+test-awf--run "start")
                        '(2 . "{\"ok\":false,\"error\":\"unknown operation \\\"start\\\"; operations: run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check, logs, status\"}")))
         (+test-awf--with-server
+          ;; confirm ISSUE cancel (a run whose issue was closed by hand): past
+          ;; the script, answered by Emacs (no run here: its error, not a
+          ;; wrong use).
+          (let ((run (+test-awf--run "confirm" "demo-1" "cancel")))
+            (should (= (car run) 1))
+            (should-not (string-search "isn't go" (cdr run))))
           (let ((run (+test-awf--run "check")))
             (should (= (car run) 0))
             (should (equal (plist-get (json-parse-string (cdr run) :object-type 'plist :array-type 'list) :profiles)

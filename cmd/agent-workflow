@@ -46,7 +46,7 @@
 #                                not committed) -> {"ok": true, "issue",
 #                                "job", "step", "replaced": [jobs], "lost":
 #                                [lines]}
-#   agent-workflow confirm ISSUE go|accept|skip|stop [--note-to JOB NOTE]...
+#   agent-workflow confirm ISSUE go|accept|skip|stop|cancel [--note-to JOB NOTE]...
 #                                ISSUE's run's question answered: a job that
 #                                sent it back too often, or a round that
 #                                changed nothing (go on, with a note for a
@@ -56,7 +56,8 @@
 #                                broke (go: again; skip; stop), a merge
 #                                waiting (go: again; stop), its budget used up
 #                                (go, with --more-cost N, --more-tokens N or
-#                                --more-time 1h; stop)
+#                                --more-time 1h; stop), its issue closed by
+#                                hand (go: in progress again; cancel the run)
 #                                -> {"ok": true, "issue", "job", "choice"}
 #   agent-workflow approve ISSUE
 #   agent-workflow reject ISSUE NOTE|-
@@ -230,19 +231,19 @@ case "$op" in
           [ $# -lt 3 ] && fail 2 "--note-to: a job and its note: --note-to JOB NOTE"
           notes="$notes${notes:+,}$(printf '{"job":%s,"note":%s}' "$(json_string "$2")" "$(json_string "$3")")"
           shift 3 ;;
-        -*) fail 2 "confirm: unknown argument \"$1\"; agent-workflow confirm ISSUE go|accept|skip|stop [--note-to JOB NOTE]..." ;;
+        -*) fail 2 "confirm: unknown argument \"$1\"; agent-workflow confirm ISSUE go|accept|skip|stop|cancel [--note-to JOB NOTE]..." ;;
         *)
           if [ -z "$issue" ]; then issue=$1
           elif [ -z "$choice" ]; then choice=$1
-          else fail 2 "confirm: unknown argument \"$1\"; agent-workflow confirm ISSUE go|accept|skip|stop [--note-to JOB NOTE]..."
+          else fail 2 "confirm: unknown argument \"$1\"; agent-workflow confirm ISSUE go|accept|skip|stop|cancel [--note-to JOB NOTE]..."
           fi
           shift ;;
       esac
     done
     case "$choice" in
-      go|accept|skip|stop) ;;
-      '') fail 2 "confirm: go, accept, skip or stop? agent-workflow confirm ISSUE go|accept|skip|stop" ;;
-      *) fail 2 "confirm: \"$choice\" isn't go, accept, skip or stop" ;;
+      go|accept|skip|stop|cancel) ;;
+      '') fail 2 "confirm: go, accept, skip, stop or cancel? agent-workflow confirm ISSUE go|accept|skip|stop|cancel" ;;
+      *) fail 2 "confirm: \"$choice\" isn't go, accept, skip, stop or cancel" ;;
     esac
     payload=$(printf '{"issue":%s,"choice":%s,"notes":[%s],"more":{%s}}' "$(json_string "$issue")" "$(json_string "$choice")" "$notes" "$more") ;;
   approve)
