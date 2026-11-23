@@ -17,7 +17,10 @@
 ;; - A section per job's agent: its agent-shell session's canvas, shown
 ;;   there (`agent-ui-host'): its plan, its progress, its questions, with no
 ;;   pane of its own; folded once its job ends (▸ build ✓ 12m). RET on its
-;;   divider opens its session. Its notes there too, whole.
+;;   divider opens its session. While its agent works (an agent step, a
+;;   failed step it fixes): what on, how long its turn's been, its last
+;;   actions as they come, and Session (its session; asking, at its
+;;   question). Its notes there too, whole.
 ;; - Notes, once an agent wrote some: every job's, a line each.
 ;; - Log: its last events (log.el).
 ;;
@@ -31,6 +34,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'map)
 
 (defvar agent-workflow-pane-log-lines)
 (defvar agent-ui-answer-function)
@@ -96,6 +100,27 @@ folded once.")
 
 (defvar agent-workflow--pane-showing nil
   "Non-nil while a pane is shown on purpose (`agent-workflow-pane').")
+
+(defconst agent-workflow--pane-agent-now-id "agent-now"
+  "The id of what a job's agent is at, in its section: not one its own
+canvas would give.")
+
+(defvar agent-workflow-pane-agent-actions 3
+  "How many of a job's agent's last actions its section shows while it works.")
+
+(defvar agent-workflow--pane-activity (make-hash-table :test #'eq :weakness 'key)
+  "Each agent's activity, for its section: a plist, :actions its last tool
+calls ((ID KIND TEXT)...), the latest first; :turn when its turn began (a
+`float-time'), nil between turns. From its session's events, never polled.")
+
+(defvar agent-workflow--pane-agents-timer nil
+  "The timer drawing the agents' sections again, a second after what they
+did: a busy agent's actions drawn once a second at most.")
+
+(defconst agent-workflow--pane-action-marks
+  '(("execute" . "⚙") ("read" . "📖") ("search" . "📖") ("fetch" . "📖")
+    ("edit" . "✎") ("delete" . "✎") ("move" . "✎"))
+  "A tool call's kind (ACP's) as its mark before it; others: •.")
 
 ;; ====== THE PANE ======
 
@@ -1009,7 +1034,8 @@ shown again only when it's another), gone once it doesn't."
 
 (defun agent-workflow--pane-answer (prompt _submit key)
   "A button of a run's pane pressed (`agent-ui-answer-function'): its
-header's Cancel (asked first), git's
+header's Cancel (asked first), a job's agent's Session (its session
+shown), git's
 \(PROMPT worktree, magit: its worktree opened), or a question's answer
 \(PROMPT the button's label; a form's, read from its element, KEY's), given
 to the run (approved, rejected, confirmed, sent back, cancelled) once the
@@ -1019,6 +1045,10 @@ question left as it was."
          (pane (current-buffer)))
     (cond ((equal key "git") (agent-workflow--pane-open-worktree run prompt))
           ((equal key "run") (agent-workflow--pane-cancel run))
+          ;; A job's agent's Session (its section's: job.JOB).
+          ((and (equal (agent-ui--key-id key) agent-workflow--pane-agent-now-id)
+                (string-prefix-p "job." (or (agent-ui--key-section key) "")))
+           (agent-workflow--pane-go-to-agent run (substring (agent-ui--key-section key) 4)))
           (t (agent-workflow--pane-answer-question run pane prompt key)))))
 
 (defun agent-workflow--pane-cancel (run)
@@ -1131,7 +1161,8 @@ section goes there too: after the others, before Notes."
 
 (defun agent-workflow--pane-agents (run pane)
   "RUN's jobs' agents in PANE: a section each, its session's canvas shown
-there (while it shows nothing, said); a job over, its section folded
+there (while it shows nothing, said), while its agent works what it's
+at (`agent-workflow--pane-agent-now'); a job over, its section folded
 once, its mark done."
   (with-current-buffer pane
     (dolist (job (agent-workflow-run-jobs run))
@@ -1166,6 +1197,11 @@ once, its mark done."
                       (canvas (agent-ui--session-name buffer))
                       ((not (equal (agent-ui--section-hosts (agent-ui--find-section section)) canvas))))
             (agent-ui-host canvas pane section))
+          ;; While its agent works: what on, its last actions, its session's button.
+          (if-let* ((now (agent-workflow--pane-agent-now run name state)))
+              (agent-ui-show now :canvas pane :section section)
+            (when (gethash (agent-ui--key agent-workflow--pane-agent-now-id section) agent-ui--entries)
+              (agent-ui-remove agent-workflow--pane-agent-now-id :canvas pane :section section)))
           ;; Over: folded, once; running again (sent back), unfolded.
           (cond ((and (memq status '(done skipped cancelled)) (not (member name agent-workflow--pane-ended)))
                  (push name agent-workflow--pane-ended)
@@ -1174,6 +1210,117 @@ once, its mark done."
                  (setq agent-workflow--pane-ended (delete name agent-workflow--pane-ended))
                  (agent-ui-section pane section :folded nil))))))))
 
+(defun agent-workflow--pane-action-text (tool-call)
+  "TOOL-CALL (agent-shell's) as its line says it: its title, else its
+description, on one line, its backquotes gone; nil if it has neither."
+  (when-let* ((text (seq-find (lambda (text) (and (stringp text) (not (string-blank-p text))))
+                              (list (map-elt tool-call :title) (map-elt tool-call :description)))))
+    (string-trim (replace-regexp-in-string "[\n\r\t ]+" " " (replace-regexp-in-string "`" "" text)))))
+
+(defun agent-workflow--pane-agent-event (agent event)
+  "An event of AGENT's session: its turn begun (its last actions forgotten)
+or over, a tool call's (its line, kept where it came, its text as it's
+known better); its section drawn again soon. In
+`agent-workflow-agent-event-functions'."
+  (let ((activity (gethash agent agent-workflow--pane-activity))
+        (changed t))
+    (pcase (map-elt event :event)
+      ('input-submitted
+       (setq activity (list :turn (float-time))))
+      ((or 'turn-complete 'error)
+       (setq activity (plist-put activity :turn nil)))
+      ('tool-call-update
+       (let* ((data (map-elt event :data))
+              (id (map-elt data :tool-call-id))
+              (call (map-elt data :tool-call))
+              (text (agent-workflow--pane-action-text call))
+              (kind (map-elt call :kind))
+              (actions (plist-get activity :actions)))
+         (if (not text)
+             (setq changed nil)
+           (if-let* ((action (assoc id actions)))
+               (setcdr action (list kind text))
+             (setq actions (seq-take (cons (list id kind text) actions) agent-workflow-pane-agent-actions)))
+           (setq activity (plist-put activity :actions actions))
+           (unless (plist-get activity :turn)
+             (setq activity (plist-put activity :turn (float-time)))))))
+      (_ (setq changed nil)))
+    (when changed
+      (puthash agent activity agent-workflow--pane-activity)
+      (agent-workflow--pane-agents-soon))))
+
+(add-hook 'agent-workflow-agent-event-functions #'agent-workflow--pane-agent-event)
+
+(defun agent-workflow--pane-agents-soon ()
+  "The agents' sections of the runs with a pane drawn again in a second, once."
+  (unless (timerp agent-workflow--pane-agents-timer)
+    (setq agent-workflow--pane-agents-timer
+          (run-at-time 1 nil (lambda ()
+                               (setq agent-workflow--pane-agents-timer nil)
+                               (dolist (run agent-workflow--runs)
+                                 (when-let* ((pane (agent-workflow--pane-live run)))
+                                   (with-demoted-errors "agent workflow's pane: %S"
+                                     (let ((agent-ui-display-function #'ignore))
+                                       (agent-workflow--pane-agents run pane))))))))))
+
+(defun agent-workflow--pane-agent-doing (run job state)
+  "What JOB of RUN in STATE has its agent at, in a few words: fixing step N
+\(name) · try X of Y, resolving its conflicts, its agent step (step N
+\(name)); nil if its agent isn't at work (a script step runs, its agent
+kept for later)."
+  (let* ((steps (plist-get (agent-workflow--job-spec run job) :steps))
+         (retry (plist-get state :retry))
+         (index (or retry (plist-get state :step) 0))
+         (step (nth index steps))
+         (name (and step (format "step %d (%s)" (1+ index) (agent-workflow--pane-step-name step)))))
+    (cond ((and retry (plist-get state :resolving)) "resolving its conflicts")
+          (retry (format "fixing %s · try %d of %d" name
+                         (or (alist-get retry (plist-get state :tries)) 1)
+                         (1+ (or (plist-get step :retries) 0))))
+          ((and step (eq (plist-get step :kind) 'agent)) name))))
+
+(defun agent-workflow--pane-agent-now (run job state)
+  "What JOB of RUN in STATE has its agent at, for its section, while it
+works (nil else): its profile, what on, how long its turn's been (or that
+it asks you) as its title; its last actions under it, a line each, marked
+by their kind; a button showing its session (at its question, if it asks)."
+  (when-let* ((agent (plist-get state :agent))
+              ((agent-workflow-agent-p agent))
+              ((memq (plist-get state :status) '(running waiting)))
+              ((not (plist-get state :pool)))
+              ((not (agent-workflow-agent-stopping agent)))
+              ((buffer-live-p (agent-workflow-agent-buffer agent)))
+              (doing (agent-workflow--pane-agent-doing run job state)))
+    (let* ((activity (gethash agent agent-workflow--pane-activity))
+           (turn (plist-get activity :turn))
+           (asks (and (eq (plist-get state :status) 'waiting) (plist-get state :agent-asks)))
+           (actions (plist-get activity :actions)))
+      (list :id agent-workflow--pane-agent-now-id :type "text" :face "muted"
+            :title (string-join (delq nil (list (agent-workflow-agent-profile agent) doing
+                                                (cond (asks "asks you")
+                                                      (turn (format "its turn %s"
+                                                                    (agent-workflow--duration-words
+                                                                     (round (- (float-time) turn))))))))
+                                " · ")
+            :text (if actions
+                      (mapconcat (lambda (action)
+                                   (format "%s %s" (or (cdr (assoc (nth 1 action) agent-workflow--pane-action-marks)) "•")
+                                           (nth 2 action)))
+                                 actions "\n")
+                    "Nothing done yet in this turn.")
+            ;; Its own (`agent-workflow--pane-answer'): hovered, what it opens.
+            :actions (list (if asks
+                               (list :label "Go to it" :prompt "session" :help "its session, at its question")
+                             (list :label "Session" :prompt "session" :help "open its agent-shell session")))))))
+
+(defun agent-workflow--pane-go-to-agent (run job)
+  "JOB of RUN's agent's session shown (its section's Session), at its
+question if it asks you."
+  (if-let* ((asks (plist-get (agent-workflow--job run job) :agent-asks))
+            ((eq (plist-get (agent-workflow--job run job) :status) 'waiting)))
+      (agent-workflow--pane-answer-agent run job (plist-get asks :kind) agent-workflow--pane-go-to-it)
+    (agent-workflow--pane-open-session run job)))
+
 (defvar agent-ui--hosts)
 (defvar agent-ui-session)
 
@@ -1181,7 +1328,10 @@ once, its mark done."
   "AGENT stops (its job over, sent back, its run cancelled...): what its
 session's canvas showed in its run's pane kept there, its section's own
 \(folded once its job's done), not gone with its session. In
-`agent-workflow-agent-stop-functions'."
+`agent-workflow-agent-stop-functions'. What it was at: gone from its
+section, soon."
+  (remhash agent agent-workflow--pane-activity)
+  (agent-workflow--pane-agents-soon)
   (when-let* ((buffer (agent-workflow-agent-buffer agent))
               ((buffer-live-p buffer))
               ((fboundp 'agent-ui-unhost))
@@ -1239,9 +1389,10 @@ none."
                       (prog1 (and stamp (equal stamp (buffer-local-value 'agent-workflow--pane-where-stamp pane)))
                         (with-current-buffer pane (setq agent-workflow--pane-where-stamp stamp)))))
                (equal (agent-workflow-run-where run) (buffer-local-value 'agent-workflow--pane-where-shown pane)))
-              ;; Its header's time and spending, moving on.
+              ;; Its header's time and spending, its agents' turns', moving on.
               (let ((agent-ui-display-function #'ignore))
-                (agent-ui-show (agent-workflow--pane-header run) :canvas pane))
+                (agent-ui-show (agent-workflow--pane-header run) :canvas pane)
+                (agent-workflow--pane-agents run pane))
             (agent-workflow--pane-draw run)))))
     (unless any
       (when (timerp agent-workflow--pane-where-timer)
