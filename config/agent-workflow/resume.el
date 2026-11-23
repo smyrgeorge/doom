@@ -110,7 +110,6 @@ workflow it started with: a run, or nil if it can't be."
            :warned (plist-get saved :warned)
            :base (plist-get saved :base)
            :branch-end (plist-get saved :branch-end)
-           :commits (plist-get saved :commits)
            :edges (mapcar (lambda (edge) (cons (plist-get edge :edge)
                                                (list :count (plist-get edge :count) :notes (plist-get edge :notes))))
                           (plist-get saved :edges))

@@ -720,15 +720,15 @@ not committed, counted, not listed. Kept in its state.json."
             (should (equal (mapcar #'cadr (plist-get where :commits)) '("fix-2.txt" "fix-1.txt")))
             (should (equal (plist-get where :uncommitted) 1))
             (should (string-suffix-p " · 2 commits of its · 1 not committed" (agent-workflow--pane-git-line where))))
-          ;; Saved, and read back.
+          ;; Saved with its job, and read back.
           (agent-workflow--save-state run)
-          (should (equal (append (plist-get (json-parse-string (with-temp-buffer
-                                                                 (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
-                                                                 (buffer-string))
-                                                               :object-type 'plist)
-                                            :commits)
-                                 nil)
-                         (agent-workflow-run-commits run))))
+          (let* ((json (json-parse-string (with-temp-buffer
+                                            (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
+                                            (buffer-string))
+                                          :object-type 'plist :array-type 'list :null-object nil :false-object nil))
+                 (job (agent-workflow--job-from-json (car (plist-get json :jobs)))))
+            (should (equal (plist-get job :own) (plist-get (agent-workflow--job run "green") :own)))
+            (should (= (length (plist-get job :own)) 2))))
       (delete-directory project t)
       (delete-directory (agent-workflow-run-dir run) t))))
 
