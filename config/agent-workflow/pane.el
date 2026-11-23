@@ -1250,6 +1250,16 @@ kept for later)."
                          (1+ (or (plist-get step :retries) 0))))
           ((and step (eq (plist-get step :kind) 'agent)) name))))
 
+(defun agent-workflow--pane-box-of (id title lines none actions)
+  "A live box: ID, TITLE, its LINES (texts, or {level, text}) as a log, the
+last `agent-workflow-pane-box-lines'; none yet, NONE said, muted (a log of
+it was counted as a line of output: 1 line); its ACTIONS."
+  (append (list :id id :title title)
+          (if lines
+              (list :type "log" :show agent-workflow-pane-box-lines :lines lines)
+            (list :type "text" :face "muted" :text none))
+          (list :actions actions)))
+
 (defun agent-workflow--pane-agent-box (job state)
   "JOB's live box while its agent works (STATE its job's; nil else): its
 job, its agent's profile and what on, how long its turn's been (or that it
@@ -1263,8 +1273,9 @@ its kind; Show session (at its question, if it asks)."
     (let* ((activity (gethash agent agent-workflow--pane-activity))
            (turn (plist-get activity :turn))
            (asks (and (eq (plist-get state :status) 'waiting) (plist-get state :agent-asks))))
-      (list :id (agent-workflow--pane-box-id job) :type "log" :show agent-workflow-pane-box-lines
-            :title (string-join (delq nil (list job (agent-workflow-agent-profile agent) doing
+      (agent-workflow--pane-box-of
+            (agent-workflow--pane-box-id job)
+            (string-join (delq nil (list job (agent-workflow-agent-profile agent) doing
                                                 (cond (asks "asks you")
                                                       (turn (format "its turn %s"
                                                                     (agent-workflow--duration-words
@@ -1272,17 +1283,17 @@ its kind; Show session (at its question, if it asks)."
                                 " · ")
             ;; Its actions, not output: no level found in their words (a
             ;; command's --log-failed no error).
-            :lines (mapcar (lambda (text) (list :level "info" :text text))
-                           (or (mapcar (lambda (action)
-                                         (format "%s %s" (or (cdr (assoc (nth 1 action) agent-workflow--pane-action-marks)) "•")
-                                                 (nth 2 action)))
-                                       (reverse (plist-get activity :actions)))
-                               (list "Nothing done yet in this turn.")))
+            (mapcar (lambda (action)
+                      (list :level "info"
+                            :text (format "%s %s" (or (cdr (assoc (nth 1 action) agent-workflow--pane-action-marks)) "•")
+                                          (nth 2 action))))
+                    (reverse (plist-get activity :actions)))
+            "Nothing done yet in this turn."
             ;; Its own (`agent-workflow--pane-answer'): hovered, what it opens.
-            :actions (list (if asks
-                               (list :label "Go to it" :prompt (concat "session " job) :help "its session, at its question")
-                             (list :label "Show session" :prompt (concat "session " job)
-                                   :help "its agent-shell session, whole")))))))
+            (list (if asks
+                      (list :label "Go to it" :prompt (concat "session " job) :help "its session, at its question")
+                    (list :label "Show session" :prompt (concat "session " job)
+                          :help "its agent-shell session, whole")))))))
 
 (defun agent-workflow--pane-output-lines (process)
   "PROCESS's output so far, its last lines (`agent-workflow-pane-box-lines'):
@@ -1312,17 +1323,19 @@ title; its output's last lines as it comes; Show output."
            (step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
            (try (alist-get index (plist-get state :tries)))
            (started (plist-get (alist-get index (plist-get (gethash job agent-workflow--pane-times) :steps)) :started)))
-      (list :id (agent-workflow--pane-box-id job) :type "log" :show agent-workflow-pane-box-lines
-            :title (string-join
+      (agent-workflow--pane-box-of
+            (agent-workflow--pane-box-id job)
+            (string-join
                     (delq nil (list job
                                     (and step (format "step %d (%s)" (1+ index) (agent-workflow--pane-step-name step)))
                                     (and (numberp try) (> try 1) (format "try %d" try))
                                     (and step (agent-workflow--pane-step-does step))
                                     (and started (agent-workflow--duration-words (round (- (float-time) started))))))
                     " · ")
-            :lines (or (agent-workflow--pane-output-lines process) (list "No output yet."))
-            :actions (list (list :label "Show output" :prompt (concat "output " job)
-                                 :help "its output so far, whole"))))))
+            (agent-workflow--pane-output-lines process)
+            "No output yet."
+            (list (list :label "Show output" :prompt (concat "output " job)
+                        :help "its output so far, whole"))))))
 
 (defun agent-workflow--pane-box (job state)
   "JOB's live box (STATE its job's), while it runs: its agent's at work,

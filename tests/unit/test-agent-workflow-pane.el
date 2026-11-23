@@ -155,7 +155,7 @@ counting down, until closed (q)."
         (should (+test-awr--wait (lambda () (ignore-errors (agent-ui-get "now-build" :canvas pane :section "run")))))
         (should (equal (+test-awp--sections pane) '("run" "log")))
         (let ((box (agent-ui-get "now-build" :canvas pane :section "run")))
-          (should (equal (plist-get box :type) "log"))
+          (should (member (plist-get box :type) '("text" "log")))
           (should (string-prefix-p "build · " (plist-get box :title)))
           (should (equal (+test-awp--labels box) '("Show session"))))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "run"))
@@ -881,9 +881,13 @@ running), none. Show session and Show output pressed: shown."
                       agent-workflow--pane-times (make-hash-table :test #'equal))
           (let ((element (funcall box "green")))
             (should (equal (plist-get element :id) "now-green"))
-            (should (equal (plist-get element :type) "log"))
             (should (equal (plist-get element :title) "green · ci · fixing step 2 (watch) · try 1 of 6"))
-            (should (equal (+test-awp--box-lines element) '("Nothing done yet in this turn.")))
+            ;; Nothing yet: said, a muted line, no log (its 1 line counted).
+            (should (equal (plist-get element :type) "text"))
+            (should (equal (plist-get element :text) "Nothing done yet in this turn.")))
+          (funcall event 'tool-call-update "t0" "read" "Read a.el")
+          (let ((element (funcall box "green")))
+            (should (equal (plist-get element :type) "log"))
             (should (equal (+test-awp--labels element) '("Show session"))))
           ;; Its turn, its actions as they come.
           (funcall event 'input-submitted)
@@ -910,6 +914,13 @@ running), none. Show session and Show output pressed: shown."
                  (process (make-process :name "test-script" :buffer output :command '("sleep" "30") :noquery t)))
             (unwind-protect
                 (progn
+                  (puthash "green" (list :steps (list (cons 1 (list :started (- (float-time) 75))))) agent-workflow--pane-times)
+                  (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
+                        (list :status 'running :step 1 :agent agent :process process :tries '((1 . 2))))
+                  ;; No output yet: said, a muted line.
+                  (let ((element (funcall box "green")))
+                    (should (equal (plist-get element :type) "text"))
+                    (should (equal (plist-get element :text) "No output yet.")))
                   (with-current-buffer output
                     (insert "\e[32mstep one\e[0m\n\nprogress 10%\rprogress 90%\nstep two\nstep three\n"))
                   (puthash "green" (list :steps (list (cons 1 (list :started (- (float-time) 75))))) agent-workflow--pane-times)
