@@ -189,9 +189,17 @@ profile's instructions; its first message sent."
                          (list "Read" (format "Bash(git -C %s commit:*)" (shell-quote-argument (directory-file-name worktree)))
                                (format "Bash(%s done:*)" (expand-file-name "cmd/agent-workflow" +test-root)))))
           ;; What runs it, never changed by it.
-          (should (equal (plist-get options :disallowedTools)
-                         '("Bash(git push:*)" "Edit(.agent-workflow/**)" "Write(.agent-workflow/**)"
-                           "NotebookEdit(.agent-workflow/**)"))))
+          ;; What runs it, never changed by it: the project's, yours (in
+          ;; .agent-shell/), where it works and in the main checkout.
+          (let ((denied (plist-get options :disallowedTools))
+                (main (concat "/" (file-name-as-directory (expand-file-name project)))))
+            (should (equal (car denied) "Bash(git push:*)"))
+            (dolist (tool '("Edit" "Write" "NotebookEdit"))
+              (dolist (pattern '(".agent-workflow/**" ".agent-shell/agent-workflow/workflows/**"
+                                 ".agent-shell/agent-workflow/profiles/**"))
+                (should (member (format "%s(%s)" tool pattern) denied))
+                (should (member (format "%s(%s%s)" tool main pattern) denied))))
+            (should (string-prefix-p "Edit(//" (seq-find (lambda (rule) (string-search main rule)) denied)))))
         ;; Its first message, its variables filled in.
         (should (+test-awp--wait
                  (lambda () (+test-awp--logged (lambda (e) (and (equal (plist-get e :method) "session/prompt")

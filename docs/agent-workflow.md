@@ -598,7 +598,9 @@ agent-workflow-forget-trust` stops trusting one. The starters and yours (out of 
 
 Agents can't change what runs them:
 
-- Every agent is denied editing `.agent-workflow/`.
+- Every agent is denied editing what runs it: `.agent-workflow/`, and your own workflows and profiles
+  (`.agent-shell/agent-workflow/workflows/`, `profiles/`, trusted without asking), where it works and in the main
+  checkout by their absolute paths (its Bash is its profile's own rules to watch).
 - A branch that changes `.agent-workflow/` is merged only once you say so (`confirm ISSUE go`), whatever the workflow's
   `approve` says.
 - The check warns about a `run:` naming a file elsewhere (`tests/run.sh`): an agent could change it to make it pass. One

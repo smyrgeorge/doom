@@ -207,11 +207,28 @@ project's issues (BEADS_DIR: it works in a worktree)."
             (when (file-directory-p beads)
               (list (concat "BEADS_DIR=" beads))))))
 
-(defun agent-workflow--claude-options (meta profile)
+(defconst agent-workflow--protected
+  '(".agent-workflow/**" ".agent-shell/agent-workflow/workflows/**" ".agent-shell/agent-workflow/profiles/**")
+  "What runs an agent, which it never edits: the project's workflows,
+profiles and scripts, and yours (trusted without asking: trust.el).")
+
+(defun agent-workflow--protected-rules (project)
+  "Claude Code's rules denying an agent edits of what runs it
+\(`agent-workflow--protected'): where it works (relative), and in PROJECT's
+main checkout (absolute, //...: a worktree's agent reaching it there)."
+  (let ((patterns (append agent-workflow--protected
+                          (and project
+                               (mapcar (lambda (pattern)
+                                         (concat "/" (file-name-as-directory (expand-file-name project)) pattern))
+                                       agent-workflow--protected)))))
+    (cl-loop for tool in '("Edit" "Write" "NotebookEdit")
+             append (mapcar (lambda (pattern) (format "%s(%s)" tool pattern)) patterns))))
+
+(defun agent-workflow--claude-options (meta profile &optional project)
   "META, Claude Code's session meta, with PROFILE's tools in Claude Code's
 options (allowedTools, disallowedTools); ending its step
-\(`agent-workflow-command' done) always allowed, editing .agent-workflow/
-never."
+\(`agent-workflow-command' done) always allowed, editing what runs it
+never (`agent-workflow--protected-rules', PROJECT's)."
   (let* ((claude (alist-get 'claudeCode meta))
          (options (alist-get 'options claude)))
     (setf (alist-get 'allowedTools options)
@@ -219,8 +236,7 @@ never."
                    (list (format "Bash(%s done:*)" agent-workflow-command))))
     ;; What runs it (.agent-workflow/) never changed by it (trust.el).
     (setf (alist-get 'disallowedTools options)
-          (vconcat (plist-get profile :deny)
-                   (list "Edit(.agent-workflow/**)" "Write(.agent-workflow/**)" "NotebookEdit(.agent-workflow/**)")))
+          (vconcat (plist-get profile :deny) (agent-workflow--protected-rules project)))
     (when options
       (setf (alist-get 'options claude) options
             (alist-get 'claudeCode meta) claude))
@@ -243,7 +259,8 @@ never."
       (setf (alist-get :default-session-mode-id config) (lambda () mode)))
     (when (plist-get kind :claude-code)
       (setf (alist-get :session-meta config)
-            (agent-workflow--claude-options (alist-get :session-meta config) profile)))
+            (agent-workflow--claude-options (alist-get :session-meta config) profile
+                                            (agent-workflow-agent-project agent))))
     (when maker
       (setf (alist-get :client-maker config)
             (lambda (buffer)
