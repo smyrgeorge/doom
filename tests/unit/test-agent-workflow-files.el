@@ -347,6 +347,31 @@ jobs:
                      (error 15 "retry-from 9: no such step of its job (one, two)")
                      (warning 17 "retry-from: an agent step isn't retried (its script's are): ignored"))))))
 
+(ert-deftest agent-workflow-files/a-job-s-approve-beside-its-steps ()
+  "A job's approve: true beside its steps: read, its last step's result
+waiting for your OK; one step's keys on the job, approve among them: the
+same."
+  (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow "description: x
+jobs:
+  build:
+    approve: true
+    steps:
+      - run: make
+      - run: make test
+")))
+    (should-not problems)
+    (let ((run (agent-workflow-run--make :workflow workflow :jobs (list (cons "build" (list :status 'running :step 1))))))
+      (should (plist-get (cdr (assoc "build" (plist-get workflow :jobs))) :approve))
+      (should (agent-workflow--needs-approval-p run "build"))
+      (agent-workflow--job-set run "build" :step 0)
+      (should-not (agent-workflow--needs-approval-p run "build"))))
+  (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow "description: x\njobs:\n  build:\n    agent: build\n    approve: true\n")))
+    (should-not problems)
+    (should (= (length (plist-get (cdr (assoc "build" (plist-get workflow :jobs))) :steps)) 1))
+    (should (agent-workflow--needs-approval-p
+             (agent-workflow-run--make :workflow workflow :jobs (list (cons "build" (list :status 'running :step 0))))
+             "build"))))
+
 (ert-deftest agent-workflow-files/steps-as-a-mapping ()
   "steps: written as a mapping (the dash forgotten, or in braces): an error
 of its file, at its line, not a signal; an empty job in a ticketless or

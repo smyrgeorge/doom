@@ -406,7 +406,10 @@ file). NEEDS: every job's needs (an alist), PROFILES the profiles' names
             ((pred (lambda (k) (member k agent-workflow--step-keys))))
             (_ (funcall problem 'warning at "unknown key %s: ignored" key)))))
       (let* ((steps (cdr (assoc "steps" spec)))
-             (own (seq-filter (lambda (pair) (member (car pair) agent-workflow--step-keys)) spec)))
+             ;; approve: a job's too (its last step's), beside steps: as well.
+             (own (seq-filter (lambda (pair) (and (member (car pair) agent-workflow--step-keys)
+                                                   (not (equal (car pair) "approve"))))
+                              spec)))
         (cond
          ((and (assoc "steps" spec) own)
           (funcall problem 'error path "job %s: its steps (steps:) or one step's keys (%s), not both"
