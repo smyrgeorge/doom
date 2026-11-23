@@ -447,7 +447,11 @@ has none yet."
                      (concat "your checkout"
                              (if base (format ", from %s" (agent-workflow--pane-short (plist-get base :commit))) "")
                              (let ((own (or (plist-get where :own) 0)))
-                               (if (> own 0) (format " · %d commit%s since" own (if (= own 1) "" "s")) ""))))
+                               (if (> own 0) (format " · %d commit%s of its" own (if (= own 1) "" "s")) ""))
+                             ;; Not committed: yours or its agent's at work,
+                             ;; not told apart: counted, not listed as its.
+                             (let ((loose (or (plist-get where :uncommitted) 0)))
+                               (if (> loose 0) (format " · %d not committed" loose) ""))))
                     ((and (plist-get where :deleted) (plist-get where :empty)) "no commit · deleted")
                     ((plist-get where :deleted) (format "deleted, merged into %s" into))
                     ((plist-get where :merged) (format "merged into %s" into))

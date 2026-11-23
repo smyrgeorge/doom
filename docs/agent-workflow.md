@@ -286,7 +286,10 @@ HEAD. No worktree, no branch of its own: nothing to merge (the check refuses `us
 A job that edits starts only while your checkout has no changes not committed (it waits, `build: waiting: your
 checkout has changes not committed`): its agent would commit them. One run in a project's checkout at a time; going
 back with `C-u` is refused there (no reset of your checkout). On a ticket, the issue is closed once the run's done.
-Its pane's git line says so: `⎇ main   your checkout, from 881e46c · 1 commit since`.
+Its pane's git line says so: `⎇ main   your checkout, from 881e46c · 1 commit of its`. Its commits there are those
+made while one of its agents worked (from its step's start, or its fix's, to its done): yours, before, between and
+after, aren't listed as its, nor their files (one you commit while its agent works is counted as its: git can't tell
+them apart); changes not committed are counted (`· 2 not committed`), not listed.
 
 ### Following a run
 

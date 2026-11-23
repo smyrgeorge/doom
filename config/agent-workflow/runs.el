@@ -79,7 +79,8 @@
   blocked                ; its issue's blockers, new since it started (watch.el)
   pane                   ; its pane's canvas, a buffer, while it has one (pane.el)
   base                   ; where its branch started: (:branch B :commit C); (:branch nil :commit nil) unknown
-  branch-end)            ; its branch once it's done: (:branch B :deleted t :into MAIN) or (:branch B :why WHY)
+  branch-end             ; its branch once it's done: (:branch B :deleted t :into MAIN) or (:branch B :why WHY)
+  commits)               ; in your checkout: its own commits (its agents'), oldest first (`agent-workflow--checkout-track')
 
 (defvar agent-workflow--runs nil
   "Every run of this Emacs, as they were started.")
@@ -262,7 +263,7 @@ its name, nil null, t true; an alist of numbers ((0 . 2)) an object."
 
 (defconst agent-workflow--saved-job-keys
   '(:status :step :round :outcome :notes :session :start-commit :end-commit :commit :dir :snapshot :approved :ask
-    :why :tries :user-note :back)
+    :why :tries :user-note :back :head)
   "What of a job's state state.json keeps: all it needs to come back.")
 
 (defun agent-workflow--save-state (run)
@@ -285,6 +286,7 @@ all it needs to come back after Emacs stops (resume.el)."
                       :warned (if (agent-workflow-run-warned run) t :false)
                       :base (agent-workflow--to-json (agent-workflow-run-base run))
                       :branch-end (agent-workflow--to-json (agent-workflow-run-branch-end run))
+                      :commits (vconcat (agent-workflow-run-commits run))
                       :info (agent-workflow--to-json (agent-workflow-run-info run))
                       :edges (vconcat (mapcar (lambda (edge) (list :edge (car edge)
                                                                    :count (plist-get (cdr edge) :count)
@@ -1220,14 +1222,15 @@ since its base (`agent-workflow--where-files'), :commits its latest
 
 (defun agent-workflow--where-checkout (run)
   "Where RUN's work is, in your checkout (runs-in: checkout): its branch,
-where it started, its commits since, your changes not committed; :checkout
-t, nothing merged or deleted."
+where it started, its own commits (its agents', not yours:
+`agent-workflow--checkout-track') and the files they changed, how many
+files aren't committed there; :checkout t, nothing merged or deleted."
   (let* ((project (file-name-as-directory (agent-workflow-run-project run)))
          (default-directory project)
          (branch (agent-workflow--checkout-branch project))
          (base (let ((base (agent-workflow-run-base run))) (and (plist-get base :commit) base)))
-         (from (or (plist-get base :commit) "HEAD"))
-         (own (string-to-number (or (car (agent-workflow--git-lines "rev-list" "--count" (concat from "..HEAD"))) "0"))))
+         (commits (agent-workflow-run-commits run))
+         (own (length commits)))
     (list :checkout t
           :worktree project
           :branch (or branch "HEAD")
@@ -1239,8 +1242,8 @@ t, nothing merged or deleted."
           :with 0
           :uncommitted (length (agent-workflow--git-lines "status" "--porcelain"))
           :merged nil
-          :files (agent-workflow--where-files project from)
-          :commits (agent-workflow--where-commits project from "HEAD")
+          :files (agent-workflow--where-own-files project commits)
+          :commits (agent-workflow--where-own-commits project commits)
           :snapshots (delq nil (mapcar (lambda (job)
                                          (when-let* (((memq (plist-get (cdr job) :status) '(running waiting)))
                                                      (snapshot (plist-get (cdr job) :snapshot))
@@ -1301,6 +1304,95 @@ t, nothing merged or deleted."
 
 (defconst agent-workflow--where-commits-shown 5
   "A run's latest commits its where has, at most.")
+
+(defun agent-workflow--where-own-files (dir commits)
+  "The files COMMITS (a run's own in your checkout DIR, oldest first)
+changed, as `agent-workflow--where-files' says them: added if the first
+added it, deleted if the last deleted it, its lines summed; a commit gone
+\(rebased away, pruned) left out."
+  (when commits
+    (let* ((default-directory dir)
+           (files nil))
+      (dolist (line (apply #'agent-workflow--git-lines "log" "--no-walk=unsorted" "--ignore-missing" "--no-renames"
+                           "--format=" "--numstat" commits))
+        (pcase-let ((`(,added ,removed ,path) (split-string line "\t")))
+          (when path
+            (let ((file (or (assoc path files) (car (push (list path :added 0 :removed 0) files)))))
+              (when (string-match-p "\\`[0-9]+\\'" added)
+                (plist-put (cdr file) :added (+ (plist-get (cdr file) :added) (string-to-number added))))
+              (when (string-match-p "\\`[0-9]+\\'" removed)
+                (plist-put (cdr file) :removed (+ (plist-get (cdr file) :removed) (string-to-number removed))))))))
+      (let ((statuses (mapcar (lambda (line) (split-string line "\t"))
+                              (apply #'agent-workflow--git-lines "log" "--no-walk=unsorted" "--ignore-missing" "--no-renames"
+                                     "--format=" "--name-status" commits))))
+        (mapcar (lambda (file)
+                  (let* ((path (car file))
+                         (kinds (mapcar #'car (seq-filter (lambda (status) (equal (nth 1 status) path)) statuses))))
+                    (list :path path
+                          ;; Its statuses oldest first (the order given).
+                          :status (cond ((equal (car (last kinds)) "D") 'deleted)
+                                        ((equal (car kinds) "A") 'added)
+                                        (t 'changed))
+                          :added (plist-get (cdr file) :added)
+                          :removed (plist-get (cdr file) :removed))))
+                (nreverse files))))))
+
+(defun agent-workflow--where-own-commits (dir commits)
+  "COMMITS (a run's own in your checkout DIR, oldest first), the latest
+first: ((SHORT SUBJECT)...), `agent-workflow--where-commits-shown' at most;
+one gone left out."
+  (when commits
+    (let ((default-directory dir))
+      (mapcar (lambda (line) (split-string line "\t"))
+              (apply #'agent-workflow--git-lines "log" "--no-walk=unsorted" "--ignore-missing" "--format=%h%x09%s"
+                     (reverse (last commits agent-workflow--where-commits-shown)))))))
+
+;; ====== ITS COMMITS IN YOUR CHECKOUT ======
+;; A run in your checkout (runs-in: checkout) works among your own commits:
+;; its are those made while one of its agents worked, from its step's start
+;; (or its fix's) to its done (or the run's end), noted then. Yours, before,
+;; between and after, aren't its; one made while its agent worked is
+;; counted as its (git can't tell them apart).
+
+(defun agent-workflow--checkout-head (run)
+  "RUN's checkout's HEAD (a commit), or nil."
+  (let ((default-directory (file-name-as-directory (agent-workflow-run-project run))))
+    (car (agent-workflow--git-lines "rev-parse" "HEAD"))))
+
+(defun agent-workflow--checkout-note (run job)
+  "JOB of RUN's agent's work over: the commits made in your checkout since
+it began (its :head) noted as RUN's own."
+  (when-let* ((head (plist-get (agent-workflow--job run job) :head)))
+    (agent-workflow--job-set run job :head nil)
+    (let* ((default-directory (file-name-as-directory (agent-workflow-run-project run)))
+           (own (agent-workflow-run-commits run))
+           (new (seq-remove (lambda (commit) (member commit own))
+                            (agent-workflow--git-lines "rev-list" "--reverse" (concat head "..HEAD")))))
+      (when new
+        (setf (agent-workflow-run-commits run) (append own new))))))
+
+(defun agent-workflow--checkout-track (run event data)
+  "RUN in your checkout: its agents' work's start and end (EVENT, its DATA)
+noted, the commits made in between its own. In
+`agent-workflow-journal-functions'."
+  (when (agent-workflow-run-checkout-p run)
+    (pcase event
+      ((or "step-started" "fixing")
+       ;; An agent at work: where HEAD was (a fix after its step: still
+       ;; from its step's start).
+       (when-let* (((plist-get data :agent))
+                   (job (plist-get data :job))
+                   ((not (plist-get (agent-workflow--job run job) :head)))
+                   (head (agent-workflow--checkout-head run)))
+         (agent-workflow--job-set run job :head head)))
+      ("step-ended" (agent-workflow--checkout-note run (plist-get data :job)))
+      ;; Over: its agents' work too (interrupted, it goes on: not over).
+      ((or "cancelled" "failed" "run-done")
+       (dolist (job (agent-workflow-run-jobs run))
+         (agent-workflow--checkout-note run (car job)))))))
+
+;; Before the pane's: it draws what's noted.
+(add-hook 'agent-workflow-journal-functions #'agent-workflow--checkout-track -50)
 
 (defun agent-workflow--where-files (dir base)
   "The files changed in the worktree DIR since BASE (a commit, a branch),

@@ -663,7 +663,9 @@ once it's done."
           (should (plist-get where :checkout))
           (should (equal (plist-get where :own) 1))
           (should (string-prefix-p (format "⎇ %s   your checkout, from " branch) (agent-workflow--pane-git-line where)))
-          (should (string-suffix-p " · 1 commit since" (agent-workflow--pane-git-line where)))))
+          (should (string-suffix-p " · 1 commit of its" (agent-workflow--pane-git-line where)))
+          (should (equal (mapcar (lambda (file) (plist-get file :path)) (plist-get where :files)) '("here.txt")))
+          (should (equal (mapcar #'cadr (plist-get where :commits)) '("here")))))
       ;; On a ticket: closed once done.
       (let* ((issue (+test-awr--issue project "In place" "--type" "task"))
              (run (agent-workflow-start-run project issue :workflow "fix")))
@@ -672,6 +674,63 @@ once it's done."
         (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
         (should (equal (alist-get 'status (+test-awr--shown project issue)) "closed"))
         (should-not (agent-workflow-issue-branch-made project issue))))))
+
+(ert-deftest agent-workflow-steps/its-own-commits-in-your-checkout ()
+  "A run in your checkout: its commits are those made while its agents
+worked (from a step's start, or a fix's, to its done, or the run's end);
+yours before, between and after aren't its, nor are their files; a change
+not committed, counted, not listed. Kept in its state.json."
+  (let* ((project (file-name-as-directory (make-temp-file "awf-own" t)))
+         (default-directory project)
+         (run (agent-workflow-run--make :project project :issue "github" :n 1 :dir (file-name-as-directory (make-temp-file "awf-run" t))
+                                        :state 'running :spent '(:cost 0 :tokens 0)
+                                        :workflow '(:name "github" :checkout t
+                                                    :jobs (("green" :name "green" :steps ((:kind run :run "watch.sh" :on-fail "ci")))))
+                                        :jobs (list (cons "green" (list :status 'running :step 0))))))
+    (unwind-protect
+        (cl-flet ((commit (file)
+                    (write-region file nil (expand-file-name file project))
+                    (call-process "git" nil nil nil "add" file)
+                    (call-process "git" nil nil nil "commit" "-q" "-m" file))
+                  (event (name &rest data) (agent-workflow--checkout-track run name data)))
+          (call-process "git" nil nil nil "init" "-q")
+          (call-process "git" nil nil nil "config" "user.email" "t@t")
+          (call-process "git" nil nil nil "config" "user.name" "t")
+          (commit "base.txt")
+          (setf (agent-workflow-run-base run) (list :branch "main" :commit (car (agent-workflow--git-lines "rev-parse" "HEAD"))))
+          (commit "mine-before.txt")
+          ;; The script fails: its agent fixes it, commits; done.
+          (event "step-started" :job "green" :step 0 :kind "run")
+          (should-not (plist-get (agent-workflow--job run "green") :head))
+          (event "fixing" :job "green" :step 0 :agent "ci-1")
+          (commit "fix-1.txt")
+          (event "step-ended" :job "green" :step 0 :outcome "done")
+          (commit "mine-between.txt")
+          ;; Again: a fix, the run over before it says done.
+          (event "fixing" :job "green" :step 0 :agent "ci-1")
+          (commit "fix-2.txt")
+          (event "run-done")
+          (commit "mine-after.txt")
+          (write-region "loose" nil (expand-file-name "loose.txt" project))
+          (let ((where (agent-workflow--where-checkout run)))
+            (should (equal (plist-get where :own) 2))
+            (should-not (plist-get where :empty))
+            (should (equal (mapcar (lambda (file) (plist-get file :path)) (plist-get where :files)) '("fix-1.txt" "fix-2.txt")))
+            (should (equal (plist-get (car (plist-get where :files)) :status) 'added))
+            (should (equal (mapcar #'cadr (plist-get where :commits)) '("fix-2.txt" "fix-1.txt")))
+            (should (equal (plist-get where :uncommitted) 1))
+            (should (string-suffix-p " · 2 commits of its · 1 not committed" (agent-workflow--pane-git-line where))))
+          ;; Saved, and read back.
+          (agent-workflow--save-state run)
+          (should (equal (append (plist-get (json-parse-string (with-temp-buffer
+                                                                 (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
+                                                                 (buffer-string))
+                                                               :object-type 'plist)
+                                            :commits)
+                                 nil)
+                         (agent-workflow-run-commits run))))
+      (delete-directory project t)
+      (delete-directory (agent-workflow-run-dir run) t))))
 
 (ert-deftest agent-workflow-steps/its-branch-kept ()
   "A run done, its branch not merged (no merge in its workflow): kept,
