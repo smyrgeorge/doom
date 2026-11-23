@@ -282,7 +282,8 @@ running ended."
 
 (defun agent-workflow--pane-rounds-element ()
   "The pane's rounds as a timeline (nil before the first): a bar each, its
-round past 1 and an outcome other than done said; one running growing."
+round past 1 and an outcome other than done said; one running growing;
+one ended done (its outcome in its name), replaced or cancelled grey."
   (when agent-workflow--pane-rounds
     (cl-flet ((stamp (time) (format-time-string "%FT%TZ" time t)))
       (list :id "rounds" :type "timeline" :title "Rounds"
@@ -298,10 +299,11 @@ round past 1 and an outcome other than done said; one running growing."
                                                         (concat " → " outcome)
                                                       ""))
                                       :start (stamp (plist-get round :start))
+                                      ;; Ended: done, whatever its outcome (approved,
+                                      ;; changes: said in its name); not a failure.
                                       :status (cond ((null (plist-get round :end)) "running")
-                                                    ((member outcome '("done")) "done")
                                                     ((member outcome '("replaced" "cancelled")) "queued")
-                                                    (t "failed")))
+                                                    (t "done")))
                                 (and (plist-get round :end) (list :end (stamp (plist-get round :end)))))))
                            agent-workflow--pane-rounds)))))
 

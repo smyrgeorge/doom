@@ -436,6 +436,24 @@ on; Go to it, beside."
 
 ;; ====== WHERE ITS WORK IS ======
 
+(ert-deftest agent-workflow-pane/rounds ()
+  "Its rounds, a bar each: ended, done whatever its outcome (approved,
+changes: in its name), not red; replaced or cancelled, grey; running,
+growing (no end)."
+  (with-temp-buffer
+    (setq-local agent-workflow--pane-rounds
+                (list (list :job "build" :round 1 :start 100.0 :end 160.0 :outcome "done")
+                      (list :job "review" :round 1 :start 160.0 :end 200.0 :outcome "changes")
+                      (list :job "docs" :round 1 :start 160.0 :end 170.0 :outcome "replaced")
+                      (list :job "build" :round 2 :start 200.0 :end 230.0 :outcome "done")
+                      (list :job "review" :round 2 :start 230.0 :end 260.0 :outcome "approved")
+                      (list :job "merge" :round 1 :start 260.0 :end nil)))
+    (should (equal (mapcar (lambda (task) (list (plist-get task :name) (plist-get task :status)))
+                           (plist-get (agent-workflow--pane-rounds-element) :tasks))
+                   '(("build" "done") ("review → changes" "done") ("docs → replaced" "queued")
+                     ("build · round 2" "done") ("review · round 2 → approved" "done") ("merge" "running"))))
+    (should-not (plist-get (car (last (plist-get (agent-workflow--pane-rounds-element) :tasks))) :end))))
+
 (ert-deftest agent-workflow-pane/where-in-words ()
   "Its state in a line: its mark, its time, what it spent, its tokens, each
 against its budget. Where its work is: ⎇ its branch, where it started →
