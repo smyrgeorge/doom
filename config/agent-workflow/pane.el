@@ -1266,7 +1266,7 @@ it was counted as a line of output: 1 line); its ACTIONS."
 
 (defun agent-workflow--pane-agent-box (job state)
   "JOB's live box while its agent works (STATE its job's; nil else): its
-job, its agent's profile and what on, how long its turn's been (or that it
+job, agent and its profile (agent ci), what on, how long its turn's been (or that it
 asks you) as its title; its last actions, the latest last, each marked by
 its kind; Show session (at its question, if it asks)."
   (when-let* ((agent (plist-get state :agent))
@@ -1279,7 +1279,9 @@ its kind; Show session (at its question, if it asks)."
            (asks (and (eq (plist-get state :status) 'waiting) (plist-get state :agent-asks))))
       (agent-workflow--pane-box-of
             (agent-workflow--pane-box-id job)
-            (string-join (delq nil (list job (agent-workflow-agent-profile agent) doing
+            ;; An agent's, said (its profile alone read as part of its job's
+            ;; name: a script's box, it looked).
+            (string-join (delq nil (list job (concat "agent " (agent-workflow-agent-profile agent)) doing
                                                 (cond (asks "asks you")
                                                       (turn (format "its turn %s"
                                                                     (agent-workflow--duration-words
@@ -1317,8 +1319,8 @@ its colours' codes gone, a line redrawn in place (\\r) its last state."
 
 (defun agent-workflow--pane-script-box (job state)
   "JOB's live box while a script step of its runs (STATE its job's; nil
-else): its job, its step, its try, its command and how long it's run as its
-title; its output's last lines as it comes; Show output."
+else): its job, script (else what its step does), its step, its try, its
+command and how long it's run as its title; its output's last lines as it comes; Show output."
   (when-let* ((process (plist-get state :process))
               ((processp process))
               ((process-live-p process)))
@@ -1331,9 +1333,14 @@ title; its output's last lines as it comes; Show output."
             (agent-workflow--pane-box-id job)
             (string-join
                     (delq nil (list job
+                                    ;; A script's, said; its command after its step.
+                                    (if (eq (plist-get step :kind) 'run) "script" (and step (agent-workflow--pane-step-does step)))
                                     (and step (format "step %d (%s)" (1+ index) (agent-workflow--pane-step-name step)))
                                     (and (numberp try) (> try 1) (format "try %d" try))
-                                    (and step (agent-workflow--pane-step-does step))
+                                    (and (eq (plist-get step :kind) 'run)
+                                         (truncate-string-to-width
+                                          (car (split-string (string-trim (format "%s" (plist-get step :run))) "\n"))
+                                          60 nil nil "…"))
                                     (and started (agent-workflow--duration-words (round (- (float-time) started))))))
                     " · ")
             (agent-workflow--pane-output-lines process)
