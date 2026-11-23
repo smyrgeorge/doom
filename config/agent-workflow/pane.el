@@ -325,22 +325,62 @@ one ended done (its outcome in its name), replaced or cancelled grey."
                                 (and (plist-get round :end) (list :end (stamp (plist-get round :end)))))))
                            agent-workflow--pane-rounds)))))
 
+(defun agent-workflow--pane-verdict (text)
+  "TEXT's verdict, the line a note is in the feed: its first line (its
+bold, a list's dash dropped), else its first sentence, 80 characters at
+most."
+  (let* ((line (string-trim (replace-regexp-in-string
+                             "\\*\\*\\|`" "" (replace-regexp-in-string "\\`[-*] " ""
+                                                                     (car (split-string (string-trim text) "\n"))))))
+         (line (if (and (> (length line) 80)
+                        (string-match "\\`\\(.+?[.!?]\\)\\(?:\\s-\\|\\'\\)" line))
+                   (match-string 1 line)
+                 line)))
+    (truncate-string-to-width line 80 nil nil "…")))
+
+(defun agent-workflow--pane-note-name (note)
+  "NOTE's job, its round past 1 said: its name in the feed."
+  (let ((round (plist-get note :round)))
+    (concat (plist-get note :job) (if (and (numberp round) (> round 1)) (format " · round %d" round) ""))))
+
 (defun agent-workflow--pane-notes-element ()
-  "The pane's agents' notes as a feed (nil before the first): each headed
-by its job (bold), its round past 1, its outcome and its time, its text
-as it wrote it (Markdown: its lists, its file:line links), a rule between
-them. Not quoted: a quote was drawn muted, its > on each line."
+  "The pane's agents' notes as a feed (nil before the first): a line each,
+its job (its round past 1), its time, its outcome (not done, nor what its
+verdict starts with), its verdict (`agent-workflow--pane-verdict'); its
+whole in its agent's section."
   (when agent-workflow--pane-notes
-    (list :id "notes" :type "markdown"
-          :markdown (mapconcat
-                     (lambda (note)
-                       (let ((round (plist-get note :round)))
-                         (concat "**" (plist-get note :job) "**"
-                                 (if (and (numberp round) (> round 1)) (format " · round %d" round) "")
-                                 " · " (or (plist-get note :outcome) "done")
-                                 " · " (format-time-string "%H:%M" (plist-get note :time))
-                                 "\n\n" (plist-get note :text))))
-                     agent-workflow--pane-notes "\n\n---\n\n"))))
+    (let ((seen nil))
+      (list :id "notes" :type "steps" :close :false
+            :steps (mapcar (lambda (note)
+                             (let* ((name (agent-workflow--pane-note-name note))
+                                    (name (if (member name seen)
+                                              (format "%s (%d)" name (1+ (seq-count (lambda (s) (string-prefix-p name s)) seen)))
+                                            name))
+                                    (outcome (plist-get note :outcome))
+                                    (verdict (agent-workflow--pane-verdict (plist-get note :text))))
+                               (push name seen)
+                               (list :name name :status "done"
+                                     :detail (concat (format-time-string "%H:%M" (plist-get note :time)) " · "
+                                                     ;; Its outcome, unless its verdict says it first.
+                                                     (if (and outcome (not (equal outcome "done"))
+                                                              (not (string-prefix-p (downcase outcome) (downcase verdict))))
+                                                         (concat outcome " · ")
+                                                       "")
+                                                     verdict))))
+                           agent-workflow--pane-notes)))))
+
+(defun agent-workflow--pane-job-notes-element (job)
+  "JOB's notes, whole (Markdown), for its agent's section; several rounds',
+each under its round, outcome and time. Nil if it has none."
+  (when-let* ((notes (seq-filter (lambda (note) (equal (plist-get note :job) job)) agent-workflow--pane-notes)))
+    (list :id "agent-notes" :type "markdown" :title "Its notes"
+          :markdown (if (cdr notes)
+                        (mapconcat (lambda (note)
+                                     (format "**Round %s** · %s · %s\n\n%s"
+                                             (or (plist-get note :round) 1) (or (plist-get note :outcome) "done")
+                                             (format-time-string "%H:%M" (plist-get note :time)) (plist-get note :text)))
+                                   notes "\n\n")
+                      (plist-get (car notes) :text)))))
 
 ;; ====== WHAT IT SHOWS ======
 
@@ -1051,16 +1091,35 @@ events). Stopped once there's none."
                                             ('running 'running) ('waiting 'needs-you) ('queued 'waiting)
                                             ('done 'done) ('cancelled 'failed)))
       (agent-workflow--pane-needs run pane)
-      (agent-workflow--pane-show-notes pane)
+      (agent-workflow--pane-show-notes run pane)
       (agent-workflow--pane-agents run pane)))
 
-(defun agent-workflow--pane-show-notes (pane)
-  "PANE's Notes (its agents' notes, a feed): its section once the first
-came, after Run and Needs you, before its agents'."
+(defun agent-workflow--pane-show-notes (run pane)
+  "RUN's PANE's Notes (its agents' verdicts, a feed): its section once the
+first came, after Run and Needs you, before its agents'; each agent's notes
+whole in its own section, made (folded) if its agent's gone already (a
+pane drawn again from its journal)."
   (when-let* ((notes (agent-workflow--pane-notes-element)))
     (unless (agent-ui--find-section "notes")
       (agent-ui-section pane "notes" :title "Notes" :after (if (agent-ui--find-section "needs-you") "needs-you" "run")))
-    (agent-ui-show notes :canvas pane :section "notes")))
+    (agent-ui-show notes :canvas pane :section "notes")
+    (dolist (job (delete-dups (mapcar (lambda (note) (plist-get note :job)) agent-workflow--pane-notes)))
+      (when-let* ((section (agent-workflow--pane-section job))
+                  (element (agent-workflow--pane-job-notes-element job)))
+        (unless (agent-ui--find-section section)
+          (let ((status (plist-get (agent-workflow--job run job) :status)))
+            (agent-ui-section pane section :title job
+                              :state (pcase status ('running 'running) ('waiting 'needs-you) ('done 'done)
+                                       ('skipped 'done) (_ 'waiting))
+                              :folded (memq status '(done skipped))
+                              :after (or (car (last (seq-filter (lambda (s) (string-prefix-p "job." s))
+                                                                (mapcar #'agent-ui--section-name agent-ui--sections))))
+                                         "notes")
+                              :open (lambda () (agent-workflow--pane-open-session run job)))
+            (when (memq status '(done skipped))
+              (push job agent-workflow--pane-ended))))
+        (with-demoted-errors "agent workflow's pane: %S"
+          (agent-ui-show element :canvas pane :section section))))))
 
 (defun agent-workflow--pane-changed (run)
   "RUN changed: its pane drawn again, if it has one. In

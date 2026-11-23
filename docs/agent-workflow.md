@@ -311,11 +311,12 @@ review asks: Should the escape table also cover Unicode escapes?
   loop guard and its budget used up, a form (a note for each agent; more budget). Its agent asking in its session
   (below): a permission, its own buttons; a question (its form), Agent UI's own, answered here as its Submit does (one
   with options a choice, its free answer the note; several a form), **Go to it** beside it opening its session there.
-- **Notes:** each agent's notes as it ended its step (what it did, what it found, why it changed nothing), in order,
-  headed by its job, its round past 1, its outcome and its time, as it wrote them (its lists, its `file:line` links).
+- **Notes:** each agent's verdict as it ended its step, a line each, in order: its job (its round past 1), its time,
+  its outcome (but done), its verdict (its notes' first line: agents are told to start with it, 80 characters at most;
+  else their first sentence). Its notes whole are in its own section.
 - **A section per agent:** its session's canvas, shown there: its plan, its progress, its questions; finished (its plan
-  done), they stay (no countdown here). Its job over, it's folded (`▸ build ✓ 4m 12s`), what its agent showed kept
-  there, its session gone. `RET` on its divider opens its session; `TAB` on any divider folds it.
+  done), they stay (no countdown here); its notes whole, once it ended its step (each round's under its own). Its job
+  over, it's folded (`▸ build ✓ 4m 12s`), what its agent showed kept there, its session gone. `RET` on its divider opens its session; `TAB` on any divider folds it.
 - **Log:** its last events, shorter than its log.txt: no issue on each line, its job in a column, a job's agent step
   starting and ending left out, a job done how long it took; a wait a warning, what went wrong an error.
 

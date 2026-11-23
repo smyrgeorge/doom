@@ -165,8 +165,9 @@ run on the issue %s, in %s, and nothing else. You have no name: you're known as 
 %s Never switch, make or rename branches, push, or change, relabel or close the issue: the \
 workflow does that. Your bd commands run as %s (BEADS_ACTOR).
 
-When your job is done, end it with %s done %s \"notes\": the outcome (%s), and what the \
-next jobs and the user need to know, in a few lines. Then end your turn. Without it, the run \
+When your job is done, end it with %s done %s \"notes\": the outcome (%s), and your notes: \
+first a line of your verdict, 80 characters at most (the user's pane shows it), then what the next \
+jobs and the user need to know, in a few short bullets (file:line). Then end your turn. Without it, the run \
 waits for the user. How to do a job of a run (reading the issue, your canvas, being sent back, \
 outcomes): read %s first."
                (agent-workflow-agent-job agent) (agent-workflow-agent-issue agent)

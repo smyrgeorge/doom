@@ -30,7 +30,8 @@ cmd/agent-workflow done approved "Reads well; the tests cover the acceptance cri
 ```
 
 The outcome comes first when your job has outcomes (your system prompt lists them: `done`, or `approved`, `changes`...);
-without one it's `done`. The notes are what the next jobs and the user need to know, in a few lines: what you did, where
+without one it's `done`. The notes: first a line of your verdict, 80 characters at most (the user's pane shows it,
+a line for each agent); then what the next jobs and the user need to know, in a few short bullets: what you did, where
 (file:line), what's left. They go on the issue and into the next jobs' prompts. Its full path is in your system
 prompt; it never asks the user's permission.
 
