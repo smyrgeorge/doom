@@ -17,8 +17,9 @@
 
 (defconst agent-ui-steps--statuses '(pending running waiting done failed skipped))
 
-(defconst agent-ui-steps--keys '(:name :status :detail :seconds :started :steps)
-  "What a step has (started: when it began running, noted).")
+(defconst agent-ui-steps--keys '(:name :status :detail :body :seconds :started :steps)
+  "What a step has (started: when it began running, noted; body: what it
+unfolds to, Markdown).")
 
 (defconst agent-ui-steps-max-depth 4
   "How deep steps nest.")
@@ -39,12 +40,13 @@ its status a symbol, its sub-steps too. An error naming WHERE (\"step 2\",
      ((agent-ui--plist-p step)
       (cl-loop for (k _) on step by #'cddr
                unless (memq k agent-ui-steps--keys)
-               do (bad (format "has %s: a step has name, status, detail, seconds, steps"
+               do (bad (format "has %s: a step has name, status, detail, body, seconds, steps"
                                (agent-ui--show-value (substring (symbol-name k) 1)))))
       (let* ((name (plist-get step :name))
              (status (or (plist-get step :status) "pending"))
              (sym (if (stringp status) (intern-soft status) status))
              (detail (plist-get step :detail))
+             (body (plist-get step :body))
              (seconds (plist-get step :seconds))
              (started (plist-get step :started))
              (steps (plist-get step :steps)))
@@ -54,6 +56,8 @@ its status a symbol, its sub-steps too. An error naming WHERE (\"step 2\",
                        (agent-ui--show-value status))))
         (when (and detail (not (stringp detail)))
           (setq detail (agent-ui-cell detail)))
+        (unless (or (null body) (stringp body))
+          (bad (format "has body %s: text (Markdown)" (agent-ui--show-value body))))
         (unless (or (null seconds) (and (numberp seconds) (>= seconds 0)))
           (bad (format "has seconds %s: a number, 0 or more" (agent-ui--show-value seconds))))
         (unless (or (null started) (numberp started))
@@ -64,6 +68,7 @@ its status a symbol, its sub-steps too. An error naming WHERE (\"step 2\",
           (bad (format "has steps %d deep: %d at most" (+ depth 2) agent-ui-steps-max-depth)))
         (append (list :name name :status sym)
                 (when detail (list :detail detail))
+                (when (and body (not (string-blank-p body))) (list :body body))
                 (when seconds (list :seconds seconds))
                 (when started (list :started started))
                 (when steps
@@ -242,15 +247,63 @@ columns, if they all fit; else cut with … where they don't, or, with WRAP
           (when (> (length all) (length shown))
             (propertize (format "… %d steps more" (- (length all) (length shown))) 'face 'agent-ui-muted)))))
 
+(defun agent-ui-steps--marked (steps open)
+  "STEPS with a body marked before their detail: ▸ folded, ▾ unfolded (its
+name in OPEN); their own steps too."
+  (mapcar (lambda (step)
+            (let ((step (copy-sequence step)))
+              (when (plist-get step :body)
+                (setq step (plist-put step :detail
+                                      (concat (if (member (plist-get step :name) open) "▾ " "▸ ")
+                                              (or (plist-get step :detail) "")))))
+              (when (plist-get step :steps)
+                (setq step (plist-put step :steps (agent-ui-steps--marked (plist-get step :steps) open))))
+              step))
+          steps))
+
+(defun agent-ui-steps--toggle-open (ctx name open)
+  "A command folding or unfolding the body of step NAME (OPEN those unfolded)."
+  (lambda ()
+    (let ((id (plist-get ctx :id)))
+      (unless (and id (derived-mode-p 'agent-ui-canvas-mode))
+        (user-error "A step unfolds in a canvas"))
+      (agent-ui-update id (list :open (if (member name open) (remove name open) (append open (list name))))
+                       :canvas (current-buffer)))))
+
+(defun agent-ui-steps--body (step depth ctx)
+  "STEP's body drawn under it (Markdown), indented past its icon, DEPTH deep."
+  (let* ((indent (make-string (+ 2 (* 2 depth)) ?\s))
+         (width (max 10 (- (plist-get ctx :width) (length indent))))
+         (text (agent-ui-render (list :type "markdown" :markdown (plist-get step :body))
+                                (plist-put (copy-sequence ctx) :width width))))
+    (mapconcat (lambda (line) (if (string-empty-p line) line (concat indent line)))
+               (split-string (string-trim-right text) "\n") "\n")))
+
 (defun agent-ui-steps--text (props ctx)
   "PROPS' steps, a checklist: a line each, its times and details in
 columns, if they all fit; else each step wrapped, as a plan to approve is
 \(every name was cut with … to half the width, their rest nowhere:
-doom-1j3, reversing doom-mri's line each)."
+doom-1j3, reversing doom-mri's line each). A step with a body: its lines a
+button unfolding it under them (OPEN, the names of those unfolded), ▸ or ▾
+before its detail."
   (if (null (plist-get props :steps))
       (propertize "no steps yet" 'face 'agent-ui-muted)
-    (let ((drawn (agent-ui-steps--drawn props ctx t)))
-      (string-join (append (car drawn) (and (cdr drawn) (list (cdr drawn)))) "\n"))))
+    (let* ((open (plist-get props :open))
+           (props (plist-put (copy-sequence props) :steps (agent-ui-steps--marked (plist-get props :steps) open)))
+           (drawn (agent-ui-steps--drawn props ctx t))
+           (flat (agent-ui-steps--flat (plist-get props :steps) 0))
+           (texts (cl-loop for text in (car drawn)
+                           for (depth . step) in flat
+                           collect (if-let* (((plist-get step :body))
+                                             (name (plist-get step :name)))
+                                       (let ((shown (member name open)))
+                                         (concat (if (plist-get ctx :still)
+                                                     text
+                                                   (agent-ui-button text (agent-ui-steps--toggle-open ctx name open)
+                                                                    (if shown "RET: fold it" "RET: unfold it")))
+                                                 (if shown (concat "\n" (agent-ui-steps--body step depth ctx)) "")))
+                                     text))))
+      (string-join (append texts (and (cdr drawn) (list (cdr drawn)))) "\n"))))
 
 ;; ====== APPENDING ======
 
@@ -512,7 +565,8 @@ text's colour until it's answered."
 \(pending), or {\"name\", \"status\", \"detail\", \"seconds\", \"steps\"}:
 status one of pending, running (a spinner), waiting (◆: for the user, timed
 as running), done, failed, skipped; detail a note after it; seconds how long it took (else timed from running to done);
-steps its own, drawn under it. Appending a step whose name is there changes
+steps its own, drawn under it; body what it unfolds to (Markdown: RET on
+it, folded until then). Appending a step whose name is there changes
 it in its place: append {\"steps\": [{\"name\": \"Build\", \"status\":
 \"done\"}]}; with \"parent\": \"Build\", among that step's own. With APPROVE,
 a plan the user approves first (dropping, rewording steps): \"Answer to steps
@@ -522,6 +576,7 @@ and the plan may close (as every question answered): to tick them, show
 them again, without APPROVE."
   :props ((steps list "The steps, in order")
           (approve any "A plan for the user to approve first: true, or {\"question\": ...}")
+          (open list "The steps unfolded, their names (the user's: RET on a step with a body)")
           (dropped list "The steps the user dropped (theirs)")
           (edits list "The steps the user reworded, {\"name\": ..., \"text\": ...} (theirs)")
           (note-text string "The user's note")

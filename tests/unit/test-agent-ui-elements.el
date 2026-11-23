@@ -542,7 +542,7 @@ detail's sake when the line fits. A step too long: wrapped, as a plan's
   (should (equal (+test-aue-error '(:type "steps" :steps ((:status "done"))))
                  "steps: step 1 has no name"))
   (should (equal (+test-aue-error '(:type "steps" :steps ((:name "a" :state "done"))))
-                 "steps: step 1 has \"state\": a step has name, status, detail, seconds, steps"))
+                 "steps: step 1 has \"state\": a step has name, status, detail, body, seconds, steps"))
   (should (string-match-p "step 1 is 3" (+test-aue-error '(:type "steps" :steps (3)))))
   ;; A plan to approve.
   (should (string-match-p "approve is true, or"
@@ -700,6 +700,26 @@ line. A row-open not an action: refused."
                                    "\n" t))
              1))
   (should (string-match-p "row-open" (+test-aue-error '(:type "table" :columns ("a") :rows (("x")) :row-open "open")))))
+
+;; A step's body: folded under ▸, RET unfolding it (Markdown) under it.
+(ert-deftest agent-ui-elements/steps-a-step-s-body-unfolds ()
+  "A step with a body: ▸ before its detail, its body nowhere; its lines a
+button. OPEN naming it: ▾, its body under it, drawn as Markdown, indented.
+A body not text: refused."
+  (let* ((element '(:type "steps" :steps ((:name "green" :status "done" :detail "20:47 · Not fixed"
+                                           :body "Not fixed: **cause** unknown.\n\n- one\n- two")
+                                          (:name "docs" :status "done" :detail "Wrote it"))))
+         (folded (agent-ui-render element (agent-ui-context :width 60)))
+         (open (+test-aue-draw (plist-put (copy-sequence element) :open '("green")))))
+    (should (string-search "▸ 20:47 · Not fixed" folded))
+    (should-not (string-search "one" folded))
+    (should-not (string-search "▸ Wrote it" folded))
+    (should (equal (get-text-property (string-search "green" folded) 'help-echo folded) "RET: unfold it"))
+    (should-not (get-text-property (string-search "docs" folded) 'agent-ui-action folded))
+    (should (string-search "▾ 20:47 · Not fixed" open))
+    (should (string-match-p "\n  Not fixed: cause unknown\\." open))
+    (should (string-match-p "\n  .*one\n  .*two" open)))
+  (should (string-match-p "body" (+test-aue-error '(:type "steps" :steps ((:name "a" :body 3)))))))
 
 (ert-deftest agent-ui-elements/table-columns-that-fit ()
   "More columns than fit, each cut to its narrowest: those on the left that
