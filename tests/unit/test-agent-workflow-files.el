@@ -712,10 +712,11 @@ end, its branch deleted once merged."
   "A stand-in gh in BIN: auth status fails with GH_LOGGED_OUT; run list
 prints GH_RUNS (lines ID TAB STATUS TAB CONCLUSION TAB NAME, \\n between),
 in_progress the first GH_PENDING times (counted in GH_COUNT); run view
-prints a failed job's lines."
+prints a failed job's lines. Its arguments, a line each call, in GH_ARGS."
   (make-directory bin t)
   (let ((gh (expand-file-name "gh" bin)))
     (write-region "#!/bin/bash
+[ -n \"$GH_ARGS\" ] && echo \"$*\" >> \"$GH_ARGS\"
 case \"$1 $2\" in
   'auth status') [ -z \"$GH_LOGGED_OUT\" ] ;;
   'run list')
@@ -765,6 +766,10 @@ ORIGIN), CLONE your checkout and its worktree."
       (funcall git clone "checkout" "-q" "-b" "other"))
     (when (plist-get env :no-remote)
       (funcall git clone "remote" "remove" "origin"))
+    ;; Origin's URL a GitHub one, fetched from the bare origin all the same.
+    (when-let* ((url (plist-get env :url)))
+      (funcall git clone "remote" "set-url" "origin" url)
+      (funcall git clone "config" (format "url.%s.insteadOf" origin) url))
     (with-temp-buffer
       (let* ((default-directory clone)
              (process-environment
@@ -775,6 +780,7 @@ ORIGIN), CLONE your checkout and its worktree."
                             (concat "MAIN=" clone) "MAIN_BRANCH=main" "GITHUB_POLL=0"
                             (format "GITHUB_APPEAR=%s" (or (plist-get env :appear) 0))
                             (concat "GH_COUNT=" (expand-file-name "count" dir))
+                            (concat "GH_ARGS=" (expand-file-name "args" dir))
                             (concat "GH_RUNS=" (or (plist-get env :runs) ""))
                             (format "GH_PENDING=%s" (or (plist-get env :pending) 0))
                             (concat "GH_LOGGED_OUT=" (if (plist-get env :logged-out) "1" "")))
@@ -851,7 +857,16 @@ said; cancelled: 2."
   (pcase-let ((`(,exit ,out) (+test-awf--github "watch-cancel" "github-watch.sh"
                                                 :runs "11\tcompleted\tcancelled\tTests\n")))
     (should (eql exit 2))
-    (should (string-match-p "was cancelled" out))))
+    (should (string-match-p "was cancelled" out)))
+  ;; gh asked about origin's own repository (-R), not its default one.
+  (pcase-let ((`(,exit ,_out) (+test-awf--github "watch-repo" "github-watch.sh" :url "git@github.com:me/doom.git"
+                                                 :runs "8\tcompleted\tfailure\tTests\n")))
+    (should (eql exit 1))
+    (let ((calls (with-temp-buffer
+                   (insert-file-contents (expand-file-name "awf/watch-repo/args" +test-tmp))
+                   (split-string (buffer-string) "\n" t))))
+      (should (string-prefix-p "run list -R github.com/me/doom --commit " (car calls)))
+      (should (equal (cadr calls) "run view -R github.com/me/doom 8 --log-failed")))))
 
 (ert-deftest agent-workflow-files/check ()
   "M-x agent-workflow-check: every problem a line FILE:LINE: level: what,

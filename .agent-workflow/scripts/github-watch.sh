@@ -9,6 +9,9 @@
 # code or its test and commits; then the job runs again from its push); 2 it
 # can't (gh failing, a run cancelled): the run asks you.
 #
+# gh is asked about GITHUB_REMOTE's own repository (-R, from its URL), not
+# its default one (upstream, in a fork).
+#
 # GITHUB_REMOTE (origin), GITHUB_POLL (30: seconds between looks),
 # GITHUB_APPEAR (300: seconds a pushed commit's runs have to show up),
 # GITHUB_LOG_LINES (150: a failed job's last lines printed).
@@ -27,9 +30,20 @@ if ! git fetch -q "$remote" "$main"; then
 fi
 target=$(git rev-parse "$remote/$main")
 
+# gh asked about the remote's own repository (HOST/OWNER/NAME, from its URL
+# as configured, before any insteadOf), not its default one (upstream, in a
+# fork): -R. A URL not naming one (a local path): gh's default.
+repo=()
+url=$(git config --get "remote.$remote.url")
+slug=$(printf '%s\n' "$url" | sed -nE 's#^(https?://|ssh://|git://)([^@/]+@)?([^/:]+)(:[0-9]+)?/([^/]+)/([^/]+)$#\3/\5/\6#p;
+                                    s#^([^@/]+@)([^/:]+):([^/]+)/([^/]+)$#\2/\3/\4#p' | head -1)
+slug=${slug%/}
+slug=${slug%.git}
+[ -n "$slug" ] && repo=(-R "$slug")
+
 waited=0
 while :; do
-  runs=$(gh run list --commit "$target" --limit 50 --json databaseId,workflowName,status,conclusion \
+  runs=$(gh run list ${repo[@]+"${repo[@]}"} --commit "$target" --limit 50 --json databaseId,workflowName,status,conclusion \
            --jq '.[] | "\(.databaseId)\t\(.status)\t\(.conclusion)\t\(.workflowName)"' 2>&1) || {
     echo "github-watch.sh: gh run list failed: $runs" >&2
     exit 2
@@ -60,6 +74,6 @@ echo "GitHub Actions failed on $main (${target:0:7}):"
 printf '%s\n' "$failed" | while IFS=$'\t' read -r id _status conclusion name; do
   echo
   echo "== $name: $conclusion (gh run view $id)"
-  gh run view "$id" --log-failed 2>&1 | tail -n "$log_lines"
+  gh run view ${repo[@]+"${repo[@]}"} "$id" --log-failed 2>&1 | tail -n "$log_lines"
 done
 exit 1
