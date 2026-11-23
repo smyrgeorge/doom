@@ -1551,6 +1551,7 @@ last script's output's file."
 (defun agent-workflow--approval-asked (run)
   "RUN's job whose result waits for your OK, and its question: (JOB . ASK),
 or a user error."
+  (agent-workflow--refuse-ended run)
   (let ((asking (agent-workflow-asking run)))
     (unless (eq (plist-get (cdr asking) :kind) 'approve)
       (user-error "%s waits for no approval" (agent-workflow-run-name run)))
@@ -1693,9 +1694,16 @@ for it): going back, the work kept. JOB, if it isn't after OTHER, done."
       (agent-workflow--tick-soon))))
 
 (defun agent-workflow-asking (run)
-  "RUN's job asking you (see LOOPS), and what it asks: (JOB . ASK), or nil."
-  (seq-some (lambda (job) (and (plist-get (cdr job) :ask) (cons (car job) (plist-get (cdr job) :ask))))
-            (agent-workflow-run-jobs run)))
+  "RUN's job asking you (see LOOPS), and what it asks: (JOB . ASK), or nil;
+nil once RUN is over (a question left from before its cancel)."
+  (unless (memq (agent-workflow-run-state run) agent-workflow--ended)
+    (seq-some (lambda (job) (and (plist-get (cdr job) :ask) (cons (car job) (plist-get (cdr job) :ask))))
+              (agent-workflow-run-jobs run))))
+
+(defun agent-workflow--refuse-ended (run)
+  "A user error if RUN is over: nothing of it is answered."
+  (when (memq (agent-workflow-run-state run) agent-workflow--ended)
+    (user-error "%s is over (%s): it asks nothing" (agent-workflow-run-name run) (agent-workflow-run-state run))))
 
 (cl-defun agent-workflow-confirm (run choice &key notes more (by "you"))
   "Answer RUN's question with CHOICE. A loop's (see LOOPS): go (on: the
@@ -1706,7 +1714,9 @@ tries start again, the agent fixing it told NOTES' note for its job),
 skip, stop; a step that broke: go (run it again), skip, stop; a merge
 waiting: go (try it again), stop (steps.el); its budget used up: go (MORE,
 \(:cost :tokens :time) added to it, its steps continued), stop (budget.el).
-A user error if RUN asks nothing, or CHOICE isn't one of its question's."
+A user error if RUN asks nothing (over, it never does), or CHOICE isn't
+one of its question's."
+  (agent-workflow--refuse-ended run)
   (pcase-let* ((`(,job . ,ask) (or (agent-workflow-asking run)
                                    (when-let* ((agent (agent-workflow-agent-asking run)))
                                      (user-error "%s: %s's agent asks you in its session: answer it there, or in \

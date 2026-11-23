@@ -241,13 +241,17 @@ script killed; interrupted, waiting for you."
 (defun agent-workflow--cancel-jobs (run &optional except)
   "RUN's jobs running or waiting (but EXCEPT) cancelled, their run over:
 their own status, kept in its state.json (no spinner left in its pane or
-status). Return their names."
+status); every job's question dropped. Return their names."
   (let ((cancelled nil))
     (dolist (job (agent-workflow-run-jobs run))
       (when (and (memq (plist-get (cdr job) :status) '(running waiting))
                  (not (equal (car job) except)))
         (agent-workflow--job-set run (car job) :status 'cancelled :why nil :finished nil :retry nil :resolving nil)
         (push (car job) cancelled)))
+    ;; Their questions gone with them: nothing answers them now.
+    (dolist (job (agent-workflow-run-jobs run))
+      (when (plist-get (cdr job) :ask)
+        (agent-workflow--job-set run (car job) :ask nil)))
     (nreverse cancelled)))
 
 (cl-defun agent-workflow-cancel (run &key (by "you"))

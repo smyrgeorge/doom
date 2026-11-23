@@ -367,6 +367,29 @@ jobs:
         (should (string-prefix-p "● running" (plist-get (agent-ui-get "run" :canvas pane) :text)))
         (agent-workflow-cancel run)))))
 
+(ert-deftest agent-workflow-pane/a-cancelled-run-asks-nothing ()
+  "A run waiting for your OK, cancelled: it asks nothing more; approve,
+reject and confirm refuse it; M-x agent-workflow-approve and confirm don't
+pick it; it stays cancelled, no agent started."
+  (+test-awp "cancelled-asks"
+    (let* ((issue (+test-awr--issue project "A gate" "--type" "task"))
+           (run (car (car (let ((agent-workflow-from-shell t)) (agent-workflow-run-ticket (list issue) nil project))))))
+      (+test-awr--finish-step run "build" "built it")
+      (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
+      (agent-workflow-cancel run)
+      (should-not (agent-workflow-asking run))
+      (should-not (plist-get (agent-workflow--job run "build") :ask))
+      (should (string-match-p "is over (cancelled)"
+                              (cadr (should-error (agent-workflow-approve run) :type 'user-error))))
+      (should-error (agent-workflow-reject run "no") :type 'user-error)
+      (should-error (agent-workflow-confirm run "go") :type 'user-error)
+      (should (equal (cadr (should-error (agent-workflow--read-approval "Approve: ") :type 'user-error))
+                     "No run waits for your OK"))
+      (should-error (call-interactively #'agent-workflow-confirm-command) :type 'user-error)
+      (should (eq (agent-workflow-run-state run) 'cancelled))
+      (should-not (seq-some (lambda (agent) (buffer-live-p (agent-workflow-agent-buffer agent)))
+                            (agent-workflow-agents project))))))
+
 (defun +test-awp--ask (pane)
   "The question in PANE's Needs you, if there's one."
   (ignore-errors (agent-ui-get "ask" :canvas pane :section "needs-you")))
