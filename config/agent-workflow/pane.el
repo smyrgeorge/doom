@@ -528,7 +528,8 @@ merge takes too)."
 (defun agent-workflow--pane-state (run)
   "RUN's state as its header's first tile: (VALUE DETAIL FACE), its mark
 and state, what it waits for or why it ended (else what it's at now), the
-colour of its state (nil: plain)."
+colour of its state: running accent (blue, as its graph's running jobs),
+needs you warning, done success, failed error, queued and cancelled muted."
   (let* ((state (agent-workflow-run-state run))
          (why (agent-workflow-run-why run))
          ;; A job's next agent step waiting for one: said.
@@ -539,12 +540,12 @@ colour of its state (nil: plain)."
          (near (and (agent-workflow-run-warned run) "near its budget")))
     (pcase state
       ('waiting (list "◆ needs you" (or why near) "warning"))
-      ('queued (list "○ queued" why nil))
+      ('queued (list "○ queued" why "muted"))
       ('done (list "✓ done" (and (plist-get (agent-workflow-run-where run) :empty) "no commit") "success"))
       ('cancelled (list "✗ cancelled" why "muted"))
       ('failed (list "✗ failed" why "error"))
       (_ (list "● running" (string-join (delq nil (list (or pool (agent-workflow--pane-now run)) near)) " · ")
-               nil)))))
+               "accent")))))
 
 (defun agent-workflow--pane-figures (run)
   "RUN's header as tiles: its state (what it's at), its time, what it spent

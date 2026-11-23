@@ -3918,7 +3918,18 @@ doesn't know is refused."
     (should (eq (get-text-property (string-search "15m" text) 'face text) 'bold)))
   (let ((svg (+test-aue-svg '(:type "stats" :figures ((:label "State" :value "failed" :face "error"))) 60)))
     (should (string-search (format "fill=\"%s\"" (agent-ui-chart--color 'agent-ui-error)) svg)))
-  (should (string-match-p "face is plain, success, warning, error or muted"
+  (let ((text (agent-ui-render '(:type "stats" :figures ((:label "State" :value "● running" :face "accent")))
+                               (agent-ui-context :width 60))))
+    (should (equal (get-text-property (string-search "● running" text) 'face text) '(bold agent-ui-accent))))
+  ;; Under a title, a line above its tiles (they touched it); without one,
+  ;; none.
+  (dolist (case '((nil . 0) ("Run" . 16)))
+    (let ((svg (+test-aue-svg (append (and (car case) (list :title (car case)))
+                                      '(:type "stats" :figures ((:label "a" :value 1))))
+                              60)))
+      (should (string-match "<rect [^>]*y=\"\\([0-9.]+\\)\"" svg))
+      (should (= (string-to-number (match-string 1 svg)) (cdr case)))))
+  (should (string-match-p "face is plain, accent, success, warning, error or muted"
                           (+test-aue-error '(:type "stats" :figures ((:label "a" :value 1 :face "loud")))))))
 
 ;; ====== GRAPH ======

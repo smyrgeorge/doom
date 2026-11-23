@@ -540,7 +540,10 @@ elements. No newline at its end."
               (props (agent-ui-check type element))
               (draw (or (and (plist-get ctx :graphic) (agent-ui-type-gui type))
                         (agent-ui-type-text type)))
-              ;; A question's actions beside its Answer: given to it.
+              ;; A question's actions beside its Answer: given to it; a
+              ;; title over it, said (:titled: room under it, for a type
+              ;; drawing an image).
+              (ctx (if (agent-ui--title-text element ctx) (plist-put (copy-sequence ctx) :titled t) ctx))
               (text (funcall draw props (if (agent-ui--actions-beside-answer-p element)
                                             (plist-put (copy-sequence ctx) :actions (plist-get element :actions))
                                           ctx))))

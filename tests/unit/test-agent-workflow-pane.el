@@ -746,7 +746,7 @@ line too."
       (should (string-match-p "waits: a: waiting for an agent: 3 of 3 work" (plist-get item :detail)))
       (should (equal (mapcar (lambda (step) (plist-get step :status)) (plist-get item :steps)) '("done" "done" "pending")))
       (should-not (plist-get (nth 2 (plist-get item :steps)) :started)))
-    (should (equal (agent-workflow--pane-state run) '("● running" "a: waiting for an agent: 3 of 3 work" nil)))))
+    (should (equal (agent-workflow--pane-state run) '("● running" "a: waiting for an agent: 3 of 3 work" "accent")))))
 
 (ert-deftest agent-workflow-pane/a-step-s-try ()
   "A running job's line: its step's first try says no try; its second, try
@@ -821,7 +821,7 @@ too."
                                         :workflow workflow :spent '(:cost 0 :tokens 0) :active 60
                                         :jobs (list (cons "green" (list :status 'running :step 2))
                                                     (cons "docs" (list :status 'pending))))))
-    (should (equal (agent-workflow--pane-state run) '("● running" "watch, step 3 of 3" nil)))
+    (should (equal (agent-workflow--pane-state run) '("● running" "watch, step 3 of 3" "accent")))
     (setf (alist-get "docs" (agent-workflow-run-jobs run) nil nil #'equal) (list :status 'running :step 0))
     (should (equal (cadr (agent-workflow--pane-state run)) "watch, step 3 of 3 · docs"))
     (setf (agent-workflow-run-warned run) t)
@@ -897,7 +897,7 @@ said), its commits; started from another branch than the main one, said."
     (let ((header (agent-workflow--pane-header run)))
       (should (equal (mapcar (lambda (f) (plist-get f :label)) (plist-get header :figures))
                      '("State" "Time" "Cost" "Jobs")))
-      (should (equal (+test-awp--figure header "State") '("● running" nil nil)))
+      (should (equal (+test-awp--figure header "State") '("● running" nil "accent")))
       (should (equal (+test-awp--figure header "Time") '("15m" nil nil)))))
   (should (equal (agent-workflow--pane-git-line
                   '(:branch "feat/demo-1-x" :into "main" :worktree "/p/w/" :base (:branch "main" :commit "abcdef1234")))

@@ -5,8 +5,8 @@
 ;; A figure: {"label", "value", "unit", "change", "good", "face"}: VALUE (a
 ;; number or text) with its UNIT, CHANGE (a number: ▲ or ▼ with it; text: as
 ;; it is), GOOD "up" (default), "down" or "none": whether a rise is good
-;; (green) or bad (red); FACE its value's colour (success, warning, error,
-;; muted: a state, a figure past its limit). Side by side, as many as fit, then wrapping; in the GUI, tiles
+;; (green) or bad (red); FACE its value's colour (accent, success, warning,
+;; error, muted: a state, a figure past its limit). Side by side, as many as fit, then wrapping; in the GUI, tiles
 ;; (SVG). The summary at the top of a canvas.
 ;;
 ;;   Coverage          Tests            Build
@@ -32,8 +32,9 @@
           (face (plist-get entry :face)))
       (unless (member good '("up" "down" "none" up down none))
         (bad "'s good is up, down or none"))
-      (unless (member face '(nil "plain" "success" "warning" "error" "muted" plain success warning error muted))
-        (bad "'s face is plain, success, warning, error or muted"))
+      (unless (member face '(nil "plain" "accent" "success" "warning" "error" "muted"
+                                 plain accent success warning error muted))
+        (bad "'s face is plain, accent, success, warning, error or muted"))
       (let ((figure (plist-put (copy-sequence entry) :good (if (stringp good) (intern good) good))))
         (if face (plist-put figure :face (if (stringp face) (intern face) face)) figure)))))
 
@@ -44,7 +45,7 @@
 (defun agent-ui-stats--face (figure)
   "FIGURE's value's face: bold, in its FACE's colour if it has one."
   (pcase (plist-get figure :face)
-    ('success '(bold agent-ui-success)) ('warning '(bold agent-ui-warning))
+    ('accent '(bold agent-ui-accent)) ('success '(bold agent-ui-success)) ('warning '(bold agent-ui-warning))
     ('error '(bold agent-ui-error)) ('muted '(bold agent-ui-muted))
     (_ 'bold)))
 
@@ -175,13 +176,16 @@ a character ~0.5 of a line wide; wrapped if longer (it was cut)."
                                                   row)))
                          rows))
          (heights (cl-mapcar (lambda (extra under) (* lh (+ 3 extra under))) extras unders))
-         (svg (svg-create width (- (apply #'+ (mapcar (lambda (h) (+ h gap)) heights)) gap)))
+         ;; A line above the tiles under a title (a run pane's name): they
+         ;; touched it.
+         (top (if (plist-get ctx :titled) lh 0))
+         (svg (svg-create width (+ top (- (apply #'+ (mapcar (lambda (h) (+ h gap)) heights)) gap))))
          (fg (agent-ui-chart--color 'default))
          (muted (agent-ui-chart--color 'agent-ui-muted))
          (fill (agent-ui-progress--blend (or (face-background 'default nil t) "black") fg 0.07)))
     (if (null figures)
         (agent-ui-stats--text props ctx)
-      (let ((y 0))
+      (let ((y top))
         (cl-loop for row in rows
                  for tile-height in heights
                  for extra in extras
@@ -216,7 +220,8 @@ a character ~0.5 of a line wide; wrapped if longer (it was cut)."
 canvas. A figure is {\"label\", \"value\", \"unit\", \"change\", \"good\"}:
 CHANGE a number (▲ or ▼ with it) or text; GOOD \"up\" (default: a rise is
 good, green), \"down\" (a rise is bad, red) or \"none\"; FACE the value's
-colour: success, warning, error, muted (a state, a figure past its limit).
+colour: accent, success, warning, error, muted (a state, a figure past its
+limit).
 Tiles in the GUI; side by side, wrapping, as text."
   :props ((figures list "The figures: {\"label\", \"value\", \"unit\", \"change\", \"good\", \"face\"}"))
   :example (:figures ((:label "Coverage" :value 87.1 :unit "%" :change 2.3)
