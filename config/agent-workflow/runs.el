@@ -840,7 +840,12 @@ job's snapshot of its branch), the commit it sees there; its first step."
     (agent-workflow--refresh run)
     (agent-workflow--issue-summary run)
     (agent-workflow--changed run)
-    (agent-workflow--step-start run job (or (plist-get (plist-get (agent-workflow--job run job) :back) :step) 0))))
+    ;; Sent back to a step: this round starts there, the next ones from
+    ;; the first (its note and session kept for its agent step).
+    (let ((back (plist-get (agent-workflow--job run job) :back)))
+      (when (plist-get back :step)
+        (agent-workflow--job-set run job :back (plist-put (copy-sequence back) :step nil)))
+      (agent-workflow--step-start run job (or (plist-get back :step) 0)))))
 
 (defun agent-workflow--step-start (run job index)
   "Step INDEX of JOB of RUN starts."
@@ -1122,7 +1127,7 @@ stops."
          (agent-workflow-stop-agent agent))
        (when (plist-get state :snapshot)
          (agent-workflow-snapshot-remove (agent-workflow-run-project run) (agent-workflow-run-issue run) job))
-       (agent-workflow--job-set run job :status 'done :agent nil :why nil :snapshot nil
+       (agent-workflow--job-set run job :status 'done :agent nil :why nil :snapshot nil :back nil
                                 :end-commit (and (agent-workflow--job-edits-p run job)
                                                  (let ((dir (agent-workflow--work-directory run)))
                                                    (and (file-directory-p dir)
@@ -1418,7 +1423,7 @@ JOB hasn't run, or STEP isn't one."
               (agent-workflow-snapshot-remove project issue other))
             (agent-workflow--job-set run other :status 'pending :agent nil :finished nil :why nil :pool nil
                                      :outcome nil :notes nil :snapshot nil :process nil :retry nil
-                                     :resolving nil :tries nil :ask nil
+                                     :resolving nil :tries nil :ask nil :back nil
                                      :round (1+ (or (plist-get other-state :round) 1))))))
       (agent-workflow--job-set run job :back (list :step step :note note :by by :session session))
       (when discard

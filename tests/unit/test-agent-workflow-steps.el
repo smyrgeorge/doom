@@ -233,6 +233,45 @@ jobs:
         (agent-workflow-done agent nil "wrote it"))
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
+(ert-deftest agent-workflow-steps/sent-back-to-a-step-once ()
+  "A job sent back to its step 2: that round starts there; a later round of
+it (its job before rerun, it with it) from its first step again."
+  (+test-awr "back-step"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  build:
+    run: echo build
+  check:
+    needs: build
+    steps:
+      - name: lint
+        run: echo lint
+      - name: test
+        run: test -f ok.txt || exit 1
+")
+    (let* ((issue (+test-awr--issue project "Back to a step"))
+           (run (agent-workflow-start-run project issue)))
+      (cl-flet ((waits () (should (+test-awr--wait (lambda () (eq (+test-awr--job run "check") 'waiting)))))
+                (starts ()
+                  ;; Each round of check: the step it started from.
+                  (let ((events (agent-workflow--journal-events (agent-workflow-run-dir run)))
+                        (from nil) (started nil))
+                    (dolist (event events)
+                      (when (equal (plist-get event :job) "check")
+                        (pcase (plist-get event :ev)
+                          ("job-started" (setq started t))
+                          ("step-starting" (when started (push (plist-get event :step) from) (setq started nil))))))
+                    (nreverse from))))
+        (waits)
+        (agent-workflow-back run "check" :step 1)
+        (should (+test-awr--wait (lambda () (equal (starts) '(0 1)))))
+        (waits)
+        (agent-workflow-back run "build" :step 0)
+        (should (+test-awr--wait (lambda () (equal (starts) '(0 1 0)))))
+        (waits)
+        (should-not (plist-get (plist-get (agent-workflow--job run "check") :back) :step))))))
+
 (ert-deftest agent-workflow-steps/environment-shell-and-your-copy ()
   "A script's environment; shell: its interpreter; a script of
 .agent-workflow/ run from your checkout, not the branch."
