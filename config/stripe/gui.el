@@ -197,6 +197,32 @@ closed windows."
 
 (add-hook 'window-state-change-functions #'+my/stripe--window-change-h)
 
+;; REDRAWN
+;; A strip's frame drawn anew with its new image, once redisplay is over, not
+;; in it: its image is made in `pre-redisplay-functions', and `redraw-frame'
+;; clears and paints the frame at once (on macOS straight into its window). In
+;; redisplay, on macOS 15, Emacs aborted (SIGABRT, no message) in the end-to-end
+;; tests, seconds after a strip's frame went from 3 rows to 10 times that (CI
+;; only, never on macOS 27 nor Linux). Several new images before then: one
+;; redraw.
+(defvar +my/stripe--to-redraw nil
+  "The strips' frames to draw anew once this redisplay is over.")
+
+(defun +my/stripe--redraw-soon (frame)
+  "FRAME, a strip's, drawn anew right after this redisplay (see REDRAWN)."
+  (unless (memq frame +my/stripe--to-redraw)
+    (unless +my/stripe--to-redraw
+      (run-at-time 0 nil #'+my/stripe--redraw-pending))
+    (push frame +my/stripe--to-redraw)))
+
+(defun +my/stripe--redraw-pending ()
+  "The strips' frames waiting to be drawn anew, drawn (those still there)."
+  (let ((frames (nreverse +my/stripe--to-redraw)))
+    (setq +my/stripe--to-redraw nil)
+    (dolist (frame frames)
+      (when (frame-live-p frame)
+        (redraw-frame frame)))))
+
 ;; TOO TALL
 ;; Emacs refuses an image bigger than `max-image-size' allows: by default 10
 ;; times the size of the frame it's shown in, the strip's own here, sized to
@@ -248,8 +274,8 @@ made first, after this redisplay, if it has none)."
             ;; showing its old image on screen though Emacs had drawn the new
             ;; one (its glyphs had it), so the band stopped moving (seen after
             ;; Doom reloaded its config, SPC h r r). A frame 8 pixels wide,
-            ;; one image: cheap.
-            (redraw-frame frame)))
+            ;; one image: cheap. Once this redisplay is over (see REDRAWN).
+            (+my/stripe--redraw-soon frame)))
         ;; Moved or resized (a notice above, a split): placed anew.
         (unless (equal (+my/stripe--geometry window) (frame-parameter frame '+my/stripe-geometry))
           (+my/stripe--sync-soon))))))

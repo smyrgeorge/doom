@@ -224,17 +224,21 @@ the text, and back up when it goes."
 (ert-deftest e2e-stripe/images-made-only-when-the-strip-changes ()
   "300 scrolls of one line in a 3000-line file: the band moves by under a pixel
 most times, so few new images, each old one flushed from Emacs's cache, and
-the strip's frame drawn anew with each (on macOS a reload left it showing the
-old one), only the strip's."
+the strip's frame drawn anew with each, after redisplay (on macOS a reload
+left it showing the old one), only the strip's."
   (+test-stripe
     (+test-stripe--file "e.el" 3000)
     (let ((made 0) (flushed 0) (redrawn nil)
           (strip (+test-stripe--frame (selected-window))))
+      ;; Its first image's redraw (after redisplay) done before counting.
+      (+test-sleep 0.05)
       (advice-add '+my/stripe--image :after (lambda (&rest _) (cl-incf made)) '((name . count)))
       (advice-add 'image-flush :after (lambda (&rest _) (cl-incf flushed)) '((name . count)))
       (advice-add 'redraw-frame :after (lambda (&optional frame) (push frame redrawn)) '((name . count)))
       (unwind-protect
-          (dotimes (_ 300) (scroll-up 1) (redisplay t))
+          ;; Timers run between scrolls: a strip's frame is drawn anew
+          ;; after redisplay, not in it (config/stripe/gui.el's REDRAWN).
+          (dotimes (_ 300) (scroll-up 1) (redisplay t) (+test-sleep 0.001))
         (advice-remove '+my/stripe--image 'count)
         (advice-remove 'image-flush 'count)
         (advice-remove 'redraw-frame 'count))

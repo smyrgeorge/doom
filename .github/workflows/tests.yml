@@ -223,6 +223,18 @@ jobs:
         env:
           TEST_LOGS: ${{ runner.temp }}/test-logs
 
+      # An Emacs that crashed (an end-to-end test file's exit 134: SIGABRT,
+      # nothing in its log): macOS's crash report, its backtrace, kept with
+      # the logs.
+      - name: Emacs's crash reports
+        if: failure()
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-logs"
+          find ~/Library/Logs/DiagnosticReports /Library/Logs/DiagnosticReports -maxdepth 1 \
+               -iname 'emacs*' -newer "$GITHUB_WORKSPACE/init.el" \
+               -exec cp {} "$RUNNER_TEMP/test-logs/" \; 2>/dev/null || true
+          ls "$RUNNER_TEMP/test-logs"
+
       - name: The failed tests' logs
         if: failure()
         uses: actions/upload-artifact@v4

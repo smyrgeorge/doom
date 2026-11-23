@@ -2212,3 +2212,23 @@ strip (cells in the margin), a click on the error's cell goes there."
       (should (<= (abs (- (line-number-at-pos) 30)) 2)))))
 
 ;;; test-stripe.el ends here
+
+(ert-deftest stripe/redrawn-after-redisplay ()
+  "A strip's frame is drawn anew after redisplay, not in it (gui.el's
+REDRAWN): asked for during it, nothing drawn yet; several asks, one redraw
+each frame, in order; one gone meanwhile, left alone."
+  (let ((+my/stripe--to-redraw nil)
+        (redrawn nil)
+        (timers nil))
+    (cl-letf (((symbol-function 'run-at-time) (lambda (_time _repeat fn &rest _) (push fn timers)))
+              ((symbol-function 'redraw-frame) (lambda (&optional frame) (push frame redrawn)))
+              ((symbol-function 'frame-live-p) (lambda (frame) (not (eq frame 'gone)))))
+      (+my/stripe--redraw-soon 'a)
+      (+my/stripe--redraw-soon 'b)
+      (+my/stripe--redraw-soon 'a)
+      (+my/stripe--redraw-soon 'gone)
+      (should-not redrawn)
+      (should (= (length timers) 1))
+      (funcall (car timers))
+      (should (equal (nreverse redrawn) '(a b)))
+      (should-not +my/stripe--to-redraw))))
