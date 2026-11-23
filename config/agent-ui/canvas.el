@@ -1136,8 +1136,9 @@ sections): plists (:id ID :type TYPE); none if it isn't there."
 FOLDED, where its divider is drawn (START and END markers, as an entry's: a
 blank line after it), the OVERLAY hiding it folded, the canvas it HOSTS (a
 name, or nil), what RET on its divider does (OPEN: a function, or nil:
-folds it)."
-  name title state note folded start end overlay hosts open)
+folds it), what it says while it holds nothing (EMPTY: a line under its
+divider, or nil)."
+  name title state note folded start end overlay hosts open empty)
 
 (defface agent-ui-section-title '((t :inherit agent-ui-title))
   "A section's title, on its divider."
@@ -1243,7 +1244,14 @@ width."
     (concat (propertize head 'mouse-face 'highlight)
             " "
             (propertize (make-string (max 1 (- width (string-width head) 1)) ?─)
-                        'face 'agent-ui-section-rule 'help-echo help))))
+                        'face 'agent-ui-section-rule 'help-echo help)
+            ;; Holding nothing, unfolded: what it says then, under it.
+            (when-let* ((empty (agent-ui--section-empty section))
+                        ((not (string-empty-p empty)))
+                        ((not folded))
+                        ((null (agent-ui--section-keys (agent-ui--section-name section)))))
+              (concat "\n\n" (propertize (agent-ui-truncate (funcall one-line empty) width)
+                                          'face 'agent-ui-muted 'help-echo help))))))
 
 (defun agent-ui--draw-section (section ctx)
   "Draw SECTION's divider again, in its place (as `agent-ui--draw' an
@@ -1269,10 +1277,10 @@ element)."
 
 (defun agent-ui--section-counted (name)
   "An element came into section NAME (a name; nil: none) or left it: its
-divider redrawn if it says how many it holds (folded), its fold kept on
-what it holds."
+divider redrawn if it says how many it holds (folded) or what it says
+holding nothing (empty), its fold kept on what it holds."
   (when-let* ((section (agent-ui--find-section name)))
-    (when (agent-ui--section-folded section)
+    (when (or (agent-ui--section-folded section) (agent-ui--section-empty section))
       (agent-ui--dirty-section section)))
   (agent-ui--fold-refresh))
 
@@ -1365,18 +1373,20 @@ starts out of its view."
 ;; ------ Making, changing, removing ------
 
 (cl-defun agent-ui-section (canvas name &key (title nil title-p) (state nil state-p) (note nil note-p)
-                                   (folded nil folded-p) (open nil open-p) after)
+                                   (folded nil folded-p) (open nil open-p) (empty nil empty-p) after)
   "Make section NAME of CANVAS (a buffer, or a canvas's name: made if it
 isn't there), or change it. TITLE: what its divider says (default: NAME);
 STATE: its mark, one of `agent-ui-section-states' (`running', `needs-you',
 `waiting', `paused', `done', `failed'; nil: none); NOTE: a few words after
 it (3m); FOLDED: folded to its divider; OPEN: a function RET on its
-divider calls (else RET folds it, as TAB). A new one goes AFTER section AFTER
+divider calls (else RET folds it, as TAB); EMPTY: a line it shows under
+its divider while it holds nothing (an agent's that has shown nothing
+yet). A new one goes AFTER section AFTER
 \(its elements), else at the end; the canvas shown if it's in no window.
 Given again, only what's given changes. Returns NAME. Signals
 `agent-ui-error' if something's wrong."
   (agent-ui--check-section-name name)
-  (dolist (text (list (and title-p title) (and note-p note)))
+  (dolist (text (list (and title-p title) (and note-p note) (and empty-p empty)))
     (when (and text (not (stringp text)))
       (agent-ui--fail "section %s: a title or a note is text, not %s" name (agent-ui--show-value text))))
   (let ((state (and state-p (agent-ui--check-state state))))
@@ -1391,6 +1401,7 @@ Given again, only what's given changes. Returns NAME. Signals
             (when note-p (setf (agent-ui--section-note section) note))
             (when folded-p (agent-ui--fold section folded))
             (when open-p (setf (agent-ui--section-open section) open))
+            (when empty-p (setf (agent-ui--section-empty section) empty))
             (agent-ui--dirty-section section)
             (agent-ui--animate))
         (when (and after (not (agent-ui--find-section after)))
@@ -1398,7 +1409,7 @@ Given again, only what's given changes. Returns NAME. Signals
                           (agent-ui--show-value after) name))
         (let* ((room (agent-ui--make-room (if after (agent-ui--section-tail after) (point-max))))
                (section (agent-ui--make-section :name name :title title :state state :note note :open open
-                                                :folded (and folded t) :start (car room) :end (cdr room)))
+                                                :empty empty :folded (and folded t) :start (car room) :end (cdr room)))
                (at (and after (1+ (cl-position after agent-ui--sections
                                                :key #'agent-ui--section-name :test #'equal)))))
           (setq agent-ui--sections (if at
@@ -1415,7 +1426,7 @@ Given again, only what's given changes. Returns NAME. Signals
 
 (defun agent-ui-sections (&optional canvas)
   "CANVAS's sections, in order: plists (:name :title :state :note :folded
-:hosts :elements), :elements how many it holds; none if it isn't there."
+:hosts :empty :elements), :elements how many it holds; none if it isn't there."
   (when-let* ((buffer (ignore-errors (agent-ui--canvas-buffer canvas nil))))
     (with-current-buffer buffer
       (mapcar (lambda (section)
@@ -1425,6 +1436,7 @@ Given again, only what's given changes. Returns NAME. Signals
                       :note (agent-ui--section-note section)
                       :folded (agent-ui--section-folded section)
                       :hosts (agent-ui--section-hosts section)
+                      :empty (agent-ui--section-empty section)
                       :elements (length (agent-ui--section-keys (agent-ui--section-name section)))))
               agent-ui--sections))))
 

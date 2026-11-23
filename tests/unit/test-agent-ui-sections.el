@@ -89,7 +89,7 @@ canvas."
         (should (equal agent-ui--order '("plan" "review/plan" "review/notes" "build/plan"))))
       (should (equal (mapcar (lambda (s) (plist-get s :name)) (agent-ui-sections canvas)) '("review" "build")))
       (should (equal (car (agent-ui-sections canvas))
-                     '(:name "review" :title "Review" :state running :note "3m" :folded nil :hosts nil :elements 2))))))
+                     '(:name "review" :title "Review" :state running :note "3m" :folded nil :hosts nil :empty nil :elements 2))))))
 
 (ert-deftest agent-ui-sections/one-after-another ()
   "A section after another (its elements), else at the end; the canvas's
@@ -186,6 +186,30 @@ mark glows (the canvas's animation runs), until it's done."
     (let ((line (car (+test-aus-lines canvas))))
       (should (= (string-width line) 40))
       (should (string-suffix-p "… ─" line)))))
+
+(ert-deftest agent-ui-sections/what-it-says-holding-nothing ()
+  "EMPTY: a line under its divider while it holds nothing, unfolded; gone
+once an element comes in, back once it's gone; folded, not shown."
+  (+test-aus
+    (agent-ui-section canvas "s" :title "Build" :empty "Nothing yet.")
+    (should (equal (cdr (+test-aus-lines canvas)) '("Nothing yet.")))
+    (should (equal (plist-get (car (agent-ui-sections canvas)) :empty) "Nothing yet."))
+    (agent-ui-show '(:id "a" :type "text" :text "hello") :canvas canvas :section "s")
+    (should (equal (cdr (+test-aus-lines canvas)) '("hello")))
+    (agent-ui-remove "a" :canvas canvas :section "s")
+    (should (equal (cdr (+test-aus-lines canvas)) '("Nothing yet.")))
+    (agent-ui-section canvas "s" :folded t)
+    (should (equal (length (+test-aus-lines canvas)) 1))
+    (agent-ui-section canvas "s" :folded nil :empty nil)
+    (should (equal (length (+test-aus-lines canvas)) 1))
+    ;; Something after it: in its place, under the line.
+    (agent-ui-section canvas "s" :empty "Nothing yet.")
+    (agent-ui-section canvas "t" :title "Next")
+    (agent-ui-show '(:id "b" :type "text" :text "in t") :canvas canvas :section "t")
+    (let ((lines (+test-aus-lines canvas)))
+      (should (equal (nth 1 lines) "Nothing yet."))
+      (should (string-prefix-p "▾ Next" (nth 2 lines)))
+      (should (equal (nth 3 lines) "in t")))))
 
 (ert-deftest agent-ui-sections/folded-and-unfolded ()
   "TAB on its divider folds a section to it (saying how many it hides), the

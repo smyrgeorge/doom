@@ -1121,7 +1121,8 @@ rejection without a note)."
 
 (defun agent-workflow--pane-agents (run pane)
   "RUN's jobs' agents in PANE: a section each, its session's canvas shown
-there; a job over, its section folded once, its mark done."
+there (while it shows nothing, said); a job over, its section folded
+once, its mark done."
   (with-current-buffer pane
     (dolist (job (agent-workflow-run-jobs run))
       (let* ((name (car job))
@@ -1146,7 +1147,11 @@ there; a job over, its section folded once, its mark done."
                                        "run")
                             :open (lambda () (agent-workflow--pane-open-session run name))))
         (when (agent-ui--find-section section)
-          (agent-ui-section pane section :state mark :note note)
+          ;; Its agent's shown nothing on its canvas: said, not a blank section.
+          (agent-ui-section pane section :state mark :note note
+                            :empty (if (memq status '(done skipped cancelled))
+                                       "Its agent showed nothing here."
+                                     "Its agent has shown nothing here yet: RET on its divider opens its session."))
           ;; Its session's canvas, shown here.
           (when-let* ((buffer (and agent (agent-workflow-agent-buffer agent)))
                       ((buffer-live-p buffer))
