@@ -527,7 +527,14 @@ tokens, each against its budget if it has one."
                    ('failed (concat "✗ failed" (if (agent-workflow-run-why run)
                                                    (concat ": " (agent-workflow-run-why run))
                                                  "")))
-                   (_ "● running"))
+                   (_ (concat "● running"
+                              ;; A job's next agent step waiting for one: said.
+                              (if-let* ((job (seq-find (lambda (job) (and (eq (plist-get (cdr job) :status) 'running)
+                                                                          (plist-get (cdr job) :pool)))
+                                                       (agent-workflow-run-jobs run)))
+                                        (why (plist-get (cdr job) :why)))
+                                  (concat ": " why)
+                                ""))))
                  (concat (agent-workflow--duration-words (plist-get spent :time))
                          (if (plist-get budget :time)
                              (concat " of " (agent-workflow--duration-words (plist-get budget :time)))
@@ -602,6 +609,9 @@ over), as skipped (–, grey: no spinner), its detail saying it."
          (agent (seq-find (lambda (step) (eq (plist-get step :kind) 'agent)) steps))
          (tries (alist-get index (plist-get state :tries)))
          (outcome (plist-get state :outcome))
+         ;; Its next agent step waiting for a free one: not running (no
+         ;; spinner, not timed), saying why.
+         (pooled (and (eq status 'running) (plist-get state :pool)))
          ;; A step that failed, its agent fixing it: who, and its try.
          (fixing (and (memq status '(running waiting)) (plist-get state :retry)
                       (agent-workflow--pane-fixing run job state)))
@@ -628,10 +638,10 @@ over), as skipped (–, grey: no spinner), its detail saying it."
                                               "no commit")))
                                   (and (eq status 'waiting) "needs you")
                                   (and (eq status 'cancelled) "cancelled")
-                                  (and (eq status 'pending) (plist-get state :why)
+                                  (and (or (eq status 'pending) pooled) (plist-get state :why)
                                        (format "waits: %s" (plist-get state :why)))))
                   " · "))
-         (mapped (agent-workflow--pane-status status))
+         (mapped (if pooled "pending" (agent-workflow--pane-status status)))
          (item (list :name job :status mapped)))
     (unless (string-empty-p detail)
       (setq item (append item (list :detail detail))))
@@ -647,6 +657,7 @@ over), as skipped (–, grey: no spinner), its detail saying it."
                                                        (fixed "failed")
                                                        ((memq status '(running waiting failed))
                                                         (cond ((< i index) "done")
+                                                              ((and (= i index) pooled) "pending")
                                                               ((= i index) (symbol-name status))
                                                               (t "pending")))
                                                        ;; Its run cancelled: those it didn't end, grey.

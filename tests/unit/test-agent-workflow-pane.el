@@ -716,6 +716,28 @@ times not counting on."
     (should-not (gethash "docs" agent-workflow--pane-times))
     (should (gethash "build" agent-workflow--pane-times))))
 
+(ert-deftest agent-workflow-pane/waiting-for-an-agent ()
+  "A running job whose next agent step waits for a free agent (the pool
+full): not drawn running (no spinner, no time), saying why; its run's state
+line too."
+  (let* ((workflow '(:name "w" :jobs (("a" :name "a" :steps ((:kind agent :agent "build")
+                                                             (:kind run :run "make")
+                                                             (:kind agent :agent "review"))))))
+         (run (agent-workflow-run--make :project "/p/" :issue "demo-1" :state 'running :workflow workflow
+                                        :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "a" (list :status 'running :step 2 :pool 2
+                                                                    :why "a: waiting for an agent: 3 of 3 work"))))))
+    (let ((item (with-temp-buffer
+                  (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+                  (puthash "a" (list :started 100.0 :steps '((2 :started 150.0))) agent-workflow--pane-times)
+                  (agent-workflow--pane-job run "a" (cdr (assoc "a" (agent-workflow-run-jobs run)))))))
+      (should (equal (plist-get item :status) "pending"))
+      (should-not (plist-get item :started))
+      (should (string-match-p "waits: a: waiting for an agent: 3 of 3 work" (plist-get item :detail)))
+      (should (equal (mapcar (lambda (step) (plist-get step :status)) (plist-get item :steps)) '("done" "done" "pending")))
+      (should-not (plist-get (nth 2 (plist-get item :steps)) :started)))
+    (should (string-prefix-p "● running: a: waiting for an agent: 3 of 3 work · " (agent-workflow--pane-state-line run)))))
+
 (ert-deftest agent-workflow-pane/a-step-s-try ()
   "A running job's line: its step's first try says no try; its second, try
 2 (its tries count the one running)."
