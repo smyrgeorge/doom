@@ -1092,6 +1092,8 @@ end."
        ;; that edits, its checks and its review run again on it.
        ((and (plist-get state :resolving) (agent-workflow--first-editing run job))
         (agent-workflow--job-set run job :resolving nil :retry nil)
+        ;; Its agent's rebase: the jobs' commits there anew (watch.el).
+        (agent-workflow--rebased run)
         (agent-workflow-back run (agent-workflow--first-editing run job)
                              :note (format "The branch was rebased onto the main branch, its conflicts resolved by %s's agent: see that your work still holds." job)
                              :by job))

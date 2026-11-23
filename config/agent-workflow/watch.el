@@ -16,7 +16,8 @@
 ;;   read them anew.
 ;; - Its branch: your commits on it are work like any. A job's commits no
 ;;   longer on it (a reset, a force-push) stop the run, asking: go on as it
-;;   is now, or stop.
+;;   is now, or stop. A rebase the run did, or its agent does (a merge's
+;;   conflicts), isn't that: its commits are there anew.
 
 (require 'cl-lib)
 (require 'seq)
@@ -39,9 +40,14 @@
         (agent-workflow--wait run next (format "%s: %s" next why))))))
 
 (defun agent-workflow--commits-gone (run)
-  "RUN's jobs whose commits aren't on its branch any more: their names."
+  "RUN's jobs whose commits aren't on its branch any more: their names.
+None while its branch is being rebased by the run (a job :resolving its
+merge's conflicts, a rebase under way): its commits move then, not lost
+\(`agent-workflow--rebased' moves the jobs' :end-commit after)."
   (let ((dir (agent-workflow--work-directory run)))
-    (when (file-directory-p dir)
+    (when (and (file-directory-p dir)
+               (not (seq-some (lambda (job) (plist-get (cdr job) :resolving)) (agent-workflow-run-jobs run)))
+               (not (agent-workflow--rebasing-p dir)))
       (let ((default-directory dir))
         (mapcar #'car
                 (seq-filter (lambda (job)

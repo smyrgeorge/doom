@@ -609,10 +609,27 @@ edits."
       (should (+test-awr--wait
                (lambda () (seq-some (lambda (prompt) (string-match-p "Rebase it onto" prompt))
                                     (+test-awr--prompts "conflict")))))
-      (let ((fixer (plist-get (agent-workflow--job run "merge") :agent)))
+      (let ((fixer (plist-get (agent-workflow--job run "merge") :agent))
+            (worktree (agent-workflow-worktree-directory project issue)))
         (should fixer)
         (should (+test-awr--wait (lambda () (eq (+test-awr--job run "merge") 'waiting))))
-        (agent-workflow-done fixer nil "rebased"))
+        ;; Its agent rebases, mid-way, then resolved: the watch takes it for
+        ;; no commits gone (build's end commit not an ancestor any more).
+        (let ((default-directory worktree))
+          (should-not (eql 0 (call-process "git" nil nil nil "-c" "user.name=A" "-c" "user.email=a@a"
+                                           "rebase" (agent-workflow-main-branch project))))
+          (agent-workflow-watch-run run)
+          (write-region "both\n" nil "lexer.el")
+          (call-process "git" nil nil nil "add" "lexer.el")
+          (should (eql 0 (call-process "git" nil nil nil "-c" "user.name=A" "-c" "user.email=a@a" "-c" "core.editor=true"
+                                       "rebase" "--continue")))
+          (agent-workflow-watch-run run))
+        (should-not (member "branch-moved" (+test-awr--journal run)))
+        (agent-workflow-done fixer nil "rebased")
+        ;; Its end commits moved with the rebase: still none gone.
+        (should-not (agent-workflow--commits-gone run))
+        (agent-workflow-watch-run run)
+        (should-not (member "branch-moved" (+test-awr--journal run))))
       ;; Back to build, round 2, told why.
       (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) 2))))
       (should (+test-awr--wait

@@ -421,17 +421,40 @@ commit or stash them, then go" job (string-join both ", "))))
               (agent-workflow--merged run job index branch main nil))))))
     (error (agent-workflow--broke run job index (format "its merge: %s" (error-message-string err))))))
 
+(defun agent-workflow--rebasing-p (dir)
+  "Non-nil if a rebase is under way in DIR (a worktree): its conflicts
+being resolved."
+  (let ((default-directory dir))
+    (seq-some (lambda (name)
+                (file-exists-p (expand-file-name (agent-workflow--git "rev-parse" "--git-path" name) dir)))
+              '("rebase-merge" "rebase-apply"))))
+
+(defun agent-workflow--rebased (run)
+  "RUN's branch rebased by the run (onto the main branch, its conflicts
+resolved): its jobs' commits are there anew, under other names; their
+:end-commit moved to the branch as it is now, for the watch (watch.el)."
+  (let ((head (let ((default-directory (agent-workflow--work-directory run)))
+                (agent-workflow--git "rev-parse" "HEAD"))))
+    (dolist (job (agent-workflow-run-jobs run))
+      (when (plist-get (cdr job) :end-commit)
+        (agent-workflow--job-set run (car job) :end-commit head)))))
+
 (defun agent-workflow--merge-conflict (run job index branch main)
   "BRANCH conflicts with MAIN: rebased onto it if that goes cleanly (and
-the merge tried again), else the on-fail agent rebases it, resolving."
-  (let ((default-directory (agent-workflow--work-directory run)))
-    (if (and (null (agent-workflow--git-lines "status" "--porcelain"))
+the merge tried again), else the on-fail agent rebases it, resolving. Its
+own rebase that failed aborted; never one under way (its agent's)."
+  (let* ((default-directory (agent-workflow--work-directory run))
+         (clean (and (not (agent-workflow--rebasing-p default-directory))
+                     (null (agent-workflow--git-lines "status" "--porcelain")))))
+    (if (and clean
              (eql 0 (process-file "git" nil nil nil "-c" "user.name=agent workflow"
                                   "-c" "user.email=agent-workflow@localhost" "rebase" main)))
         (progn
           (agent-workflow--journal run "rebased" :job job :step index :onto main)
+          (agent-workflow--rebased run)
           (agent-workflow--merge-step run job (nth index (plist-get (agent-workflow--job-spec run job) :steps)) index))
-      (process-file "git" nil nil nil "rebase" "--abort")
+      (when clean
+        (process-file "git" nil nil nil "rebase" "--abort"))
       (agent-workflow--job-set run job :resolving t)
       (agent-workflow--fix
        run job index
