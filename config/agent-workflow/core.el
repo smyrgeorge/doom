@@ -1,12 +1,12 @@
 ;;; $DOOMDIR/config/agent-workflow/core.el -*- lexical-binding: t; -*-
 ;; What the rest of agent-workflow uses: a project (its main checkout), the
-;; places its workflows and profiles come from, their problems, the
+;; places its workflows and agents come from, their problems, the
 ;; variables a prompt may name. Loaded from config/agent-workflow.el. No Doom
 ;; here.
 ;;
-;; A project's workflows and profiles come from three places, in order, a
+;; A project's workflows and agents come from three places, in order, a
 ;; later one's replacing an earlier one's of the same name: the starters
-;; (shipped here, config/agent-workflow/workflows/ and profiles/), the
+;; (shipped here, config/agent-workflow/workflows/ and agents/), the
 ;; project's (.agent-workflow/, committed: read from your checkout, the
 ;; project's main one, never an agent's worktree) and yours
 ;; (.agent-shell/agent-workflow/, out of git).
@@ -46,14 +46,14 @@ fails."
 
 (defvar agent-workflow-starters-directory
   (file-name-directory (or load-file-name buffer-file-name))
-  "Where the starters are: its workflows/ and profiles/, shipped with
+  "Where the starters are: its workflows/ and agents/, shipped with
 this config.")
 
 (defvar agent-workflow-directory)
 (defvar agent-workflow-local-directory)
 
 (defun agent-workflow--places (project kind)
-  "Where PROJECT's KIND (\"workflows\" or \"profiles\") come from, in
+  "Where PROJECT's KIND (\"workflows\" or \"agents\") come from, in
 order (a later one's replace an earlier one's of the same name): ((ORIGIN .
 FOLDER)...), ORIGIN starter, project or local."
   (cons (cons 'starter (expand-file-name kind agent-workflow-starters-directory))
@@ -98,7 +98,7 @@ command couldn't reach it). One of `+my/agent-shell-claude-context-functions'."
 %s), read %s first." (abbreviate-file-name agent-workflow-command) (abbreviate-file-name agent-workflow-skill))))
 
 (defconst agent-workflow--name-regexp "\\`[a-z][a-z0-9-]*\\'"
-  "A workflow's, a profile's, a job's name: a lowercase letter, then
+  "A workflow's, an agent's, a job's name: a lowercase letter, then
 lowercase letters, digits or -.")
 
 ;; ====== PROBLEMS ======
@@ -148,7 +148,7 @@ or nil if it isn't one."
   '("issue" "issue.title" "issue.description" "issue.acceptance" "issue.notes"
     "branch" "main" "main-branch" "worktree" "project" "diff.stat"
     "output" "note" "round" "try")
-  "The variables a step's prompt and a profile may name, as {NAME}; and
+  "The variables a step's prompt and an agent may name, as {NAME}; and
 {jobs.JOB.outcome}, {jobs.JOB.notes}, JOB one of the workflow's jobs.")
 
 (defconst agent-workflow--variable-regexp "{\\([a-z][a-z0-9-]*\\(?:\\.[a-z0-9-]+\\)*\\)}"

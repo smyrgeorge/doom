@@ -212,13 +212,13 @@ agent freed: the waiting run gets it, nothing else happening."
 
 (ert-deftest agent-workflow-runs/parallel-jobs ()
   "Jobs whose needs are done start at once: those that only read (their
-profile denies Edit and Write) each on a snapshot of the branch, detached at
+agent denies Edit and Write) each on a snapshot of the branch, detached at
 the commit it's at, removed after; one that edits in the issue's worktree,
 the next that edits waiting for it, saying why. Each says the commit it
 saw."
   (+test-awr "parallel"
     (write-region "---\ndescription: reads\ndeny: Edit, Write\n---\nRead it.\n" nil
-                  (expand-file-name ".agent-workflow/profiles/reader.md" project))
+                  (expand-file-name ".agent-workflow/agents/reader.md" project))
     (write-region "description: x
 for: [feature]
 jobs:
@@ -288,7 +288,7 @@ started, what's lost said. Refused: a job that hasn't run, a step it
 hasn't, from an agent's session."
   (+test-awr "back"
     (write-region "---\ndescription: reads\ndeny: Edit, Write\n---\nRead it.\n" nil
-                  (expand-file-name ".agent-workflow/profiles/reader.md" project))
+                  (expand-file-name ".agent-workflow/agents/reader.md" project))
     (write-region "description: x
 for: [feature]
 jobs:
@@ -360,7 +360,7 @@ the count starts again, each side told your note; a round that changed
 nothing asks at once; accept: the run goes on as if continue."
   (+test-awr "loops"
     (write-region "---\ndescription: reads\ndeny: Edit, Write\n---\nRead it.\n" nil
-                  (expand-file-name ".agent-workflow/profiles/reader.md" project))
+                  (expand-file-name ".agent-workflow/agents/reader.md" project))
     (write-region "description: x
 for: [feature]
 jobs:
@@ -870,8 +870,8 @@ its agent step, it does."
                              :steps ((:kind run :run "push.sh" :name "push")
                                      (:kind run :run "watch.sh" :name "watch" :retries 5 :on-fail "ci")))
                             ("docs" :name "docs" :steps ((:kind agent :agent "docs"))))))
-         (agent (agent-workflow-agent--make :issue "github" :job "green" :profile "ci"))
-         (docs (agent-workflow-agent--make :issue "github" :job "docs" :profile "docs"))
+         (agent (agent-workflow-agent--make :issue "github" :job "green" :definition "ci"))
+         (docs (agent-workflow-agent--make :issue "github" :job "docs" :definition "docs"))
          (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running :workflow workflow
                                         :spent '(:cost 0 :tokens 0)
                                         :jobs (list (cons "green" (list :status 'running :step 1 :agent agent))

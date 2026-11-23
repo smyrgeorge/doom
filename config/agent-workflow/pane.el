@@ -47,7 +47,7 @@
 (declare-function agent-workflow-agent-p "agent-workflow/pool")
 (declare-function agent-workflow-cancel-asked "agent-workflow/resume")
 (declare-function agent-workflow--where-stamp "agent-workflow/runs")
-(declare-function agent-workflow-agent-profile "agent-workflow/pool")
+(declare-function agent-workflow-agent-definition "agent-workflow/pool")
 (declare-function agent-shell-jump-to-latest-permission-button-row "agent-shell")
 (declare-function agent-shell-elicitation-jump-to-latest-form "agent-shell-elicitation")
 (declare-function agent-shell-elicitation--get "agent-shell-elicitation")
@@ -757,7 +757,7 @@ of 6: its try that failed, of all it may have)."
          (step (nth index (plist-get (agent-workflow--job-spec run job) :steps)))
          (agent (plist-get state :agent))
          (who (or (and (plist-get state :fix-script) "its on-fail script")
-                  (and agent (agent-workflow-agent-p agent) (agent-workflow-agent-profile agent))
+                  (and agent (agent-workflow-agent-p agent) (agent-workflow-agent-definition agent))
                   (plist-get step :on-fail)
                   "its agent"))
          (tries (or (alist-get index (plist-get state :tries)) 1)))
@@ -1269,7 +1269,7 @@ it was counted as a line of output: 1 line); its ACTIONS."
 
 (defun agent-workflow--pane-agent-box (job state)
   "JOB's live box while its agent works (STATE its job's; nil else): its
-job, agent and its profile (agent ci), what on, how long its turn's been (or that it
+job, its agent (agent ci), what on, how long its turn's been (or that it
 asks you) as its title; its last actions, the latest last, each marked by
 its kind; Show session (at its question, if it asks)."
   (when-let* (((not (plist-get state :fix-script)))
@@ -1283,9 +1283,9 @@ its kind; Show session (at its question, if it asks)."
            (asks (and (eq (plist-get state :status) 'waiting) (plist-get state :agent-asks))))
       (agent-workflow--pane-box-of
             (agent-workflow--pane-box-id job)
-            ;; An agent's, said (its profile alone read as part of its job's
+            ;; An agent's, said (its name alone read as part of its job's
             ;; name: a script's box, it looked).
-            (string-join (delq nil (list job (concat "agent " (agent-workflow-agent-profile agent)) doing
+            (string-join (delq nil (list job (concat "agent " (agent-workflow-agent-definition agent)) doing
                                                 (cond (asks "asks you")
                                                       (turn (format "its turn %s"
                                                                     (agent-workflow--duration-words

@@ -14,7 +14,7 @@
 ;;
 ;;   exit 0     the next step
 ;;   exit 1     the work is wrong: its output goes to the job's agent (or,
-;;              the job having none, one with the step's on-fail profile),
+;;              the job having none, one with the step's on-fail agent),
 ;;              which fixes it and says done; the step runs again (from
 ;;              its retry-from step: those between run again too), up to
 ;;              its retries (0 by default, its own tries counted); used
@@ -72,7 +72,7 @@
   "Step INDEX of JOB of RUN failed (WHAT, in words; OUTPUT its output): its
 on-fail script first, if it has one (not SCRIPTED yet:
 `agent-workflow--fix-script'); then the job's agent told, else one with
-the step's on-fail profile started, to fix it and say done (ALSO, what its
+the step's on-fail agent started, to fix it and say done (ALSO, what its
 script said, told too); the step then runs again. No agent to send: the
 run waits for you. Its pane redrawn either way (who fixes it, or the
 wait)."
@@ -139,15 +139,15 @@ the run asks you; other, it broke: the run asks you."
                               "the step runs again"
                             (format "its job runs again from its step %d%s, then this one"
                                     (1+ from) (agent-workflow--step-called run job from)))))
-         (profile (plist-get step :on-fail)))
+         (definition (plist-get step :on-fail)))
     (agent-workflow--job-set run job :retry index :finished nil)
     (cond
      ((and held (buffer-live-p (agent-workflow-agent-buffer held)))
       (agent-workflow-send held message)
       (agent-workflow--journal run "fixing" :job job :step index :agent (agent-workflow-agent-name held)))
-     ((not profile)
+     ((not definition)
       (agent-workflow--job-set run job :retry nil)
-      (agent-workflow--wait run job (format "%s: %s, and no agent fixes it (on-fail: a profile)" job what)))
+      (agent-workflow--wait run job (format "%s: %s, and no agent fixes it (on-fail: an agent)" job what)))
      ((agent-workflow--no-agent run job)
       ;; The pool full, its workflow at its limit: it waits for an agent,
       ;; looked at again as one stops (runs.el's --advance).
@@ -160,14 +160,14 @@ the run asks you; other, it broke: the run asks you."
                  (snapshot (plist-get state :snapshot))
                  (agent (agent-workflow-start-agent
                          :project (agent-workflow-run-project run) :issue (agent-workflow-run-issue run)
-                         :job job :profile profile :type (plist-get info :type) :title (plist-get info :title)
+                         :job job :definition definition :type (plist-get info :type) :title (plist-get info :title)
                          :branch (agent-workflow--run-branch run)
                          :place (and (agent-workflow-run-checkout-p run) (agent-workflow--run-worktree run))
                          :values (append (agent-workflow--job-values run job) (agent-workflow--run-values run))
                          :prompt message :snapshot snapshot)))
             (agent-workflow--job-set run job :agent agent)
             (agent-workflow--journal run "fixing" :job job :step index :agent (agent-workflow-agent-name agent)
-                                     :profile profile))
+                                     :definition definition))
         (error (agent-workflow--job-set run job :retry nil)
                (agent-workflow--wait run job (format "%s: %s, and its agent didn't start: %s" job what
                                                      (error-message-string err)))))))))

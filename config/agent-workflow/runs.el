@@ -572,12 +572,12 @@ skipped."
 
 (defun agent-workflow--job-edits-p (run job)
   "Non-nil if JOB of RUN may change the issue's branch: one of its agents'
-profiles (its agent steps', its steps' on-fail) lets it edit."
-  (let ((profiles (agent-workflow-profiles (agent-workflow-run-project run))))
+agents (its agent steps', its steps' on-fail) lets it edit."
+  (let ((definitions (agent-workflow-agent-definitions (agent-workflow-run-project run))))
     (seq-some (lambda (step)
                 (seq-some (lambda (name)
-                            (and name (agent-workflow-profile-edits-p
-                                       (alist-get name profiles nil nil #'equal))))
+                            (and name (agent-workflow-definition-edits-p
+                                       (alist-get name definitions nil nil #'equal))))
                           (list (plist-get step :agent) (plist-get step :on-fail))))
               (plist-get (agent-workflow--job-spec run job) :steps))))
 
@@ -977,7 +977,7 @@ one started for it. The pool full: the run waits, queued, for an agent."
             (let* ((info (agent-workflow-run-info run))
                    (agent (agent-workflow-start-agent
                            :project (agent-workflow-run-project run) :issue (agent-workflow-run-issue run)
-                           :job job :profile (plist-get step :agent)
+                           :job job :definition (plist-get step :agent)
                            :type (plist-get info :type) :title (plist-get info :title)
                            :branch (agent-workflow--run-branch run)
                            :place (and (agent-workflow-run-checkout-p run) (agent-workflow--run-worktree run))
@@ -989,7 +989,7 @@ one started for it. The pool full: the run waits, queued, for an agent."
               (agent-workflow--job-set run job :agent agent :back nil :user-note nil)
               (agent-workflow--journal run "step-started" :job job :step index
                                        :agent (agent-workflow-agent-name agent)
-                                       :profile (plist-get step :agent)
+                                       :definition (plist-get step :agent)
                                        :branch (agent-workflow-agent-branch agent)))
           (error (agent-workflow--wait run job (format "%s: its agent didn't start: %s" job
                                                        (error-message-string err)))))))))
@@ -1468,7 +1468,7 @@ SUBJECT)...), `agent-workflow--where-commits-shown' at most."
 
 ;; ====== ITS AGENT ASKS ======
 ;; An agent asking you in its session (agent-shell's permission-request: a
-;; tool its profile doesn't allow without asking; its elicitation-request: a
+;; tool its agent doesn't allow without asking; its elicitation-request: a
 ;; question, AskUserQuestion's form) holds its turn until you answer: its
 ;; job waits for you, saying what it asks, as any wait does (the run's
 ;; state, status, its pane's Needs you, a notification). Answered, wherever

@@ -2,7 +2,7 @@
 ;; config/agent-workflow/pool.el and worktree.el: the pool's agents, real
 ;; agent-shell sessions run by a stand-in agent
 ;; (examples/agent-workspace/stand-in.el, agent-shell's mock agent kind), each
-;; a job's, with no role or name, started with its step's profile in its
+;; a job's, with no role or name, started with its step's agent in its
 ;; issue's worktree; the pool's size; refused where an agent-workspace crew
 ;; runs; an agent's canvas opening no pane; stopped, leaving no process.
 ;; run.sh: slow (stand-in sessions)
@@ -41,7 +41,7 @@
 
 (defun +test-awp--project (name)
   "A git repository NAME in the temp folder, with a commit, a .beads/
-folder and a profile build of its own: its folder."
+folder and an agent build of its own: its folder."
   (let ((dir (file-name-as-directory (expand-file-name (concat "awp/" name) +test-tmp))))
     (when (file-exists-p dir) (delete-directory dir t))
     (make-directory dir t)
@@ -51,7 +51,7 @@ folder and a profile build of its own: its folder."
       (+test-awp--git "add" "README")
       (+test-awp--git "-c" "user.name=Test" "-c" "user.email=test@example.com" "commit" "-q" "-m" "first")
       (make-directory (expand-file-name ".beads" dir))
-      (make-directory (expand-file-name ".agent-workflow/profiles" dir) t)
+      (make-directory (expand-file-name ".agent-workflow/agents" dir) t)
       (write-region "---
 description: builds an issue with its tests
 tools: Read, Bash(git -C {worktree} commit:*)
@@ -60,7 +60,7 @@ model: sonnet
 mode: acceptEdits
 ---
 Build {issue} on {branch}, in {project}.
-" nil (expand-file-name ".agent-workflow/profiles/build.md" dir)))
+" nil (expand-file-name ".agent-workflow/agents/build.md" dir)))
     (file-name-as-directory (file-truename dir))))
 
 (defmacro +test-awp--with-project (name &rest body)
@@ -70,7 +70,7 @@ every agent stopped after, the stand-in's log fresh."
   `(let* ((project (+test-awp--project ,name))
           (default-directory project)
           (agent-workflow-starters-directory (+test-tmp-file "awp/no-starters/"))
-          (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+          (agent-workflow--definitions-cache (make-hash-table :test #'equal))
           (agent-workflow--workflows-cache (make-hash-table :test #'equal))
           (agent-workflow-kind 'mock)
           (+test-awp--log (expand-file-name (concat "awp/" ,name ".log") +test-tmp))
@@ -102,10 +102,10 @@ its value, or nil."
   (seq-filter predicate (+test-awp--log-entries)))
 
 (defun +test-awp--start (project issue job &rest args)
-  "An agent for JOB of ISSUE in PROJECT, with the profile build: ARGS more
+  "An agent for JOB of ISSUE in PROJECT, with the agent build: ARGS more
 of `agent-workflow-start-agent''s."
   (apply #'agent-workflow-start-agent
-         (append args (list :project project :issue issue :job job :profile "build"))))
+         (append args (list :project project :issue issue :job job :definition "build"))))
 
 ;; ====== THE WORKTREE ======
 
@@ -158,9 +158,9 @@ with its branch kept."
 
 (ert-deftest agent-workflow-pool/an-agent ()
   "A job's agent: its session named by its issue and job, in the issue's
-worktree, its bd as ISSUE/JOB, its profile's model, mode and tools (their
+worktree, its bd as ISSUE/JOB, its agent's model, mode and tools (their
 variables filled in, shell-quoted), told its job, how it ends it and its
-profile's instructions; its first message sent."
+agent's instructions; its first message sent."
   (+test-awp--with-project "agent"
     (let ((agent (+test-awp--start project "demo-1" "build" :type "feature" :title "A pool"
                                    :outcomes '("approved" "changes")
@@ -180,7 +180,7 @@ profile's instructions; its first message sent."
           (should (equal (plist-get start :cwd) worktree))
           (should (equal (plist-get (plist-get start :start) :BEADS_ACTOR) "demo-1/build"))
           (should (equal (plist-get (plist-get start :start) :BEADS_DIR) (expand-file-name ".beads" project))))
-        ;; Its session: its profile's tools, filled in.
+        ;; Its session: its agent's tools, filled in.
         (let* ((new (car (+test-awp--wait
                           (lambda () (+test-awp--logged (lambda (e) (equal (plist-get e :method) "session/new")))))))
                (options (plist-get (plist-get (plist-get (plist-get new :params) :_meta) :claudeCode) :options)))
@@ -196,7 +196,7 @@ profile's instructions; its first message sent."
             (should (equal (car denied) "Bash(git push:*)"))
             (dolist (tool '("Edit" "Write" "NotebookEdit"))
               (dolist (pattern '(".agent-workflow/**" ".agent-shell/agent-workflow/workflows/**"
-                                 ".agent-shell/agent-workflow/profiles/**"))
+                                 ".agent-shell/agent-workflow/agents/**"))
                 (should (member (format "%s(%s)" tool pattern) denied))
                 (should (member (format "%s(%s%s)" tool main pattern) denied))))
             (should (string-prefix-p "Edit(//" (seq-find (lambda (rule) (string-search main rule)) denied)))))
@@ -205,7 +205,7 @@ profile's instructions; its first message sent."
                  (lambda () (+test-awp--logged (lambda (e) (and (equal (plist-get e :method) "session/prompt")
                                                                 (string-match-p "Build demo-1: A pool"
                                                                                 (format "%S" (plist-get e :params))))))))))
-      ;; Its model and mode, the profile's.
+      ;; Its model and mode, the agent's.
       (let ((config (agent-workflow--config agent)))
         (should (equal (funcall (alist-get :default-model-id config)) "sonnet"))
         (should (equal (funcall (alist-get :default-session-mode-id config)) "acceptEdits"))
@@ -237,10 +237,10 @@ makes room."
 
 (ert-deftest agent-workflow-pool/refused ()
   "No agent where an agent-workspace crew runs (its lock held by an Emacs
-alive), nor with a profile that isn't one; nothing made."
+alive), nor with an agent that isn't one; nothing made."
   (+test-awp--with-project "refused"
-    (should (equal (cadr (should-error (+test-awp--start project "demo-1" "build" :profile "nobody") :type 'user-error))
-                   "No profile nobody: build"))
+    (should (equal (cadr (should-error (+test-awp--start project "demo-1" "build" :definition "nobody") :type 'user-error))
+                   "No agent nobody: build"))
     (let ((lock (expand-file-name ".agent-shell/agent-workspace/crew.lock" project)))
       (make-directory (file-name-directory lock) t)
       (write-region (format "%d here\n" (emacs-pid)) nil lock)

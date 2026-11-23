@@ -4,11 +4,11 @@
 ;;
 ;; An agent has no role and no name: it's a job's, known by its issue and
 ;; job ("doom-a1b · review"), started for an agent step with that step's
-;; profile, in the issue's worktree (worktree.el). Its session is
+;; agent, in the issue's worktree (worktree.el). Its session is
 ;; agent-shell's (its buffer named so): its permissions, questions, usage
 ;; and resuming (by its session's id) are agent-shell's. It's told, in its
 ;; system prompt, the job it does, where, what it never does and how it
-;; ends a step; then its profile's instructions, their variables filled in.
+;; ends a step; then its agent's instructions, their variables filled in.
 ;; Its bd commands run as ISSUE/JOB (BEADS_ACTOR): Beads' history says which
 ;; job did what.
 ;;
@@ -52,7 +52,7 @@
   project                ; its project's main checkout
   issue                  ; the issue whose run it works for: "doom-a1b"
   job                    ; its job: "review"
-  profile                ; its step's profile, a name
+  definition                ; its step's agent, a name
   worktree               ; the issue's worktree, where it works
   branch                 ; the issue's branch
   commit                 ; a reading job's: the commit its snapshot is at
@@ -116,7 +116,7 @@ or its lock held by an Emacs alive (this one or another)."
         (and (not (member (alist-get 'state attributes) '("Z" "X")))
              (string-match-p "emacs" (downcase (or (alist-get 'comm attributes) "")))))))
 
-;; ====== ITS PROFILE, FILLED IN ======
+;; ====== ITS DEFINITION, FILLED IN ======
 
 (defun agent-workflow--agent-values (agent)
   "AGENT's variables' values: those it was given, then where it works (a
@@ -130,34 +130,34 @@ run with no ticket gives its {issue}: its name)."
                   (cons "main-branch" (agent-workflow-main-branch (file-name-as-directory project)))
                   (cons "project" (file-name-nondirectory project))))))
 
-(defun agent-workflow-profile-filled (agent)
-  "AGENT's profile (a copy), its tools and deny with their variables
+(defun agent-workflow-definition-filled (agent)
+  "AGENT's definition (a copy), its tools and deny with their variables
 filled in shell-quoted (a rule names an exact command: Bash(git -C {main}
 commit:*)), its instructions with them as they are."
-  (let* ((profile (copy-sequence (alist-get (agent-workflow-agent-profile agent)
-                                            (agent-workflow-profiles (agent-workflow-agent-project agent))
+  (let* ((definition (copy-sequence (alist-get (agent-workflow-agent-definition agent)
+                                            (agent-workflow-agent-definitions (agent-workflow-agent-project agent))
                                             nil nil #'equal)))
          (values (agent-workflow--agent-values agent))
          (quoted (mapcar (lambda (value) (cons (car value) (and (cdr value) (shell-quote-argument (cdr value)))))
                          values)))
     (dolist (key '(:tools :deny))
-      (when (plist-get profile key)
-        (setq profile (plist-put profile key (mapcar (lambda (rule) (agent-workflow-fill rule quoted))
-                                                     (plist-get profile key))))))
-    (when (plist-get profile :instructions)
-      (setq profile (plist-put profile :instructions (agent-workflow-fill (plist-get profile :instructions) values))))
-    profile))
+      (when (plist-get definition key)
+        (setq definition (plist-put definition key (mapcar (lambda (rule) (agent-workflow-fill rule quoted))
+                                                     (plist-get definition key))))))
+    (when (plist-get definition :instructions)
+      (setq definition (plist-put definition :instructions (agent-workflow-fill (plist-get definition :instructions) values))))
+    definition))
 
 ;; ====== WHAT IT'S TOLD ======
 
 (defun agent-workflow-agent-context ()
   "What the agent whose session starts is told, after what every session
 is: the job it does and where, how it ends a step, what it never does;
-then its profile's instructions. nil for any other session. One of
+then its agent's instructions. nil for any other session. One of
 `+my/agent-shell-claude-context-functions'."
   (when-let* ((agent agent-workflow--starting))
-    (let* ((profile (agent-workflow-profile-filled agent))
-           (instructions (plist-get profile :instructions))
+    (let* ((definition (agent-workflow-definition-filled agent))
+           (instructions (plist-get definition :instructions))
            (outcomes (cons "done" (agent-workflow-agent-outcomes agent))))
       (concat
        (format "You are an agent of the user's agent workflow, in Emacs: you do the job %s of the \
@@ -208,9 +208,9 @@ project's issues (BEADS_DIR: it works in a worktree)."
               (list (concat "BEADS_DIR=" beads))))))
 
 (defconst agent-workflow--protected
-  '(".agent-workflow/**" ".agent-shell/agent-workflow/workflows/**" ".agent-shell/agent-workflow/profiles/**")
+  '(".agent-workflow/**" ".agent-shell/agent-workflow/workflows/**" ".agent-shell/agent-workflow/agents/**")
   "What runs an agent, which it never edits: the project's workflows,
-profiles and scripts, and yours (trusted without asking: trust.el).")
+agents and scripts, and yours (trusted without asking: trust.el).")
 
 (defun agent-workflow--protected-rules (project)
   "Claude Code's rules denying an agent edits of what runs it
@@ -224,19 +224,19 @@ main checkout (absolute, //...: a worktree's agent reaching it there)."
     (cl-loop for tool in '("Edit" "Write" "NotebookEdit")
              append (mapcar (lambda (pattern) (format "%s(%s)" tool pattern)) patterns))))
 
-(defun agent-workflow--claude-options (meta profile &optional project)
-  "META, Claude Code's session meta, with PROFILE's tools in Claude Code's
+(defun agent-workflow--claude-options (meta definition &optional project)
+  "META, Claude Code's session meta, with DEFINITION's tools in Claude Code's
 options (allowedTools, disallowedTools); ending its step
 \(`agent-workflow-command' done) always allowed, editing what runs it
 never (`agent-workflow--protected-rules', PROJECT's)."
   (let* ((claude (alist-get 'claudeCode meta))
          (options (alist-get 'options claude)))
     (setf (alist-get 'allowedTools options)
-          (vconcat (plist-get profile :tools)
+          (vconcat (plist-get definition :tools)
                    (list (format "Bash(%s done:*)" agent-workflow-command))))
     ;; What runs it (.agent-workflow/) never changed by it (trust.el).
     (setf (alist-get 'disallowedTools options)
-          (vconcat (plist-get profile :deny) (agent-workflow--protected-rules project)))
+          (vconcat (plist-get definition :deny) (agent-workflow--protected-rules project)))
     (when options
       (setf (alist-get 'options claude) options
             (alist-get 'claudeCode meta) claude))
@@ -246,9 +246,9 @@ never (`agent-workflow--protected-rules', PROJECT's)."
   "agent-shell's config for AGENT's session (see the top of this file)."
   (let* ((kind (or (alist-get agent-workflow-kind agent-workflow-kinds)
                    (error "No such kind of agent: %s" agent-workflow-kind)))
-         (profile (agent-workflow-profile-filled agent))
-         (model (plist-get profile :model))
-         (mode (or (plist-get profile :mode) agent-workflow-mode))
+         (definition (agent-workflow-definition-filled agent))
+         (model (plist-get definition :model))
+         (mode (or (plist-get definition :mode) agent-workflow-mode))
          (config (copy-tree (let ((agent-workflow--starting agent)) (funcall (plist-get kind :config)))))
          (maker (alist-get :client-maker config))
          (environment (agent-workflow--environment agent)))
@@ -259,7 +259,7 @@ never (`agent-workflow--protected-rules', PROJECT's)."
       (setf (alist-get :default-session-mode-id config) (lambda () mode)))
     (when (plist-get kind :claude-code)
       (setf (alist-get :session-meta config)
-            (agent-workflow--claude-options (alist-get :session-meta config) profile
+            (agent-workflow--claude-options (alist-get :session-meta config) definition
                                             (agent-workflow-agent-project agent))))
     (when maker
       (setf (alist-get :client-maker config)
@@ -271,10 +271,10 @@ never (`agent-workflow--protected-rules', PROJECT's)."
                 client))))
     config))
 
-(cl-defun agent-workflow-start-agent (&key project issue job profile type title branch values outcomes prompt
+(cl-defun agent-workflow-start-agent (&key project issue job definition type title branch values outcomes prompt
                                            snapshot resume place)
   "Start an agent of the pool for the JOB of ISSUE's run in PROJECT, with
-the PROFILE (a name): its session, fresh, in ISSUE's worktree (made on its
+the DEFINITION (a name): its session, fresh, in ISSUE's worktree (made on its
 branch from TYPE and TITLE, or BRANCH, if it isn't there); PLACE, (DIR .
 BRANCH): there instead (your checkout, for a run there). VALUES: its variables'
 values (an alist); OUTCOMES: those it may give besides done; PROMPT: its
@@ -283,7 +283,7 @@ first message, its variables filled in, sent once it's ready. SNAPSHOT:
 issue's worktree (`agent-workflow-snapshot'). RESUME: a session's id, its
 session resumed (agent-shell's; a fresh one if its agent can't). Return the
 agent. A user error, nothing started, if PROJECT's crew runs, the pool is
-full or PROFILE isn't one."
+full or DEFINITION isn't one."
   (require 'agent-shell)
   (let ((project (file-name-as-directory project)))
     (when (agent-workflow-crew-running-p project)
@@ -292,14 +292,14 @@ full or PROFILE isn't one."
     (when (>= (agent-workflow-pool-used) agent-workflow-pool)
       (user-error "The pool is full: %d of %d agents work (agent-workflow-pool)"
                   (agent-workflow-pool-used) agent-workflow-pool))
-    (unless (alist-get profile (agent-workflow-profiles project) nil nil #'equal)
-      (user-error "No profile %s: %s" profile
-                  (agent-workflow--listed (mapcar #'car (agent-workflow-profiles project)))))
+    (unless (alist-get definition (agent-workflow-agent-definitions project) nil nil #'equal)
+      (user-error "No agent %s: %s" definition
+                  (agent-workflow--listed (mapcar #'car (agent-workflow-agent-definitions project)))))
     (pcase-let* ((`(,dir . ,branch) (cond (snapshot (cons (nth 0 snapshot) (nth 1 snapshot)))
                                           (place place)
                                           (t (agent-workflow-worktree project issue :type type :title title
                                                                       :branch branch))))
-                 (agent (agent-workflow-agent--make :project project :issue issue :job job :profile profile
+                 (agent (agent-workflow-agent--make :project project :issue issue :job job :definition definition
                                                     :worktree dir :branch branch :commit (nth 2 snapshot)
                                                     :values values :outcomes outcomes :resumed resume
                                                     :pending prompt))

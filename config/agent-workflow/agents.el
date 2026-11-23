@@ -1,8 +1,8 @@
-;;; $DOOMDIR/config/agent-workflow/profiles.el -*- lexical-binding: t; -*-
-;; Profiles: what an agent step may do. Loaded from config/agent-workflow.el,
+;;; $DOOMDIR/config/agent-workflow/agents.el -*- lexical-binding: t; -*-
+;; Agents: what an agent step may do. Loaded from config/agent-workflow.el,
 ;; after core.el. No Doom here.
 ;;
-;; A profile is a Markdown file, NAME.md, as Claude Code's own agents are: a
+;; An agent is a Markdown file, NAME.md, as Claude Code's own agents are: a
 ;; front matter, then its instructions (added to the step's agent's system
 ;; prompt). A step names it (agent: build); the agent has no role of its own.
 ;;
@@ -24,7 +24,7 @@
 ;;
 ;; Its tools, deny and instructions may name variables, {main}, {branch}...
 ;; (`agent-workflow-variables'), filled in as its session starts. A problem
-;; names the file and line: an error leaves the profile out, a warning
+;; names the file and line: an error leaves the agent out, a warning
 ;; doesn't. Errors: no front matter or not closed, a line not a key, no
 ;; description, a name (its file's) not a lowercase letter then lowercase
 ;; letters, digits or -, a name: not its file's, a tools or deny entry not
@@ -46,24 +46,24 @@
   "Claude Code's permission modes (auto: Claude decides what needs your OK).")
 
 (defconst agent-workflow-colours '("blue" "magenta" "green" "yellow" "cyan" "red" "white" "black")
-  "The colours a profile may have: the theme's ANSI faces' (`ansi-color-blue'...).")
+  "The colours an agent may have: the theme's ANSI faces' (`ansi-color-blue'...).")
 
 (defvar agent-workflow-models '("opus" "sonnet" "haiku")
-  "The models a profile names by their short names; a model's id
+  "The models an agent names by their short names; a model's id
 \(claude-...) too.")
 
-(defconst agent-workflow--profile-keys
+(defconst agent-workflow--definition-keys
   '("name" "description" "tools" "deny" "model" "mode" "icon" "verb" "colour")
-  "A profile's keys (color too, as Claude Code's agents spell it).")
+  "An agent's keys (color too, as Claude Code's agents spell it).")
 
-(defconst agent-workflow--profile-list-keys '("tools" "deny")
-  "A profile's keys holding a list.")
+(defconst agent-workflow--definition-list-keys '("tools" "deny")
+  "An agent's keys holding a list.")
 
-(defvar agent-workflow--profiles-cache (make-hash-table :test #'equal)
-  "A project's profiles, as last read: project to (STAMP (PROFILES .
+(defvar agent-workflow--definitions-cache (make-hash-table :test #'equal)
+  "A project's agents, as last read: project to (STAMP (DEFINITIONS .
 PROBLEMS)), STAMP the files and their modification times.")
 
-;; ====== A PROFILE FILE ======
+;; ====== A DEFINITION FILE ======
 
 (defun agent-workflow--unquote (value)
   "VALUE without the quotes around it, if any."
@@ -182,15 +182,15 @@ the last first), what's after it, trimmed."
   (seq-remove (lambda (found) (agent-workflow-variable-p (car found)))
               (agent-workflow-variables-in text)))
 
-(defun agent-workflow-profile-read (file)
-  "Read the profile FILE: (PROFILE . PROBLEMS). PROFILE is a plist (see the
+(defun agent-workflow-definition-read (file)
+  "Read the agent FILE: (DEFINITION . PROBLEMS). DEFINITION is a plist (see the
 top of this file: :name :file :description :tools :deny :model :mode :icon
 :glyph :verb :colour :instructions), nil if FILE has errors; PROBLEMS, each
 \(error|warning \"FILE:LINE: what\" FILE LINE \"what\"), in the order
 of their lines."
   (let* ((name (file-name-sans-extension (file-name-nondirectory file)))
          (case-fold-search nil)
-         (profile (list :name name :file file))
+         (definition (list :name name :file file))
          (problems nil))
     (cl-flet ((problem (level n format &rest args)
                 (push (apply #'agent-workflow--problem level file n format args) problems)))
@@ -201,8 +201,8 @@ of their lines."
           ((`(,closed ,seen ,instructions)
             (agent-workflow--front-matter-read
              file
-             :keys agent-workflow--profile-keys
-             :list-keys agent-workflow--profile-list-keys
+             :keys agent-workflow--definition-keys
+             :list-keys agent-workflow--definition-list-keys
              :aliases '(("color" . "colour"))
              :problem #'problem
              :store
@@ -215,42 +215,42 @@ of their lines."
                       (dolist (unknown (agent-workflow--unknown-variables (car item)))
                         (problem 'error (cdr item) "%s %s: {%s} isn't a variable (%s)" key (car item)
                                  (car unknown) (agent-workflow--variables-said)))))
-                  (setq profile (plist-put profile (intern (concat ":" key)) (mapcar #'car value))))
+                  (setq definition (plist-put definition (intern (concat ":" key)) (mapcar #'car value))))
                  ("name"
                   (unless (equal value name)
                     (problem 'error n "its name is %s, its file's %s: they must agree" value name)))
                  ("description"
                   (if (string-empty-p value)
                       (problem 'error n "description: empty: say what it's for")
-                    (setq profile (plist-put profile :description value))))
-                 ("verb" (setq profile (plist-put profile :verb value)))
+                    (setq definition (plist-put definition :description value))))
+                 ("verb" (setq definition (plist-put definition :verb value)))
                  ("model"
                   (unless (member value '("" "inherit"))
                     (unless (agent-workflow--model-p value)
                       (problem 'warning n "model %s: not inherit, one of %s, nor a model's id (claude-...)"
                                value (string-join agent-workflow-models ", ")))
-                    (setq profile (plist-put profile :model value))))
+                    (setq definition (plist-put definition :model value))))
                  ("mode"
                   (if-let* ((id (agent-workflow--mode-id value)))
-                      (setq profile (plist-put profile :mode id))
+                      (setq definition (plist-put definition :mode id))
                     (problem 'error n "mode %s: not one of %s" value (string-join agent-workflow-modes ", "))))
                  ("colour"
                   (if (member value agent-workflow-colours)
-                      (setq profile (plist-put profile :colour value))
+                      (setq definition (plist-put definition :colour value))
                     (problem 'error n "colour %s: not one of %s" value (string-join agent-workflow-colours ", "))))
                  ("icon"
                   (let ((parts (split-string value)))
                     (when (and (car parts) (not (agent-workflow--nerd-name-p (car parts))))
                       (problem 'warning n "icon %s: not a nerd icon (md-NAME or cod-NAME): %s is shown"
                                (car parts) (or (cadr parts) "its glyph")))
-                    (setq profile (plist-put profile :icon (car parts)))
+                    (setq definition (plist-put definition :icon (car parts)))
                     (when (cadr parts)
-                      (setq profile (plist-put profile :glyph (cadr parts)))))))))))
+                      (setq definition (plist-put definition :glyph (cadr parts)))))))))))
         (when closed
           (unless (assoc "description" seen)
             (problem 'error 1 "no description: say what it's for (description: ...)"))
-          (dolist (tool (plist-get profile :tools))
-            (when (member tool (plist-get profile :deny))
+          (dolist (tool (plist-get definition :tools))
+            (when (member tool (plist-get definition :deny))
               (problem 'warning (or (cdr (assoc "deny" seen)) 1)
                        "%s both allowed (tools) and denied (deny): denied" tool)))
           (if (string-empty-p instructions)
@@ -258,55 +258,55 @@ of their lines."
             (dolist (unknown (agent-workflow--unknown-variables instructions))
               (problem 'error (+ closed (agent-workflow--offset-line instructions (cdr unknown)))
                        "{%s} isn't a variable (%s)" (car unknown) (agent-workflow--variables-said)))
-            (setq profile (plist-put profile :instructions instructions))))))
+            (setq definition (plist-put definition :instructions instructions))))))
     (setq problems (agent-workflow--by-line (nreverse problems)))
-    (cons (unless (agent-workflow--errors-p problems) profile) problems)))
+    (cons (unless (agent-workflow--errors-p problems) definition) problems)))
 
 (defun agent-workflow--variables-said ()
   "The variables, as a problem lists them."
   (concat (mapconcat (lambda (name) (concat "{" name "}")) agent-workflow-variables ", ")
           ", {jobs.JOB.outcome}, {jobs.JOB.notes}"))
 
-(defun agent-workflow-profile-edits-p (profile)
-  "Non-nil if PROFILE (a plist) lets its agent change files: unless its
+(defun agent-workflow-definition-edits-p (definition)
+  "Non-nil if DEFINITION (a plist) lets its agent change files: unless its
 deny has both Edit and Write, it does."
-  (let ((deny (plist-get profile :deny)))
+  (let ((deny (plist-get definition :deny)))
     (not (and (member "Edit" deny) (member "Write" deny)))))
 
-;; ====== A PROJECT'S PROFILES ======
+;; ====== A PROJECT'S DEFINITIONS ======
 
-(defun agent-workflow--profiles-read (project)
-  "PROJECT's profiles and their problems, read again if a file changed:
-\(PROFILES . PROBLEMS), PROFILES an alist of a name and its profile, in
-order (the starters first), each profile's :origin where its file is
+(defun agent-workflow--definitions-read (project)
+  "PROJECT's agents and their problems, read again if a file changed:
+\(DEFINITIONS . PROBLEMS), DEFINITIONS an alist of a name and its agent, in
+order (the starters first), each agent's :origin where its file is
 \(starter, project, local), its :replaces the origin of the one of its name
 it replaced."
-  (let* ((files (agent-workflow--files project "profiles" "\\`[^.].*\\.md\\'"))
+  (let* ((files (agent-workflow--files project "agents" "\\`[^.].*\\.md\\'"))
          (stamp (agent-workflow--stamp files))
          (key (or project ""))
-         (cached (gethash key agent-workflow--profiles-cache)))
+         (cached (gethash key agent-workflow--definitions-cache)))
     (if (equal (car cached) stamp)
         (cadr cached)
-      (let (profiles problems)
+      (let (definitions problems)
         (dolist (file files)
-          (pcase-let ((`(,profile . ,found) (agent-workflow-profile-read (cdr file))))
+          (pcase-let ((`(,definition . ,found) (agent-workflow-definition-read (cdr file))))
             (setq problems (append problems found))
-            (when profile
-              (let* ((name (plist-get profile :name))
-                     (replaced (alist-get name profiles nil nil #'equal)))
-                (setq profile (plist-put profile :origin (car file)))
+            (when definition
+              (let* ((name (plist-get definition :name))
+                     (replaced (alist-get name definitions nil nil #'equal)))
+                (setq definition (plist-put definition :origin (car file)))
                 (when replaced
-                  (setq profile (plist-put profile :replaces (plist-get replaced :origin))))
-                (setf (alist-get name profiles nil nil #'equal) profile)))))
-        (let ((value (cons (nreverse profiles) problems)))
-          (puthash key (list stamp value) agent-workflow--profiles-cache)
+                  (setq definition (plist-put definition :replaces (plist-get replaced :origin))))
+                (setf (alist-get name definitions nil nil #'equal) definition)))))
+        (let ((value (cons (nreverse definitions) problems)))
+          (puthash key (list stamp value) agent-workflow--definitions-cache)
           value)))))
 
-(defun agent-workflow-profiles (&optional project)
-  "PROJECT's profiles (default: the current project's): an alist of a name
-and its profile, the starters, the project's and yours."
-  (car (agent-workflow--profiles-read (or project (agent-workflow-project)))))
+(defun agent-workflow-agent-definitions (&optional project)
+  "PROJECT's agents (default: the current project's): an alist of a name
+and its agent, the starters, the project's and yours."
+  (car (agent-workflow--definitions-read (or project (agent-workflow-project)))))
 
-(defun agent-workflow-profile-problems (&optional project)
-  "What's wrong with PROJECT's profile files."
-  (cdr (agent-workflow--profiles-read (or project (agent-workflow-project)))))
+(defun agent-workflow-definition-problems (&optional project)
+  "What's wrong with PROJECT's agent files."
+  (cdr (agent-workflow--definitions-read (or project (agent-workflow-project)))))

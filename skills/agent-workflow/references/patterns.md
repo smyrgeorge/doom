@@ -1,7 +1,7 @@
 # Patterns
 
 Part of the agent-workflow skill: read [SKILL.md](../SKILL.md) first. Each checks with no error (the starters'
-profiles).
+agents).
 
 ## Something small
 

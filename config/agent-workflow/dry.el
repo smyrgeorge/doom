@@ -24,7 +24,7 @@
 (defvar agent-workflow-pool)
 (defvar agent-workflow-max-rounds)
 
-(cl-defun agent-workflow-dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) profiles)
+(cl-defun agent-workflow-dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) definitions)
   "WORKFLOW (a plist, as read) walked, nothing run: a plist (:waves :end
 :stopped :branch), :waves a list of waves, each a list of lines (what
 happened), :end the jobs' statuses, :stopped why it would stop, or nil,
@@ -33,10 +33,10 @@ stops). INFO: the
 issue its if: reads (a plist, as `agent-workflow-issue' gives it).
 OUTCOMES: ((JOB . (OUTCOME...)) ...), an agent job's outcome each round
 \(none: done). EXITS: ((\"JOB.N\" . (CODE...))...), step N's (from 1)
-exit code each try (none: 0). POOL: the agents at once. PROFILES: the
+exit code each try (none: 0). POOL: the agents at once. DEFINITIONS: the
 project's (to tell the jobs that edit; default: the current project's)."
   (let* ((jobs (plist-get workflow :jobs))
-         (profiles (or profiles (agent-workflow-profiles (agent-workflow-project))))
+         (definitions (or definitions (agent-workflow-agent-definitions (agent-workflow-project))))
          (state (mapcar (lambda (job) (list (car job) :status 'pending :round 1)) jobs))
          (counts nil) (total 0)
          (max (or (plist-get workflow :max-rounds) agent-workflow-max-rounds))
@@ -48,7 +48,7 @@ project's (to tell the jobs that edit; default: the current project's)."
          (edits (job)
            (seq-some (lambda (step)
                        (seq-some (lambda (name)
-                                   (and name (agent-workflow-profile-edits-p (cdr (assoc name profiles)))))
+                                   (and name (agent-workflow-definition-edits-p (cdr (assoc name definitions)))))
                                  (list (plist-get step :agent) (plist-get step :on-fail))))
                      (plist-get (spec job) :steps)))
          (agent-p (job) (seq-some (lambda (step) (eq (plist-get step :kind) 'agent)) (plist-get (spec job) :steps)))
@@ -263,7 +263,7 @@ buffer."
          (info (agent-workflow--dry-info project spec issue))
          (result (agent-workflow-dry-run spec :info info :outcomes (agent-workflow--parse-chosen outcomes)
                                          :exits (agent-workflow--parse-chosen exits)
-                                         :profiles (agent-workflow-profiles project)))
+                                         :definitions (agent-workflow-agent-definitions project)))
          (buffer (get-buffer-create "*agent-workflow dry run*")))
     (with-current-buffer buffer
       (let ((inhibit-read-only t))

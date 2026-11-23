@@ -1,6 +1,6 @@
 ;;; tests/unit/test-agent-workflow-skill.el -*- lexical-binding: t; -*-
 ;; skills/agent-workflow: its SKILL.md (its front matter, under 12 KB), every
-;; workflow and profile in it and its references checked as the check does
+;; workflow and agent in it and its references checked as the check does
 ;; (none with an error), and the line every agent-shell session is told.
 
 (+test-load "config/agent-workflow")
@@ -34,17 +34,17 @@ points to there."
 
 (ert-deftest agent-workflow-skill/its-workflows-check ()
   "Every workflow in it checks with no error, against the starters'
-profiles."
-  (let ((profiles (let ((agent-workflow--profiles-cache (make-hash-table :test #'equal)))
-                    (mapcar #'car (agent-workflow-profiles nil))))
+agents."
+  (let ((definitions (let ((agent-workflow--definitions-cache (make-hash-table :test #'equal)))
+                    (mapcar #'car (agent-workflow-agent-definitions nil))))
         (dir (make-temp-file (+test-tmp-file "awk-") t))
         (checked 0))
-    (should (member "build" profiles))
+    (should (member "build" definitions))
     (pcase-dolist (`(,file . ,text) (+test-awk--blocks "yaml"))
       (when (string-match-p "^jobs:" text)
         (let ((name (if (string-match "^name: \\([a-z0-9-]+\\)" text) (match-string 1 text) "example")))
           (pcase-let ((`(,workflow . ,problems)
-                       (agent-workflow-workflow-read (+test-file (format "awk/%s.yml" name) text) profiles)))
+                       (agent-workflow-workflow-read (+test-file (format "awk/%s.yml" name) text) definitions)))
             (ert-info ((format "%s: %s" file name))
               (should workflow)
               (should-not (assq 'error problems))
@@ -53,14 +53,14 @@ profiles."
     (ignore dir)
     (should (>= checked 4))))
 
-(ert-deftest agent-workflow-skill/its-profiles-check ()
-  "Every profile in it checks with no error."
+(ert-deftest agent-workflow-skill/its-definitions-check ()
+  "Every agent in it checks with no error."
   (let ((checked 0))
     (pcase-dolist (`(,file . ,text) (+test-awk--blocks "markdown"))
       (when (string-prefix-p "---\n" text)
-        (pcase-let ((`(,profile . ,problems) (agent-workflow-profile-read (+test-file "awk/profiles/build.md" text))))
+        (pcase-let ((`(,definition . ,problems) (agent-workflow-definition-read (+test-file "awk/agents/build.md" text))))
           (ert-info (file)
-            (should profile)
+            (should definition)
             (should-not (assq 'error problems))))
         (cl-incf checked)))
     (should (>= checked 1))))
@@ -87,10 +87,10 @@ reference there; a job's agent told where it is."
     (should (< (string-bytes text) 12000))
     (should (file-exists-p (expand-file-name "references/outcomes.md" dir)))
     (should (string-match-p "cmd/agent-workflow done changes" text)))
-  (let* ((agent (agent-workflow-agent--make :project +test-root :issue "demo-1" :job "review" :profile "review"
+  (let* ((agent (agent-workflow-agent--make :project +test-root :issue "demo-1" :job "review" :definition "review"
                                             :worktree +test-root :branch "feat/demo-1" :outcomes '("approved" "changes")))
          (agent-workflow--starting agent)
-         (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+         (agent-workflow--definitions-cache (make-hash-table :test #'equal))
          (told (agent-workflow-agent-context)))
     (should (string-match-p "skills/agent-workflow-step/SKILL\\.md first\\." told))
     (should (string-match-p "one of done, approved, changes" told))))

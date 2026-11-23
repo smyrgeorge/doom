@@ -10,20 +10,20 @@
   :group 'tools)
 
 ;; WHERE THEY ARE
-;; A project's workflows (.yml) and profiles (.md) come from three places, a
+;; A project's workflows (.yml) and agents (.md) come from three places, a
 ;; later one's replacing an earlier one's of the same name: the starters
-;; (config/agent-workflow/workflows/ and profiles/), the project's (committed,
+;; (config/agent-workflow/workflows/ and agents/), the project's (committed,
 ;; read from your checkout, never an agent's worktree) and yours (out of
-;; git). Each in its folder's workflows/ and profiles/.
+;; git). Each in its folder's workflows/ and agents/.
 (defcustom agent-workflow-directory ".agent-workflow"
-  "Where a project keeps its workflows and profiles, committed: its
-workflows/ and profiles/, relative to its main checkout."
+  "Where a project keeps its workflows and agents, committed: its
+workflows/ and agents/, relative to its main checkout."
   :type 'string
   :group 'agent-workflow)
 
 (defcustom agent-workflow-local-directory ".agent-shell/agent-workflow"
-  "Where a project keeps your own workflows and profiles, out of git
-\(.agent-shell/ is ignored): its workflows/ and profiles/, relative to its
+  "Where a project keeps your own workflows and agents, out of git
+\(.agent-shell/ is ignored): its workflows/ and agents/, relative to its
 main checkout. They replace the project's and the starters of the same
 name."
   :type 'string
@@ -33,18 +33,18 @@ name."
 ;; Agent sessions, as many at once as this says, in every project: an agent
 ;; has no role and no name, it's a job's (config/agent-workflow/pool.el),
 ;; known by its issue and job ("doom-a1b · review"), started with its step's
-;; profile in the issue's worktree (config/agent-workflow/worktree.el).
+;; agent in the issue's worktree (config/agent-workflow/worktree.el).
 (defcustom agent-workflow-pool 3
   "How many agent sessions of the pool run at once, in every project."
   :type 'natnum
   :group 'agent-workflow)
 
 ;; ITS PERMISSION MODE
-;; Claude Code's (`agent-workflow-modes'): the step's profile's (mode:), else
+;; Claude Code's (`agent-workflow-modes'): the step's agent's (mode:), else
 ;; this: auto, Claude deciding what needs your OK.
 (defcustom agent-workflow-mode "auto"
   "The permission mode an agent starts in (Claude Code's id) when its
-profile has none. auto: Claude decides what needs your OK. nil: Claude
+agent has none. auto: Claude decides what needs your OK. nil: Claude
 Code's own default."
   :type '(choice (const :tag "Claude Code's" nil) string)
   :group 'agent-workflow)
@@ -53,7 +53,7 @@ Code's own default."
   '((claude-code :config agent-shell-anthropic-make-claude-code-config :claude-code t))
   "The agents the pool can run: a kind (a symbol) and how its session
 starts. :config, a function returning agent-shell's config for it;
-:claude-code, non-nil if it's Claude Code (a profile's tools go to its
+:claude-code, non-nil if it's Claude Code (an agent's tools go to its
 options)."
   :type '(alist :key-type symbol :value-type plist)
   :group 'agent-workflow)
@@ -153,13 +153,13 @@ last few, scrolling back through these)."
 ;; anew and lists every problem, each line taking you to its file and line;
 ;; cmd/agent-workflow check [FILE] does the same from the shell, as JSON
 ;; (config/agent-workflow/request.el). A file with an error is left out; a
-;; warning leaves it in. What's checked: the tops of profiles.el and
+;; warning leaves it in. What's checked: the tops of agents.el and
 ;; workflows.el.
 
 ;; ====== ITS PARTS ======
 
 (load! "agent-workflow/core")
-(load! "agent-workflow/profiles")
+(load! "agent-workflow/agents")
 (load! "agent-workflow/workflows")
 (load! "agent-workflow/worktree")
 (load! "agent-workflow/pool")
@@ -190,7 +190,7 @@ last few, scrolling back through these)."
 
 ;; WHAT AN AGENT IS TOLD
 ;; In its system prompt, after what every Claude Code session is: the job it
-;; does, where, how it ends a step, then its profile's instructions
+;; does, where, how it ends a step, then its agent's instructions
 ;; (config/agent-workflow/pool.el).
 (add-hook '+my/agent-shell-claude-context-functions #'agent-workflow-agent-context t)
 

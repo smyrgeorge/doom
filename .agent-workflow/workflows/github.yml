@@ -2,7 +2,7 @@
 # watched until they pass. No gh (or not logged in), not on main: the run
 # fails at once (check). Nothing to push: on to the watching (push);
 # finished already, their verdict at once (watch). A failure: its jobs' logs
-# to an agent with the ci profile, which finds why, fixes the code or its
+# to the ci agent (.agent-workflow/agents/ci.md), which finds why, fixes the code or its
 # test and commits on your main; the job runs again from its push
 # (retry-from): your main pushed again (the fix, and anything you committed
 # meanwhile), watched again, 5 times at most (then the run asks you). It
@@ -80,8 +80,8 @@ jobs:
         # push, so the fix is pushed, then watched again.
         retry-from: push
 
-        # on-fail: the profile of the agent sent the failure (the script's
-        # output) to fix it, in a job with no agent of its own: ci reads the
-        # logs, fixes the code or its test, commits on your main (only the
+        # on-fail: the agent sent the failure (the script's output) to fix
+        # it, in a job with no agent of its own (or {run: a script, agent:
+        # ...}: a script tried first): ci reads the logs, fixes the code or its test, commits on your main (only the
         # files it changed); it never pushes.
         on-fail: ci

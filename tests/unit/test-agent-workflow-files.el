@@ -1,5 +1,5 @@
 ;;; tests/unit/test-agent-workflow-files.el -*- lexical-binding: t; -*-
-;; config/agent-workflow/: workflows (YAML) and profiles (Markdown) read and
+;; config/agent-workflow/: workflows (YAML) and agents (Markdown) read and
 ;; checked, their problems naming the file and line; where they come from
 ;; (the starters, a project's own read from its main checkout, yours), a
 ;; later one replacing one of the same name; the variables a prompt names,
@@ -32,16 +32,16 @@
       (with-temp-file file (insert text)))
     file))
 
-(defun +test-awf--workflow (text &optional profiles name)
+(defun +test-awf--workflow (text &optional definitions name)
   "TEXT read as the workflow NAME (default feature.yml), its agent: and
-on-fail: checked against PROFILES (default: build, review, docs):
+on-fail: checked against DEFINITIONS (default: build, review, docs):
 \(WORKFLOW . PROBLEMS)."
   (agent-workflow-workflow-read (+test-awf--file (+test-awf--dir "read") (or name "feature.yml") text)
-                                (or profiles '("build" "review" "docs"))))
+                                (or definitions '("build" "review" "docs"))))
 
-(defun +test-awf--profile (text &optional name)
-  "TEXT read as the profile NAME (default build.md): (PROFILE . PROBLEMS)."
-  (agent-workflow-profile-read (+test-awf--file (+test-awf--dir "read") (or name "build.md") text)))
+(defun +test-awf--definition (text &optional name)
+  "TEXT read as the agent NAME (default build.md): (DEFINITION . PROBLEMS)."
+  (agent-workflow-definition-read (+test-awf--file (+test-awf--dir "read") (or name "build.md") text)))
 
 (defun +test-awf--said (problems)
   "PROBLEMS as (LEVEL LINE \"what\") each."
@@ -62,20 +62,20 @@ on-fail: checked against PROFILES (default: build, review, docs):
     dir))
 
 (defmacro +test-awf--with-starters (dir &rest body)
-  "BODY with DIR the starters' folder (its workflows/ and profiles/), the
+  "BODY with DIR the starters' folder (its workflows/ and agents/), the
 caches empty."
   (declare (indent 1))
   `(let ((agent-workflow-starters-directory ,dir)
-         (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+         (agent-workflow--definitions-cache (make-hash-table :test #'equal))
          (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
      ,@body))
 
-(defconst +test-awf--profile-text "---
+(defconst +test-awf--definition-text "---
 description: builds an issue with its tests
 ---
 Build it.
 "
-  "A profile with nothing but what it needs.")
+  "An agent with nothing but what it needs.")
 
 (defconst +test-awf--feature "name: feature
 description: A feature built with its tests, reviewed, merged.
@@ -192,8 +192,8 @@ jobs:
         (should-not ran)))))
 
 (ert-deftest agent-workflow-files/on-fail-a-script-an-agent-or-both ()
-  "on-fail: a profile (its agent fixes it), {run: a script} (it alone),
-{run, agent} (the script first, then the agent), {agent} (as a profile)."
+  "on-fail: an agent (its agent fixes it), {run: a script} (it alone),
+{run, agent} (the script first, then the agent), {agent} (as its name alone)."
   (cl-flet ((step (on-fail)
               (pcase-let ((`(,workflow . ,problems)
                            (+test-awf--workflow (concat "description: x\njobs:\n  a:\n    run: x\n    on-fail:" on-fail))))
@@ -228,7 +228,7 @@ jobs:
              ("description: x\njobs:\n  a:\n    if: (a) (b)\n    run: x\n"
               (error 4 "if (a) (b): one Lisp form, as (eq (issue-type) 'bug)"))
              ("description: x\njobs:\n  a:\n    agent: nobody\n"
-              (error 4 "agent nobody: no such profile (build, review, docs)"))
+              (error 4 "agent nobody: no such agent (build, review, docs)"))
              ("description: x\njobs:\n  a:\n    uses: deploy\n"
               (error 4 "uses deploy: not a built-in (merge)"))
              ("description: x\njobs:\n  a:\n    elisp: (oops\n"
@@ -236,15 +236,15 @@ jobs:
              ("description: x\njobs:\n  a:\n    shell: python\n    agent: build\n"
               (error 4 "shell: only for a run: step"))
              ("description: x\njobs:\n  a:\n    steps:\n      - run: x\n        on-fail: nobody\n"
-              (error 6 "on-fail nobody: no such profile (build, review, docs)"))
+              (error 6 "on-fail nobody: no such agent (build, review, docs)"))
              ("description: x\njobs:\n  a:\n    run: x\n    on-fail:\n      agent: nobody\n"
-              (error 6 "on-fail nobody: no such profile (build, review, docs)"))
+              (error 6 "on-fail nobody: no such agent (build, review, docs)"))
              ("description: x\njobs:\n  a:\n    run: x\n    on-fail: {}\n"
-              (error 5 "on-fail: run: (a script), agent: (a profile), or both"))
+              (error 5 "on-fail: run: (a script), agent: (an agent's name), or both"))
              ("description: x\njobs:\n  a:\n    run: x\n    on-fail:\n      run: 3\n"
               (error 6 "run 3: a script"))
              ("description: x\njobs:\n  a:\n    run: x\n    on-fail: [build]\n"
-              (error 5 "on-fail (\"build\"): a profile, or {run: a script, agent: a profile}"))
+              (error 5 "on-fail (\"build\"): an agent's name, or {run: a script, agent: an agent's name}"))
              ("description: x\njobs:\n  a:\n    run: x\n    outcomes:\n      changes: rerun b\n"
               (error 6 "changes: rerun b: no such job (a)"))
              ("description: x\njobs:\n  a:\n    run: x\n    outcomes:\n      changes: rerun b\n  b:\n    run: y\n"
@@ -419,14 +419,14 @@ the project's other workflows still read."
       (should problems)))
   (let ((starters (+test-awf--dir "mapping-starters"))
         (project (+test-awf--project "mapping")))
-    (+test-awf--file starters "profiles/build.md" +test-awf--profile-text)
+    (+test-awf--file starters "agents/build.md" +test-awf--definition-text)
     (+test-awf--with-starters starters
       (+test-awf--file project ".agent-workflow/workflows/good.yml" "description: one\njobs:\n  a:\n    agent: build\n")
       (let ((bad (+test-awf--file project ".agent-workflow/workflows/bad.yml" "description: two\njobs:\n  a:\n    run: x\n")))
         (cl-letf* ((read (symbol-function 'agent-workflow--workflow-read))
                    ((symbol-function 'agent-workflow--workflow-read)
-                    (lambda (file profiles as)
-                      (if (equal file bad) (signal 'wrong-type-argument '(listp "make")) (funcall read file profiles as)))))
+                    (lambda (file definitions as)
+                      (if (equal file bad) (signal 'wrong-type-argument '(listp "make")) (funcall read file definitions as)))))
           (should (equal (mapcar #'car (agent-workflow-workflows project)) '("good")))
           (should (equal (+test-awf--said (agent-workflow-workflow-problems project))
                          '((error 1 "it can't be read: Wrong type argument: listp, \"make\"")))))))))
@@ -522,8 +522,8 @@ jobs:
     prompt: '{jobs.a.notes} {jobs.b.outcome}'
 "))))
 
-(ert-deftest agent-workflow-files/profiles-not-checked-without-them ()
-  "Read alone, with no profiles given, agent: and on-fail: name any."
+(ert-deftest agent-workflow-files/definitions-not-checked-without-them ()
+  "Read alone, with no agents given, agent: and on-fail: name any."
   (should-not (cdr (agent-workflow-workflow-read
                     (+test-awf--file (+test-awf--dir "alone") "x.yml"
                                      "description: x\njobs:\n  a:\n    agent: anyone\n")))))
@@ -572,14 +572,14 @@ without a value left as it is; nil empty."
   (should (equal (mapcar #'agent-workflow--duration '("45s" "10m" "3h" "1h30m" 90 "3x" "10" 0 "0m"))
                  '(45 600 10800 5400 90 nil nil nil nil))))
 
-;; ====== A PROFILE FILE ======
+;; ====== A DEFINITION FILE ======
 
-(ert-deftest agent-workflow-files/a-profile ()
+(ert-deftest agent-workflow-files/a-definition ()
   "Every key read: lists inline or as YAML items, a kebab-case mode as
 Claude Code's id, the icon and its glyph, color as colour; the body its
 instructions, with variables."
-  (pcase-let ((`(,profile . ,problems)
-               (+test-awf--profile "---
+  (pcase-let ((`(,definition . ,problems)
+               (+test-awf--definition "---
 name: build
 description: \"builds an issue with its tests\"
 tools:
@@ -596,19 +596,19 @@ color: blue
 Build it on {branch}.
 ")))
     (should-not problems)
-    (should (equal (plist-get profile :description) "builds an issue with its tests"))
-    (should (equal (plist-get profile :tools) '("Read" "Bash(git -C {main} commit:*)")))
-    (should (equal (plist-get profile :deny) '("WebFetch")))
-    (should (equal (plist-get profile :model) "opus"))
-    (should (equal (plist-get profile :mode) "acceptEdits"))
-    (should (equal (plist-get profile :icon) "md-hammer"))
-    (should (equal (plist-get profile :glyph) "⚙"))
-    (should (equal (plist-get profile :verb) "building"))
-    (should (equal (plist-get profile :colour) "blue"))
-    (should (equal (plist-get profile :instructions) "Build it on {branch}."))))
+    (should (equal (plist-get definition :description) "builds an issue with its tests"))
+    (should (equal (plist-get definition :tools) '("Read" "Bash(git -C {main} commit:*)")))
+    (should (equal (plist-get definition :deny) '("WebFetch")))
+    (should (equal (plist-get definition :model) "opus"))
+    (should (equal (plist-get definition :mode) "acceptEdits"))
+    (should (equal (plist-get definition :icon) "md-hammer"))
+    (should (equal (plist-get definition :glyph) "⚙"))
+    (should (equal (plist-get definition :verb) "building"))
+    (should (equal (plist-get definition :colour) "blue"))
+    (should (equal (plist-get definition :instructions) "Build it on {branch}."))))
 
-(ert-deftest agent-workflow-files/a-profile-s-problems ()
-  "Errors leave a profile out; warnings keep it."
+(ert-deftest agent-workflow-files/a-definition-s-problems ()
+  "Errors leave an agent out; warnings keep it."
   (dolist (case '(("description: x\n" (error 1 "no front matter: it starts with a line ---, its keys, then a line ---"))
                   ("---\ndescription: x\n" (error 3 "its front matter isn't closed: a line --- after its keys"))
                   ("---\ntools: Read\n---\nx\n" (error 1 "no description: say what it's for (description: ...)"))
@@ -622,20 +622,20 @@ Build it on {branch}.
                   ("---\nname: other\ndescription: x\n---\nx\n" (error 2 "its name is other, its file's build: they must agree"))
                   ("---\ndescription: x\ncolour: pink\n---\nx\n"
                    (error 3 "colour pink: not one of blue, magenta, green, yellow, cyan, red, white, black"))))
-    (pcase-let ((`(,profile . ,problems) (+test-awf--profile (car case))))
-      (ert-info ((car case) :prefix "profile: ")
-        (should-not profile)
+    (pcase-let ((`(,definition . ,problems) (+test-awf--definition (car case))))
+      (ert-info ((car case) :prefix "agent: ")
+        (should-not definition)
         (should (member (cadr case) (+test-awf--said problems))))))
-  (pcase-let ((`(,profile . ,problems)
-               (+test-awf--profile "---\ndescription: x\ntools: Edit\ndeny: Edit\nlabels: build\nmodel: gpt\n---\n")))
-    (should profile)
+  (pcase-let ((`(,definition . ,problems)
+               (+test-awf--definition "---\ndescription: x\ntools: Edit\ndeny: Edit\nlabels: build\nmodel: gpt\n---\n")))
+    (should definition)
     (should (equal (+test-awf--said problems)
                    '((warning 4 "Edit both allowed (tools) and denied (deny): denied")
                      (warning 5 "unknown key labels: ignored")
                      (warning 6 "model gpt: not inherit, one of opus, sonnet, haiku, nor a model's id (claude-...)")
                      (warning 7 "no instructions after its front matter")))))
-  (should (cdr (agent-workflow-profile-read
-                (+test-awf--file (+test-awf--dir "bad-name") "Build.md" +test-awf--profile-text)))))
+  (should (cdr (agent-workflow-definition-read
+                (+test-awf--file (+test-awf--dir "bad-name") "Build.md" +test-awf--definition-text)))))
 
 ;; ====== A PROJECT'S ======
 
@@ -645,31 +645,31 @@ name, each saying where it's from; found from an agent's worktree too, read
 from the main checkout; a workflow's agent: checked against them all."
   (let* ((starters (+test-awf--dir "starters"))
          (project (+test-awf--project "where")))
-    (+test-awf--file starters "profiles/build.md" +test-awf--profile-text)
-    (+test-awf--file starters "profiles/review.md" "---\ndescription: reviews\n---\nReview it.\n")
+    (+test-awf--file starters "agents/build.md" +test-awf--definition-text)
+    (+test-awf--file starters "agents/review.md" "---\ndescription: reviews\n---\nReview it.\n")
     (+test-awf--file starters "workflows/feature.yml" "description: starter\njobs:\n  a:\n    agent: build\n")
     (+test-awf--file starters "workflows/quick.yml" "description: quick\njobs:\n  a:\n    agent: review\n")
-    (+test-awf--file project ".agent-workflow/profiles/review.md" "---\ndescription: the project's\n---\nx\n")
+    (+test-awf--file project ".agent-workflow/agents/review.md" "---\ndescription: the project's\n---\nx\n")
     (+test-awf--file project ".agent-workflow/workflows/feature.yaml"
                      "description: the project's\njobs:\n  a:\n    agent: docs\n")
-    (+test-awf--file project ".agent-shell/agent-workflow/profiles/docs.md" "---\ndescription: mine\n---\nx\n")
+    (+test-awf--file project ".agent-shell/agent-workflow/agents/docs.md" "---\ndescription: mine\n---\nx\n")
     (+test-awf--file project ".agent-shell/agent-workflow/workflows/quick.yml"
                      "description: mine\njobs:\n  a:\n    agent: nobody\n")
     (+test-awf--file project ".agent-shell/agent-workflow/workflows/notes.txt" "not a workflow")
     (+test-awf--with-starters starters
-      (let ((profiles (agent-workflow-profiles project))
+      (let ((definitions (agent-workflow-agent-definitions project))
             (workflows (agent-workflow-workflows project)))
-        (should (equal (mapcar #'car profiles) '("build" "review" "docs")))
-        (should (equal (mapcar (lambda (p) (plist-get (cdr p) :origin)) profiles) '(starter project local)))
-        (should (eq (plist-get (alist-get "review" profiles nil nil #'equal) :replaces) 'starter))
-        (should (equal (plist-get (alist-get "review" profiles nil nil #'equal) :description) "the project's"))
+        (should (equal (mapcar #'car definitions) '("build" "review" "docs")))
+        (should (equal (mapcar (lambda (p) (plist-get (cdr p) :origin)) definitions) '(starter project local)))
+        (should (eq (plist-get (alist-get "review" definitions nil nil #'equal) :replaces) 'starter))
+        (should (equal (plist-get (alist-get "review" definitions nil nil #'equal) :description) "the project's"))
         ;; quick: yours, its agent nobody: left out, the starter's kept.
         (should (equal (mapcar #'car workflows) '("feature" "quick")))
         (should (equal (plist-get (alist-get "feature" workflows nil nil #'equal) :description) "the project's"))
         (should (eq (plist-get (alist-get "feature" workflows nil nil #'equal) :origin) 'project))
         (should (eq (plist-get (alist-get "quick" workflows nil nil #'equal) :origin) 'starter))
         (should (equal (+test-awf--said (agent-workflow-workflow-problems project))
-                       '((error 4 "agent nobody: no such profile (build, review, docs)"))))
+                       '((error 4 "agent nobody: no such agent (build, review, docs)"))))
         ;; From an agent's worktree: the main checkout's.
         (let ((worktree (expand-file-name "wt" (+test-awf--dir "where-wt"))))
           (+test-awf--git project "worktree" "add" "-q" worktree)
@@ -679,11 +679,11 @@ from the main checkout; a workflow's agent: checked against them all."
                          '("feature" "quick"))))))))
 
 (ert-deftest agent-workflow-files/read-again-when-changed ()
-  "A project's workflows are read again when a file changes, its profiles
+  "A project's workflows are read again when a file changes, its agents
 too, else kept."
   (let ((starters (+test-awf--dir "again-starters"))
         (project (+test-awf--project "again")))
-    (+test-awf--file starters "profiles/build.md" +test-awf--profile-text)
+    (+test-awf--file starters "agents/build.md" +test-awf--definition-text)
     (+test-awf--with-starters starters
       (let ((file (+test-awf--file project ".agent-workflow/workflows/w.yml"
                                    "description: one\njobs:\n  a:\n    agent: build\n")))
@@ -691,19 +691,19 @@ too, else kept."
         (+test-awf--file project ".agent-workflow/workflows/w.yml" "description: two\njobs:\n  a:\n    agent: build\n")
         (set-file-times file (time-add (current-time) 5))
         (should (equal (plist-get (cdar (agent-workflow-workflows project)) :description) "two"))
-        ;; Its profile gone: left out, the project having none.
-        (delete-file (expand-file-name "profiles/build.md" starters))
+        ;; Its agent gone: left out, the project having none.
+        (delete-file (expand-file-name "agents/build.md" starters))
         (should-not (agent-workflow-workflows project))
         (should (equal (+test-awf--said (agent-workflow-workflow-problems project))
-                       '((error 4 "agent build: no such profile (none)"))))))))
+                       '((error 4 "agent build: no such agent (none)"))))))))
 
 ;; ====== THIS CONFIG'S OWN ======
 
 (ert-deftest agent-workflow-files/this-config-s-samples ()
   "The workflows of this config (.agent-workflow/: github, screenshots,
-their profiles ci and screenshots) checked, no problem; each walked to its
+their agents ci and screenshots) checked, no problem; each walked to its
 end, its branch deleted once merged."
-  (let ((agent-workflow--profiles-cache (make-hash-table :test #'equal))
+  (let ((agent-workflow--definitions-cache (make-hash-table :test #'equal))
         (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
     (should-not (agent-workflow-check-problems +test-root))
     (let ((workflows (agent-workflow-workflows +test-root)))
@@ -713,7 +713,7 @@ end, its branch deleted once merged."
         (ert-info (name :prefix "workflow: ")
           (let* ((workflow (cdr (assoc name workflows)))
                  (result (agent-workflow-dry-run workflow :info '(:id "demo-1" :type "task")
-                                                 :profiles (agent-workflow-profiles +test-root))))
+                                                 :definitions (agent-workflow-agent-definitions +test-root))))
             (should (equal (plist-get workflow :file)
                            (expand-file-name (format ".agent-workflow/workflows/%s.yml" name) +test-root)))
             (should-not (plist-get workflow :for))
@@ -728,8 +728,8 @@ end, its branch deleted once merged."
               (_
                (should (member "merge: merged (no ticket to close)" (+test-awf--dry-lines result)))
                (should (equal (plist-get result :branch) "deleted, merged into the main branch"))))))))
-    (should (assoc "screenshots" (agent-workflow-profiles +test-root)))
-    (should (assoc "ci" (agent-workflow-profiles +test-root)))))
+    (should (assoc "screenshots" (agent-workflow-agent-definitions +test-root)))
+    (should (assoc "ci" (agent-workflow-agent-definitions +test-root)))))
 
 ;; github's scripts (check, push, watch): a stand-in gh (its runs and logs from
 ;; GH_RUNS, GH_PENDING, GH_LOGGED_OUT), a bare origin, a clone of it on main
@@ -909,12 +909,12 @@ said; cancelled: 2."
 visiting it; none: said. One file alone, anywhere."
   (let ((starters (+test-awf--dir "check-starters"))
         (project (+test-awf--project "check")))
-    (+test-awf--file starters "profiles/build.md" +test-awf--profile-text)
+    (+test-awf--file starters "agents/build.md" +test-awf--definition-text)
     (+test-awf--with-starters starters
       (let ((default-directory project))
         (+test-clear-messages)
         (should-not (agent-workflow-check))
-        (should (= (+test-messages "\\`0 workflows, 1 profiles, no problems$") 1))
+        (should (= (+test-messages "\\`0 workflows, 1 agents, no problems$") 1))
         (+test-awf--file project ".agent-workflow/workflows/w.yml" "description: x\nnope: 1\njobs:\n  a:\n    agent: who\n")
         (let ((problems (agent-workflow-check)))
           (should (= (length problems) 2))
@@ -922,7 +922,7 @@ visiting it; none: said. One file alone, anywhere."
             (should (string-match-p "1 error, 1 warning" (buffer-string)))
             (should (string-match-p "^\\.agent-workflow/workflows/w\\.yml:2: warning: unknown key nope: ignored$"
                                     (buffer-string)))
-            (should (string-match-p "^\\.agent-workflow/workflows/w\\.yml:5: error: agent who: no such profile (build)$"
+            (should (string-match-p "^\\.agent-workflow/workflows/w\\.yml:5: error: agent who: no such agent (build)$"
                                     (buffer-string)))
             (should (derived-mode-p 'compilation-mode))))
         (let ((draft (+test-awf--file (+test-awf--dir "drafts") "draft.yml" "description: x\njobs:\n  a:\n    agent: build\n")))
@@ -946,7 +946,7 @@ from `default-directory'."
 one file alone; a file not there, an unknown operation: refused."
   (let ((starters (+test-awf--dir "request-starters"))
         (project (+test-awf--project "request")))
-    (+test-awf--file starters "profiles/build.md" +test-awf--profile-text)
+    (+test-awf--file starters "agents/build.md" +test-awf--definition-text)
     (+test-awf--file starters "workflows/quick.yml" "description: x\njobs:\n  a:\n    agent: build\n")
     (+test-awf--with-starters starters
       (let ((default-directory project))
@@ -954,14 +954,14 @@ one file alone; a file not there, an unknown operation: refused."
           (should (eq (plist-get reply :ok) t))
           (should (equal (plist-get reply :project) (directory-file-name project)))
           (should (equal (plist-get reply :workflows) '("quick")))
-          (should (equal (plist-get reply :profiles) '("build")))
+          (should (equal (plist-get reply :agents) '("build")))
           (should (equal (plist-get reply :problems) nil)))
         (let* ((file (+test-awf--file project ".agent-workflow/workflows/w.yml" "description: x\njobs:\n  a:\n    agent: who\n"))
                (reply (+test-awf--request "check" "{}")))
           (should (eq (plist-get reply :ok) :false))
           (should (equal (plist-get reply :error) "1 error"))
           (should (equal (plist-get reply :problems)
-                         (list (list :level "error" :file file :line 4 :message "agent who: no such profile (build)"))))
+                         (list (list :level "error" :file file :line 4 :message "agent who: no such agent (build)"))))
           (let ((alone (+test-awf--request "check" (json-serialize (list :file file)))))
             (should (equal (plist-get alone :workflows) nil))
             (should (= (length (plist-get alone :problems)) 1))))
@@ -1001,7 +1001,7 @@ OUTPUT). Asynchronously: this Emacs, its server, answers it meanwhile."
 with; a file of its folder alone; wrong uses: 2, without Emacs."
   (let ((starters (+test-awf--dir "script-starters"))
         (project (+test-awf--project "script")))
-    (+test-awf--file starters "profiles/build.md" +test-awf--profile-text)
+    (+test-awf--file starters "agents/build.md" +test-awf--definition-text)
     (+test-awf--with-starters starters
       (let ((default-directory project))
         (should (equal (car (+test-awf--run)) 2))
@@ -1020,7 +1020,7 @@ with; a file of its folder alone; wrong uses: 2, without Emacs."
             (should-not (string-search "isn't go" (cdr run))))
           (let ((run (+test-awf--run "check")))
             (should (= (car run) 0))
-            (should (equal (plist-get (json-parse-string (cdr run) :object-type 'plist :array-type 'list) :profiles)
+            (should (equal (plist-get (json-parse-string (cdr run) :object-type 'plist :array-type 'list) :agents)
                            '("build"))))
           (+test-awf--file project "w.yml" "description: x\njobs:\n  a:\n    agent: who\n")
           (let ((run (+test-awf--run "check" "w.yml")))
@@ -1063,11 +1063,11 @@ jobs:
   "The dry run of `+test-awf--dry' with OUTCOMES and EXITS, its issue a
 TYPE (default feature): its result."
   (let* ((workflow (car (+test-awf--workflow +test-awf--dry '("build" "reader") "dry.yml")))
-         (profiles (list (cons "build" (list :name "build"))
+         (definitions (list (cons "build" (list :name "build"))
                          (cons "reader" (list :name "reader" :deny '("Edit" "Write"))))))
     (should workflow)
     (agent-workflow-dry-run workflow :info (list :id "demo-1" :type (or type "feature"))
-                            :outcomes outcomes :exits exits :profiles profiles :pool 3)))
+                            :outcomes outcomes :exits exits :definitions definitions :pool 3)))
 
 (defun +test-awf--dry-lines (result)
   "All RESULT's lines."
@@ -1103,15 +1103,15 @@ stops."
     (should-not workflow)
     (should (member '(error 1 "branch maybe: delete (once merged: the default) or keep") (+test-awf--said problems))))
   (should (equal (plist-get (+test-awf--dry-run nil nil) :branch) "deleted, merged into the main branch"))
-  (let ((profiles (list (cons "build" (list :name "build")))))
+  (let ((definitions (list (cons "build" (list :name "build")))))
     (should (equal (plist-get (agent-workflow-dry-run
                                (car (+test-awf--workflow (concat "branch: keep\n" +test-awf--dry) '("build" "reader") "dry.yml"))
-                               :info '(:id "demo-1" :type "feature") :profiles profiles :pool 3)
+                               :info '(:id "demo-1" :type "feature") :definitions definitions :pool 3)
                               :branch)
                    "kept (branch: keep)"))
     (should (equal (plist-get (agent-workflow-dry-run
                                (car (+test-awf--workflow "description: x\njobs:\n  build:\n    agent: build\n" '("build") "dry.yml"))
-                               :info '(:id "demo-1" :type "feature") :profiles profiles :pool 3)
+                               :info '(:id "demo-1" :type "feature") :definitions definitions :pool 3)
                               :branch)
                    "kept: not merged into the main branch (no merge ran)")))
   (should-not (plist-get (+test-awf--dry-run '(("review" "changes")) nil) :branch))
@@ -1136,9 +1136,9 @@ jobs:
         retry-from: push
         on-fail: build
 " '("build") "dry.yml")))
-         (profiles (list (cons "build" (list :name "build"))))
+         (definitions (list (cons "build" (list :name "build"))))
          (dry (lambda (exits) (agent-workflow-dry-run workflow :info '(:id "demo-1" :type "task")
-                                                      :exits exits :profiles profiles :pool 3))))
+                                                      :exits exits :definitions definitions :pool 3))))
     (should (equal (car (plist-get (funcall dry '(("green.3" 1 1 0))) :waves))
                    '("green: its run step 1 (check) passes"
                      "green: its run step 2 (push) passes"

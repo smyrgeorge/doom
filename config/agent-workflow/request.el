@@ -54,9 +54,9 @@
 ;;        "budget": {...} or null, "log"}...]}; any shell's
 ;;   check {"file": "/abs/feature.yml"} (file: optional) -> {"ok": true
 ;;        when there's no error (else false, "error": "2 errors"),
-;;        "project", "workflows": [names], "profiles": [names], "problems":
+;;        "project", "workflows": [names], "agents": [names], "problems":
 ;;        [{"level", "file", "line", "message"}...]}: the project's
-;;        workflows and profiles, or the one file, read anew (check.el)
+;;        workflows and agents, or the one file, read anew (check.el)
 
 (require 'cl-lib)
 (require 'seq)
@@ -73,7 +73,7 @@
 (defvar agent-workflow--paused)
 
 (defun agent-workflow--request-check (directory payload)
-  "Check DIRECTORY's project's workflows and profiles, or PAYLOAD's file:
+  "Check DIRECTORY's project's workflows and agents, or PAYLOAD's file:
 the reply, a plist."
   (let* ((default-directory (file-name-as-directory directory))
          (project (agent-workflow-project))
@@ -90,7 +90,7 @@ the reply, a plist."
          (list :ok t)))
      (list :project (if project (directory-file-name project) :null)
            :workflows (vconcat (unless file (mapcar #'car (agent-workflow-workflows project))))
-           :profiles (vconcat (unless file (mapcar #'car (agent-workflow-profiles project))))
+           :agents (vconcat (unless file (mapcar #'car (agent-workflow-agent-definitions project))))
            :problems (vconcat
                       (mapcar (pcase-lambda (`(,level ,_ ,file ,line ,what))
                                 (list :level (symbol-name level) :file file :line line :message what))
@@ -360,7 +360,7 @@ DIRECTORY's project): the reply."
                             collect (cons (substring (symbol-name key) 1) (append value nil)))))
          (result (agent-workflow-dry-run spec :info info :outcomes (funcall chosen (plist-get payload :outcomes))
                                          :exits (funcall chosen (plist-get payload :exits))
-                                         :profiles (agent-workflow-profiles project))))
+                                         :definitions (agent-workflow-agent-definitions project))))
     (list :ok t
           :waves (vconcat (mapcar #'vconcat (plist-get result :waves)))
           :end (cl-loop for (job . status) in (plist-get result :end)

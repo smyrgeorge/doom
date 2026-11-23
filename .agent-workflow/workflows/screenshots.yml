@@ -1,7 +1,7 @@
 # A sample of this config's own: the examples' screenshots taken again
 # (.agent-workflow/scripts/screenshots.sh, macOS, Emacs with the Screen
 # Recording permission: its frames on top of your windows a minute or two),
-# each changed one looked at by an agent (the screenshots profile) and
+# each changed one looked at by an agent (the screenshots agent) and
 # committed, then reviewed, merged. No ticket: M-x agent-workflow-run, or
 # agent-workflow run --workflow screenshots.
 
@@ -42,8 +42,9 @@ jobs:
         # asks you).
         timeout: 20m
 
-      # agent: an LLM in its own agent-shell session, with a profile (its
-      # tools, what it may do, its instructions): screenshots looks at each
+      # agent: an LLM in its own agent-shell session, as the agent its
+      # .agent-workflow/agents/NAME.md says (its tools, what it may do, its
+      # instructions): screenshots looks at each
       # changed one, commits the good ones. It ends its step saying done,
       # with its notes.
       - agent: screenshots
@@ -62,7 +63,7 @@ jobs:
     needs: capture
 
     # agent: one step's keys on the job itself (no steps: list). The review
-    # profile reads, never edits: it works on a snapshot of the branch.
+    # agent reads, never edits: it works on a snapshot of the branch.
     agent: review
 
     # prompt: its first message. {branch}: the run's branch;
@@ -102,7 +103,7 @@ jobs:
     # closed (none here).
     uses: merge
 
-    # on-fail: the profile of the agent sent a conflict to resolve (it
+    # on-fail: the agent sent a conflict to resolve (it
     # rebases the branch); the run then goes back to capture, its review
     # again on what was resolved.
     on-fail: screenshots

@@ -28,7 +28,7 @@ In YAML, a form with `: ` in it goes in quotes, or under `if: |`.
 
 ## Variables
 
-In a step's `prompt` and a profile's instructions, as `{NAME}`; in a profile's `tools` and `deny` too (filled in
+In a step's `prompt` and an agent's instructions, as `{NAME}`; in an agent's `tools` and `deny` too (filled in
 shell-quoted). Anything else in braces that looks like one (`{word}`, `{a.b}`) is refused; `{ "a": 1 }` isn't one.
 
 | Variable | Is |

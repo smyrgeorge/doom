@@ -1,13 +1,13 @@
 ;;; tests/helper-agent-workflow.el -*- lexical-binding: t; -*-
 ;; What the agent workflow's run tests share (test-agent-workflow-runs.el,
-;; test-agent-workflow-steps.el): a throwaway Beads project with profiles and
+;; test-agent-workflow-steps.el): a throwaway Beads project with agents and
 ;; a workflow, runs in it with stand-in agents, their jobs, prompts and
 ;; journal read back. Loaded by each test file using it, after tests/helper.el
 ;; and config/agent-workflow.el, the stand-in set as the mock agent.
 
 ;; ====== HELPERS ======
 
-(defconst +test-awr--profile "---\ndescription: does a job\n---\nDo it.\n")
+(defconst +test-awr--definition "---\ndescription: does a job\n---\nDo it.\n")
 
 (defconst +test-awr--feature "description: build, then review
 for: [feature]
@@ -29,7 +29,7 @@ jobs:
 ")
 
 (defun +test-awr--project (name)
-  "A Beads project NAME (prefix demo) with the profiles build and review
+  "A Beads project NAME (prefix demo) with the agents build and review
 and the workflow feature: its folder."
   (let ((dir (file-name-as-directory (expand-file-name (concat "awr/" name) +test-tmp))))
     (when (file-exists-p dir) (delete-directory dir t))
@@ -37,9 +37,9 @@ and the workflow feature: its folder."
     (let ((default-directory dir))
       (+test-bd-init "--quiet" "--skip-agents" "--prefix" "demo")
       (+test-git-user)
-      (dolist (file '(("profiles/build.md" . nil) ("profiles/review.md" . nil)))
-        (make-directory (expand-file-name ".agent-workflow/profiles" dir) t)
-        (write-region +test-awr--profile nil (expand-file-name (concat ".agent-workflow/" (car file)) dir)))
+      (dolist (file '(("agents/build.md" . nil) ("agents/review.md" . nil)))
+        (make-directory (expand-file-name ".agent-workflow/agents" dir) t)
+        (write-region +test-awr--definition nil (expand-file-name (concat ".agent-workflow/" (car file)) dir)))
       (make-directory (expand-file-name ".agent-workflow/workflows" dir) t)
       (write-region +test-awr--feature nil (expand-file-name ".agent-workflow/workflows/feature.yml" dir)))
     (file-name-as-directory (file-truename dir))))
@@ -54,7 +54,7 @@ starters, no runs or agents before or after; skipped without bd."
             (default-directory project)
             (log (expand-file-name (concat "awr/" ,name ".log") +test-tmp))
             (agent-workflow-starters-directory (+test-tmp-file "awr/no-starters/"))
-            (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+            (agent-workflow--definitions-cache (make-hash-table :test #'equal))
             (agent-workflow--workflows-cache (make-hash-table :test #'equal))
             (agent-workflow-kind 'mock)
             (agent-workflow--runs nil)

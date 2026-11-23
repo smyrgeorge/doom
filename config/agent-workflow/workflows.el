@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/agent-workflow/workflows.el -*- lexical-binding: t; -*-
 ;; Workflows: the work, as GitHub Actions describes it, some steps an LLM.
-;; Loaded from config/agent-workflow.el, after profiles.el. No Doom here.
+;; Loaded from config/agent-workflow.el, after agents.el. No Doom here.
 ;;
 ;; A workflow is a YAML file, NAME.yml (or .yaml), read with yaml.el:
 ;;
@@ -19,7 +19,7 @@
 ;;   jobs:
 ;;     build:                       a job: a lowercase letter, then letters,
 ;;       steps:                     digits or -
-;;         - agent: build           an LLM in agent-shell, with a profile
+;;         - agent: build           an LLM in agent-shell, agents/build.md
 ;;           prompt: Build {issue}.
 ;;         - run: tests/run.sh      any program (inline: run: |, shell:
 ;;           name: test             python...); a name, its step's
@@ -38,7 +38,7 @@
 ;;   A step is agent: (with prompt:), run: (with shell:), elisp: (Lisp in
 ;;   your Emacs) or uses: (a built-in: merge, its with: {suite: make
 ;;   test}), with name:, timeout:, retries:, retry-from: (a step, its name
-;;   or number), on-fail: (a profile, or {run: a script, agent: a profile}:
+;;   or number), on-fail: (an agent, or {run: a script, agent: an agent}:
 ;;   the script first), approve:.
 ;;
 ;; WORKFLOW, read: a plist (:name :file :description :ticketless (ticket:
@@ -48,7 +48,7 @@
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
 ;; :max-rounds :steps (STEP...)), STEP (:kind agent|run|elisp|uses :agent
 ;; :name :prompt :run :shell :elisp :uses :with :timeout :retries
-;; :retry-from (an index of its job's steps) :on-fail (a profile)
+;; :retry-from (an index of its job's steps) :on-fail (an agent)
 ;; :on-fail-run (a script) :approve),
 ;; durations in seconds. Nothing in it is run here: if: and elisp: are only
 ;; read, to check them.
@@ -58,7 +58,7 @@
 ;; that doesn't parse, no jobs, a name (its file's) not a lowercase letter
 ;; then letters, digits or -, a name: not its file's, a needs, rerun or
 ;; {jobs.X...} naming no job, needs going round, a step with no kind or two,
-;; an agent: or on-fail: naming no profile, a uses: no built-in, a shell:
+;; an agent: or on-fail: naming no agent, a uses: no built-in, a shell:
 ;; without run:, a step's name: not a name or another's of its job, a
 ;; retry-from: naming no step of its job or one after it, an if: not one Lisp form, an elisp: not Lisp, a variable not
 ;; one there is, a number, duration or true/false that isn't one, a branch:
@@ -102,7 +102,7 @@ itself.")
 
 (defvar agent-workflow--workflows-cache (make-hash-table :test #'equal)
   "A project's workflows, as last read: project to (STAMP (WORKFLOWS .
-PROBLEMS)), STAMP the files (its profiles' too) and their times.")
+PROBLEMS)), STAMP the files (its agents' too) and their times.")
 
 ;; ====== A WORKFLOW FILE ======
 
@@ -173,21 +173,21 @@ of its jobs, or nil."
         (dolist (job jobs) (visit (car job) nil))
         nil))))
 
-(cl-defun agent-workflow-workflow-read (file &optional (profiles 'any) as)
+(cl-defun agent-workflow-workflow-read (file &optional (definitions 'any) as)
   "Read the workflow FILE: (WORKFLOW . PROBLEMS). WORKFLOW is a plist (see
 the top of this file), nil if FILE has errors; PROBLEMS, each
 \(error|warning \"FILE:LINE: what\" FILE LINE \"what\"), in the order of
-their lines. PROFILES: the names its agent: and on-fail: may name (any, the
+their lines. DEFINITIONS: the names its agent: and on-fail: may name (any, the
 default: not checked). AS: its name, if not its file's (a run's copy). A
 file whose reading signals: a problem of its own (its name, line 1), not
 an error of every command reading the project's workflows."
   (condition-case err
-      (agent-workflow--workflow-read file profiles as)
+      (agent-workflow--workflow-read file definitions as)
     (error (cons nil (list (agent-workflow--problem 'error file 1 "it can't be read: %s"
                                                     (error-message-string err)))))))
 
-(defun agent-workflow--workflow-read (file profiles as)
-  "`agent-workflow-workflow-read''s work, for FILE, PROFILES, AS."
+(defun agent-workflow--workflow-read (file definitions as)
+  "`agent-workflow-workflow-read''s work, for FILE, DEFINITIONS, AS."
   (let* ((name (or as (replace-regexp-in-string "\\.ya?ml\\'" "" (file-name-nondirectory file))))
          (text (with-temp-buffer
                  (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
@@ -308,7 +308,7 @@ an error of every command reading the project's workflows."
                                  jobs))
                   (read-jobs nil))
               (pcase-dolist (`(,job . ,spec) jobs)
-                (push (cons job (agent-workflow--job-read job spec needs profiles #'problem
+                (push (cons job (agent-workflow--job-read job spec needs definitions #'problem
                                                           #'count #'duration #'bool))
                       read-jobs))
               (when-let* ((cycle (agent-workflow--cycle
@@ -352,9 +352,9 @@ an error of every command reading the project's workflows."
     ((pred stringp) value)
     (_ (format "%S" value))))
 
-(defun agent-workflow--job-read (job spec needs profiles problem count duration bool)
+(defun agent-workflow--job-read (job spec needs definitions problem count duration bool)
   "The job JOB of a workflow, SPEC as read: a plist (see the top of this
-file). NEEDS: every job's needs (an alist), PROFILES the profiles' names
+file). NEEDS: every job's needs (an alist), DEFINITIONS the agents' names
 \(any: not checked); PROBLEM, COUNT, DURATION and BOOL report as
 `agent-workflow-workflow-read' does."
   (let ((read (list :name job))
@@ -422,7 +422,7 @@ file). NEEDS: every job's needs (an alist), PROFILES the profiles' names
           (funcall problem 'error path "job %s: its steps (steps:) or one step's keys (%s), not both"
                    job (string-join (mapcar #'car own) ", ")))
          (own
-          (setq read (plist-put read :steps (list (agent-workflow--step-read own path job needs profiles
+          (setq read (plist-put read :steps (list (agent-workflow--step-read own path job needs definitions
                                                                             problem count duration bool)))))
          ((not (assoc "steps" spec))
           (funcall problem 'error path "job %s: no steps (steps: ...), nor one step's keys (agent:, run:...)" job))
@@ -432,7 +432,7 @@ file). NEEDS: every job's needs (an alist), PROFILES the profiles' names
           (setq read (plist-put read :steps
                                 (cl-loop for step in steps for i from 0
                                          collect (agent-workflow--step-read
-                                                  step (append path (list "steps" i)) job needs profiles
+                                                  step (append path (list "steps" i)) job needs definitions
                                                   problem count duration bool))))))
         (when (plist-get read :steps)
           (setq read (plist-put read :steps
@@ -474,7 +474,7 @@ said with PROBLEM and left out."
                      (plist-put step :retry-from nil))
                     (t (plist-put step :retry-from index)))))))))
 
-(defun agent-workflow--step-read (spec path job needs profiles problem count duration bool)
+(defun agent-workflow--step-read (spec path job needs definitions problem count duration bool)
   "A step of the job JOB, SPEC as read, at PATH: a plist (see the top of
 this file). As `agent-workflow--job-read' for the rest."
   (let* ((kinds (seq-filter (lambda (kind) (assoc kind spec)) '("agent" "run" "elisp" "uses")))
@@ -490,10 +490,10 @@ this file). As `agent-workflow--job-read' for the rest."
       (let ((at (append path (list key))))
         (pcase key
           ("agent"
-           (cond ((not (stringp value)) (funcall problem 'error at "agent %s: a profile" (agent-workflow--shown value)))
-                 ((and (listp profiles) (not (member value profiles)))
-                  (funcall problem 'error at "agent %s: no such profile (%s)" value
-                           (agent-workflow--listed profiles)))
+           (cond ((not (stringp value)) (funcall problem 'error at "agent %s: an agent's name" (agent-workflow--shown value)))
+                 ((and (listp definitions) (not (member value definitions)))
+                  (funcall problem 'error at "agent %s: no such agent (%s)" value
+                           (agent-workflow--listed definitions)))
                  (t (setq step (plist-put step :agent value)))))
           ("prompt"
            (if (not (stringp value))
@@ -562,23 +562,23 @@ this file). As `agent-workflow--job-read' for the rest."
              (funcall problem 'warning at "retries: an agent step isn't retried (its script's are)"))
            (setq step (plist-put step :retries (funcall count at value 0 "retries"))))
           ("on-fail"
-           ;; A profile (its agent fixes it), or {run: a script, agent: a
-           ;; profile}: the script first, then the agent if it couldn't.
-           (let ((profile-ok (lambda (at name)
+           ;; An agent (its agent fixes it), or {run: a script, agent: a
+           ;; agent}: the script first, then the agent if it couldn't.
+           (let ((agent-ok (lambda (at name)
                                (cond ((not (stringp name))
-                                      (funcall problem 'error at "agent %s: a profile" (agent-workflow--shown name))
+                                      (funcall problem 'error at "agent %s: an agent's name" (agent-workflow--shown name))
                                       nil)
-                                     ((and (listp profiles) (not (member name profiles)))
-                                      (funcall problem 'error at "on-fail %s: no such profile (%s)" name
-                                               (agent-workflow--listed profiles))
+                                     ((and (listp definitions) (not (member name definitions)))
+                                      (funcall problem 'error at "on-fail %s: no such agent (%s)" name
+                                               (agent-workflow--listed definitions))
                                       nil)
                                      (t t)))))
              (cond ((equal kind "agent")
                     (funcall problem 'warning at "on-fail: an agent step has no script to fail: ignored"))
                    ((null value)
-                    (funcall problem 'error at "on-fail: run: (a script), agent: (a profile), or both"))
+                    (funcall problem 'error at "on-fail: run: (a script), agent: (an agent's name), or both"))
                    ((stringp value)
-                    (when (funcall profile-ok at value)
+                    (when (funcall agent-ok at value)
                       (setq step (plist-put step :on-fail value))))
                    ((and value (agent-workflow--mapping-p value))
                     (let ((script (cdr (assoc "run" value)))
@@ -587,14 +587,14 @@ this file). As `agent-workflow--job-read' for the rest."
                         (unless (member k '("run" "agent"))
                           (funcall problem 'warning (append at (list k)) "unknown key %s: ignored (run, agent)" k)))
                       (cond ((not (or script agent))
-                             (funcall problem 'error at "on-fail: run: (a script), agent: (a profile), or both"))
+                             (funcall problem 'error at "on-fail: run: (a script), agent: (an agent's name), or both"))
                             ((and script (not (and (stringp script) (not (string-blank-p script)))))
                              (funcall problem 'error (append at (list "run")) "run %s: a script"
                                       (agent-workflow--shown script)))
-                            ((and agent (not (funcall profile-ok (append at (list "agent")) agent))))
+                            ((and agent (not (funcall agent-ok (append at (list "agent")) agent))))
                             (t (when script (setq step (plist-put step :on-fail-run script)))
                                (when agent (setq step (plist-put step :on-fail agent)))))))
-                   (t (funcall problem 'error at "on-fail %s: a profile, or {run: a script, agent: a profile}"
+                   (t (funcall problem 'error at "on-fail %s: an agent's name, or {run: a script, agent: an agent's name}"
                                (agent-workflow--shown value))))))
           ("approve" (setq step (plist-put step :approve (funcall bool at value "approve"))))
           ("name"
@@ -619,19 +619,19 @@ this file). As `agent-workflow--job-read' for the rest."
 
 (defun agent-workflow--workflows-read (project)
   "PROJECT's workflows and their problems, read again if a file changed
-\(its profiles' too): (WORKFLOWS . PROBLEMS), WORKFLOWS an alist of a name
+\(its agents' too): (WORKFLOWS . PROBLEMS), WORKFLOWS an alist of a name
 and its workflow, in order (the starters first), each one's :origin where
 its file is (starter, project, local), its :replaces the origin of the one
 of its name it replaced."
   (let* ((files (agent-workflow--files project "workflows" "\\`[^.].*\\.ya?ml\\'"))
-         (profiles (agent-workflow-profiles project))
+         (definitions (agent-workflow-agent-definitions project))
          (stamp (cons (agent-workflow--stamp files)
-                      (car (gethash (or project "") agent-workflow--profiles-cache))))
+                      (car (gethash (or project "") agent-workflow--definitions-cache))))
          (key (or project ""))
          (cached (gethash key agent-workflow--workflows-cache)))
     (if (equal (car cached) stamp)
         (cadr cached)
-      (let ((names (mapcar #'car profiles)) workflows problems)
+      (let ((names (mapcar #'car definitions)) workflows problems)
         (dolist (file files)
           (pcase-let ((`(,workflow . ,found) (agent-workflow-workflow-read (cdr file) names)))
             (setq problems (append problems found))

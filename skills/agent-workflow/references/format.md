@@ -37,21 +37,21 @@ One of these, and only one:
 
 | Key | Does | With |
 |---|---|---|
-| `agent` | an LLM in agent-shell, with that profile | `prompt`: its first message (its variables filled in); none: its job on the issue |
+| `agent` | an LLM in agent-shell, with that agent | `prompt`: its first message (its variables filled in); none: its job on the issue |
 | `run` | a script, by its shell | `shell`: bash by default, `python3`, `node`, any interpreter |
 | `elisp` | Lisp in the user's Emacs | (quick: it blocks Emacs) |
 | `uses` | a built-in: `merge` | `with`: `{suite: make test}` |
 
 And: `name` (a name, its own in its job), `timeout` (a duration: a script's), `retries` (how many times a script
 failing with 1 is fixed and run again; 0 by default), `retry-from` (where its retry starts again: an earlier step of
-its job, its name or number from 1), `on-fail` (the profile of the agent sent to fix a step, in a job with no agent of
-its own; or `{run: SCRIPT}`, a script tried first, alone, or `{run: SCRIPT, agent: PROFILE}`, the script then the
+its job, its name or number from 1), `on-fail` (the agent sent to fix a step, in a job with no agent of
+its own; or `{run: SCRIPT}`, a script tried first, alone, or `{run: SCRIPT, agent: AGENT}`, the script then the
 agent if it couldn't: scripts.md), `approve`.
 
 ## What the check refuses
 
 An error leaves the workflow out: YAML that doesn't parse; no jobs; a job's name that isn't one; `needs` naming no
-job, or its own; needs going round (`a → b → a`); a step with no kind, or two; `agent` or `on-fail` naming no profile
+job, or its own; needs going round (`a → b → a`); a step with no kind, or two; `agent` or `on-fail` naming no agent
 of the project's; `uses` naming no built-in; `shell` without `run`; a step's `name` that isn't one, or another's of its job;
 `retry-from` naming no step of its job, or one after it; `prompt` on a step that isn't an agent's; an `if`
 that isn't one Lisp form; `elisp` that isn't Lisp; a variable that isn't one; `jobs.X.notes` of no job; an outcome's

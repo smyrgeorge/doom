@@ -2,8 +2,8 @@
 name: agent-workflow
 description: >-
   Write, check and run agent workflows: the work on an issue described as GitHub Actions does (jobs, their order,
-  which run in parallel, their steps), some steps an LLM in agent-shell with a profile, others scripts, Lisp or a
-  built-in merge, run by Emacs on a pool of agents. Use when asked to write or change a project's workflow or profile
+  which run in parallel, their steps), some steps an LLM in agent-shell with an agent, others scripts, Lisp or a
+  built-in merge, run by Emacs on a pool of agents. Use when asked to write or change a project's workflow or agent
   (.agent-workflow/), check one, or start, follow, answer, continue or send back a run (cmd/agent-workflow).
 ---
 
@@ -12,17 +12,18 @@ description: >-
 A **workflow** is the work on a project's issue, as GitHub Actions describes it: **jobs**, the order they run in
 (`needs`), which run in parallel (those that don't need each other), and their **steps**, in order. A step is a script
 (`run:`), Lisp in the user's Emacs (`elisp:`), a built-in (`uses: merge`), or an **agent**: an LLM in agent-shell,
-with a **profile** saying what it may do. Emacs is the engine: it starts each job, gives agent steps to agents of a
-**pool** (no role, no name: an agent is a job's, `doom-a1b · review`), moves the issue, and writes a run's journal.
+its tools, rules and instructions a Markdown file of `agents/` (`agent: review`: `agents/review.md`). Emacs is the
+engine: it starts each job, gives agent steps to sessions of a **pool** (no role, no name: a session is a job's,
+`doom-a1b · review`), moves the issue, and writes a run's journal.
 Agents never hand work on: they end their step, and the workflow says what follows.
 
 ## Where they are
 
 | Place | Committed | What |
 |---|---|---|
-| `.agent-workflow/workflows/NAME.yml`, `.agent-workflow/profiles/NAME.md` | yes | the project's; run once the user trusts the project |
-| `.agent-shell/agent-workflow/workflows/`, `profiles/` | no | the user's own |
-| `~/.config/doom/config/agent-workflow/workflows/`, `profiles/` | with this config | the starters: feature, bugfix, quick; build, test, docs, review, investigate, security |
+| `.agent-workflow/workflows/NAME.yml`, `.agent-workflow/agents/NAME.md` | yes | the project's; run once the user trusts the project |
+| `.agent-shell/agent-workflow/workflows/`, `agents/` | no | the user's own |
+| `~/.config/doom/config/agent-workflow/workflows/`, `agents/` | with this config | the starters: feature, bugfix, quick; build, test, docs, review, investigate, security |
 
 One of the same name replaces the one before it: a starter, then the project's, then the user's. Agents of a run can't
 edit `.agent-workflow/`, and a branch changing it merges only once the user says so.
@@ -33,7 +34,7 @@ edit `.agent-workflow/`, and a branch changing it merges only once the user says
 done, 1 not (the reply says why), 2 a wrong use, 3 no Emacs.
 
 ```sh
-agent-workflow check                    # every workflow and profile of the project, their problems
+agent-workflow check                    # every workflow and agent of the project, their problems
 agent-workflow check draft.yml          # one file, anywhere: check what you write before saving it in place
 agent-workflow dry-run feature --outcome review=changes,approved   # walked, nothing run: what would happen
 agent-workflow run doom-a1b doom-c3d --detach   # runs started, each with its own workflow (--workflow NAME)
@@ -60,7 +61,7 @@ budget: {cost: 15, time: 3h}      # then the run asks
 jobs:
   build:
     steps:
-      - agent: build              # an LLM, with the build profile
+      - agent: build              # the build agent, an LLM
         prompt: |
           Build {issue}: {issue.title}.
           {issue.acceptance}
@@ -85,7 +86,7 @@ jobs:
     concurrency: 1                # one merge at a time, across runs
     uses: merge
     with: {suite: make test}
-    on-fail: build                # a conflict: an agent with the build profile rebases
+    on-fail: build                # a conflict: the build agent rebases
 ```
 
 Its keys, in a line each: `name` (its file's), `description`, `ticket` (`false`: it runs on no ticket), `runs-in` (`checkout`: in the user's), `for`, `concurrency`, `budget` (`cost`, `tokens`,
@@ -99,16 +100,16 @@ Its keys, in a line each: `name` (its file's), `description`, `ticket` (`false`:
 2. Write it in a file outside `.agent-workflow/` first, and `agent-workflow check draft.yml` until it has no error.
 3. Tell the user where it goes; saved in `.agent-workflow/workflows/`, check the project again.
 
-Mind: a job's agents that may edit (their profile doesn't deny both `Edit` and `Write`) take the branch one at a time;
+Mind: a job's agents that may edit (their file doesn't deny both `Edit` and `Write`) take the branch one at a time;
 those that only read work on a snapshot, beside them. A `run:` naming a file elsewhere than `.agent-workflow/` is
 warned about: an agent could change the check to make it pass. Lisp with `: ` in it goes under `elisp: |` (YAML).
 
 ## What to read when
 
 - Every key, its values and checks: [references/format.md](references/format.md).
-- `if:` and the variables of a prompt or profile (`{issue.acceptance}`, `{jobs.build.notes}`...):
+- `if:` and the variables of a prompt or agent (`{issue.acceptance}`, `{jobs.build.notes}`...):
   [references/conditions.md](references/conditions.md).
-- A profile (what an agent step may do): [references/profiles.md](references/profiles.md).
+- An agent (what an agent step may do): [references/agents.md](references/agents.md).
 - Scripts (their environment, exit codes, retries, on-fail) and the built-in merge:
   [references/scripts.md](references/scripts.md).
 - Running them: starting, following (logs, status, the pane), what a run waits for, its questions, going back, loops,

@@ -1,23 +1,24 @@
 # Agent workflow
 
-> **Status:** being built (epic `doom-38o`). For now: workflows and profiles, read and checked; the pool of agents;
+> **Status:** being built (epic `doom-38o`). For now: workflows and agents, read and checked; the pool of agents;
 > runs, their jobs in parallel, every kind of step, going back, loops, the merge, limits, approval, resuming,
 > budgets, an issue changed by hand, the starters, the skills, a dry run, the progress pane and the logs. Not yet:
 > triggers beyond you.
 
 A **workflow** describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in
-parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, with a
-**profile** saying what it may do. Agents have no role and no name: the step brings its profile.
+parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**: an LLM in agent-shell, its tools,
+what it may do and its instructions a Markdown file of `agents/` (`agent: review`: `agents/review.md`). A session of
+the pool has no role of its own: the step brings its agent.
 
 ## Where they are
 
 | Place | Committed | What |
 |---|---|---|
-| `config/agent-workflow/workflows/`, `profiles/` | with this config | the starters |
-| `.agent-workflow/workflows/`, `profiles/` | yes | the project's, read from your checkout, never an agent's worktree |
-| `.agent-shell/agent-workflow/workflows/`, `profiles/` | no | yours |
+| `config/agent-workflow/workflows/`, `agents/` | with this config | the starters |
+| `.agent-workflow/workflows/`, `agents/` | yes | the project's, read from your checkout, never an agent's worktree |
+| `.agent-shell/agent-workflow/workflows/`, `agents/` | no | yours |
 
-A workflow is `NAME.yml` (or `.yaml`), a profile `NAME.md`. One of the same name replaces the one before it: a starter,
+A workflow is `NAME.yml` (or `.yaml`), an agent `NAME.md`. One of the same name replaces the one before it: a starter,
 then the project's, then yours.
 
 ## A workflow
@@ -103,22 +104,22 @@ A step does one thing:
 
 | Key | What |
 |---|---|
-| `agent` | An LLM in agent-shell, with that profile; `prompt`: what it's told |
+| `agent` | An LLM in agent-shell, with that agent; `prompt`: what it's told |
 | `run` | A program, or a script (`run: \|`); `shell`: its interpreter (bash by default, `python`, `node`...) |
 | `elisp` | Lisp in your Emacs (quick: it blocks it). Lisp with `: ` in it goes under `elisp: \|` |
 | `uses` | A built-in: `merge`, with `with: {suite: make test}` |
 
 With `name` (a name of its own in its job: its pane, its log say it), `timeout` (`45s`, `10m`, `1h30m`), `retries`
 (a script's), `retry-from` (where its retry starts again: an earlier step of its job, its name or number), `on-fail`
-(the profile of the agent a failing step goes to, in a job with none; or a script tried first: see below) and
+(the agent a failing step goes to, in a job with none; or a script tried first: see below) and
 `approve`.
 
 ### A script on a failure
 
-`on-fail` takes a profile (an agent fixes the step), or a script, or both:
+`on-fail` takes an agent (it fixes the step), or a script, or both:
 
 ```yaml
-on-fail: ci                    # an agent with the ci profile
+on-fail: ci                    # the ci agent
 
 on-fail:                       # a script alone
   run: .agent-workflow/scripts/rerun-flaky.sh
@@ -141,7 +142,7 @@ box shows it as it comes. It returns:
 
 ### Variables
 
-A prompt and a profile name them as `{issue}`:
+A prompt and an agent name them as `{issue}`:
 
 | Variable | Is |
 |---|---|
@@ -153,7 +154,7 @@ A prompt and a profile name them as `{issue}`:
 | `{note}` | Yours, when you send the work back or answer |
 | `{round}`, `{try}` | How many times round, how many tries |
 
-## A profile
+## An agent
 
 ```markdown
 ---
@@ -192,7 +193,7 @@ These ship with this config; a project's or yours of the same name replaces one.
 
 Their merges run no suite: a project's own copy adds its tests with `with: {suite: make test}`.
 
-| Profile | May |
+| Agent | May |
 |---|---|
 | build | edit, commit; never push |
 | test | edit `tests/`, commit; never push |
@@ -209,11 +210,11 @@ shell. They run once you trust this config (see [Trust](#trust)).
 
 | Workflow | Jobs |
 |---|---|
-| screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` profile looks at each changed one and commits the good ones; review (changes: capture again); merge |
-| github | In your checkout (`runs-in: checkout`). green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, its HEAD: your commits too, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` profile reads its logs, fixes the code or its test and commits on your main, and the job runs again from its push (`retry-from`), 5 times at most |
+| screenshots | capture: its script takes the examples' screenshots again (`.agent-workflow/scripts/screenshots.sh`, macOS: Emacs needs the Screen Recording permission; it broke, the run asks you), then an agent with the `screenshots` agent looks at each changed one and commits the good ones; review (changes: capture again); merge |
+| github | In your checkout (`runs-in: checkout`). green: check (gh logged in, your checkout on main, `.agent-workflow/scripts/github-check.sh`), push (your main, its HEAD: your commits too, `github-push.sh`), watch (its GitHub Actions until they're done, `github-watch.sh`); one failed, an agent with the `ci` agent reads its logs, fixes the code or its test and commits on your main, and the job runs again from its push (`retry-from`), 5 times at most |
 
-The `screenshots` profile (`.agent-workflow/profiles/`) may read, look at images and commit; it never takes them
-again, nor changes anything else. The `ci` profile may read, edit, run the tests and commit (only the files it
+The `screenshots` agent (`.agent-workflow/agents/`) may read, look at images and commit; it never takes them
+again, nor changes anything else. The `ci` agent may read, edit, run the tests and commit (only the files it
 changed: your checkout may have yours); it never pushes (the script does) nor runs the Actions again.
 
 github needs gh, logged in (`brew install gh`, `gh auth login`): without it the run fails at once (✗ failed, saying
@@ -241,10 +242,10 @@ Agents run in agent-shell, as many at once as `agent-workflow-pool` says (3), in
 no name: it does one job of an issue's run, and is known by them, `doom-a1b · review`, its session's buffer named so.
 Its permissions, its questions and its usage are agent-shell's, as in any session.
 
-- **Its profile** is its step's: its tools, deny, model and mode (none: `agent-workflow-mode`, auto). Variables in its
+- **Its agent** is its step's: its tools, deny, model and mode (none: `agent-workflow-mode`, auto). Variables in its
   tools are filled in as its session starts: `Bash(git -C {worktree} commit:*)`.
 - **It's told** the job it does and where, that it never switches branches, pushes, or changes the issue, and how it
-  ends its job: `cmd/agent-workflow done OUTCOME "notes"`. Then its profile's instructions.
+  ends its job: `cmd/agent-workflow done OUTCOME "notes"`. Then its agent's instructions.
 - **Its `bd` commands** run as `ISSUE/JOB` (`doom-a1b/review`): Beads' history says which job did what.
 - **Its canvas** opens no pane of its own: it's shown in its section of the run's [pane](#following-a-run).
 
@@ -257,7 +258,7 @@ A project whose [agent workspace](agent-workspace.md) crew runs has no agents of
 | Setting | Default | What |
 |---|---|---|
 | `agent-workflow-pool` | `3` | How many agents run at once |
-| `agent-workflow-mode` | `"auto"` | The permission mode of an agent whose profile has none |
+| `agent-workflow-mode` | `"auto"` | The permission mode of an agent whose file has none (`mode:`) |
 | `agent-workflow-max-rounds` | `10` | How many times a job may send the work back before the run asks you |
 | `agent-workflow-script-timeout` | `1800` | Seconds a script may run, unless its step's `timeout` says |
 | `agent-workflow-continue-on-start` | `nil` | Runs read back as Emacs starts continue by themselves |
@@ -292,9 +293,9 @@ goes to the highest priority first, then to the run started first.
 A run's jobs start once their `needs` are done; one whose `if` doesn't hold then is skipped. Jobs that don't need each
 other run at once, as the pool allows. They share the issue's branch:
 
-- **A job that edits** (one of its agents' profiles lets it) works in the issue's worktree, one at a time: the next one
+- **A job that edits** (one of its agents may edit) works in the issue's worktree, one at a time: the next one
   waits for it, saying so (`tests: waiting for docs, which edits the branch`).
-- **A job that only reads** (its profiles deny `Edit` and `Write`, or it runs scripts) works on a snapshot of the
+- **A job that only reads** (its agents deny `Edit` and `Write`, or it runs scripts) works on a snapshot of the
   branch, a worktree of its own detached at the commit the branch is at when it starts
   (`.agent-shell/agent-workflow/worktrees/ISSUE@JOB`), removed once it's over. It runs beside the others.
 
@@ -400,7 +401,7 @@ only after that, when the run needs you (its window closed, the same).
 over too: its issue, workflow, state, time, what it spent, what it waits for. `RET` opens a run's pane, `gr` reads
 them again.
 
-An agent asking you in its session, for a permission (a tool its profile doesn't allow without asking) or with a
+An agent asking you in its session, for a permission (a tool its agent doesn't allow without asking) or with a
 question (its form), holds its turn: its run waits for you, saying what (`build: its agent asks for your permission: npm
 install`). Needs you shows it: a permission's own buttons (Allow, Reject...), pressed from there; a question, its form
 as Agent UI's own, answered there (agent-shell's form gets the answer, as its Submit gives it); and **Go to it**, its
@@ -467,7 +468,7 @@ is kept in the run's `logs/`.
 | It returns | Then |
 |---|---|
 | 0 | The next step |
-| 1 | The work is wrong: its output goes to the job's agent (or, in a job with none, one with the step's `on-fail` profile), which fixes it and says done; the step runs again (from its `retry-from` step, those between with it), up to its `retries` (0 by default). Its `on-fail` script first, if it has one (see A script on a failure) |
+| 1 | The work is wrong: its output goes to the job's agent (or, in a job with none, one with the step's `on-fail` agent), which fixes it and says done; the step runs again (from its `retry-from` step, those between with it), up to its `retries` (0 by default). Its `on-fail` script first, if it has one (see A script on a failure) |
 | 3 | It can't go on: the run failed, its last line saying why. Its agents stopped, its issue open again, its branch and worktree kept, as cancelled |
 | another code, or runs out of its `timeout` | It broke: no agent is sent |
 
@@ -632,9 +633,9 @@ agent-workflow-forget-trust` stops trusting one. The starters and yours (out of 
 
 Agents can't change what runs them:
 
-- Every agent is denied editing what runs it: `.agent-workflow/`, and your own workflows and profiles
-  (`.agent-shell/agent-workflow/workflows/`, `profiles/`, trusted without asking), where it works and in the main
-  checkout by their absolute paths (its Bash is its profile's own rules to watch).
+- Every agent is denied editing what runs it: `.agent-workflow/`, and your own workflows and agents
+  (`.agent-shell/agent-workflow/workflows/`, `agents/`, trusted without asking), where it works and in the main
+  checkout by their absolute paths (its Bash is its agent's own rules to watch).
 - A branch that changes `.agent-workflow/` is merged only once you say so (`confirm ISSUE go`), whatever the workflow's
   `approve` says.
 - The check warns about a `run:` naming a file elsewhere (`tests/run.sh`): an agent could change it to make it pass. One
@@ -652,9 +653,9 @@ canvas, being sent back, what its outcomes do.
 
 ## Checking them
 
-`M-x agent-workflow-check` reads the project's workflows and profiles again and lists every problem, each line
+`M-x agent-workflow-check` reads the project's workflows and agents again and lists every problem, each line
 taking you to its file and line. A file with an error is left out (a `needs` naming no job, needs going round, an
-`agent` naming no profile, an `if` that isn't one Lisp form, a variable that isn't one); a warning keeps it. Neither
+`agent` naming no agent, an `if` that isn't one Lisp form, a variable that isn't one); a warning keeps it. Neither
 `if` nor `elisp` is run to check them.
 
 From the shell, as JSON ([more](cmd.md#cmdagent-workflow)):

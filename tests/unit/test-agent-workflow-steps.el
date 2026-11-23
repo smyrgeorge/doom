@@ -227,7 +227,7 @@ jobs:
 
 (ert-deftest agent-workflow-steps/retries-used-up-then-an-on-fail-agent ()
   "A script-only job, no retries: its first failure asked; go, with a note:
-an agent with its on-fail profile started, told the output and your note;
+an agent with its on-fail agent started, told the output and your note;
 fixed, run again."
   (+test-awr "onfail"
     (+test-aws--workflow project "description: x
@@ -244,7 +244,7 @@ jobs:
       (should-not (agent-workflow-agents project))
       (agent-workflow-confirm run "go" :notes '(("check" . "write ok.txt")))
       (let ((agent (+test-awr--agent run "check")))
-        (should (equal (agent-workflow-agent-profile agent) "build"))
+        (should (equal (agent-workflow-agent-definition agent) "build"))
         (should (+test-awr--wait
                  (lambda () (seq-some (lambda (prompt) (and (string-match-p "missing ok.txt" prompt)
                                                             (string-match-p "The user adds: write ok.txt" prompt)))
@@ -297,7 +297,7 @@ jobs:
     (let* ((issue (+test-awr--issue project "On fail both"))
            (run (agent-workflow-start-run project issue))
            (agent (+test-awr--agent run "check")))
-      (should (equal (agent-workflow-agent-profile agent) "build"))
+      (should (equal (agent-workflow-agent-definition agent) "build"))
       (should (+test-awr--wait
                (lambda () (seq-some (lambda (prompt) (and (string-match-p "missing ok.txt" prompt)
                                                           (string-match-p "on-fail script ran first and couldn't fix it" prompt)
@@ -910,12 +910,12 @@ merged, whatever approve says; agents are denied editing it."
 
 (defmacro +test-aws--with-starters (&rest body)
   "BODY with the starters as they ship, the project's own workflows and
-profiles gone."
+agents gone."
   (declare (indent 0))
   `(progn
      (delete-directory (expand-file-name ".agent-workflow" project) t)
      (let ((agent-workflow-starters-directory (expand-file-name "config/agent-workflow/" +test-root))
-           (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+           (agent-workflow--definitions-cache (make-hash-table :test #'equal))
            (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
        ,@body)))
 
@@ -935,7 +935,7 @@ the merge, the issue closed."
     (+test-aws--with-starters
       (should-not (agent-workflow-check-problems project))
       (should (equal (mapcar #'car (agent-workflow-workflows project)) '("bugfix" "feature" "quick")))
-      (should (equal (mapcar #'car (agent-workflow-profiles project))
+      (should (equal (mapcar #'car (agent-workflow-agent-definitions project))
                      '("build" "docs" "investigate" "review" "security" "test")))
       (let* ((feature (+test-awr--issue project "A feature"))
              (run (agent-workflow-start-run project feature)))

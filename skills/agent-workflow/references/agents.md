@@ -1,8 +1,8 @@
-# Profiles
+# Agents
 
 Part of the agent-workflow skill: read [SKILL.md](../SKILL.md) first.
 
-A profile is what an agent step may do: `NAME.md`, a front matter, then the agent's instructions (added to its system
+An agent is what an agent step may do: `NAME.md`, a front matter, then the agent's instructions (added to its system
 prompt, after what every agent of a run is told: its job, where it works, how it ends its step).
 
 ```markdown
@@ -29,8 +29,8 @@ Build what the issue asks for, with its tests. Commit as you go. Never push.
 | `mode` | Claude Code's permission mode: `default`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions`; none: auto | another: an error |
 | `icon`, `verb`, `colour` | how its steps are shown | |
 
-A profile that denies both `Edit` and `Write` only reads: its jobs work on a snapshot of the branch, beside the others.
+An agent that denies both `Edit` and `Write` only reads: its jobs work on a snapshot of the branch, beside the others.
 One that may edit takes the issue's worktree, one job at a time.
 
 Every agent of a run may run `cmd/agent-workflow done` without asking, and may never edit `.agent-workflow/`, whatever
-its profile says.
+its agent says.

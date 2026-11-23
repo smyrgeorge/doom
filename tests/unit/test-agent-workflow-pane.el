@@ -803,7 +803,7 @@ line too."
 
 (ert-deftest agent-workflow-pane/a-step-being-fixed ()
   "A step that failed, its agent fixing it (its job's :retry): failed, its
-detail who fixes it (the agent's profile, else its on-fail) and the try that
+detail who fixes it (the agent's agent, else its on-fail) and the try that
 failed, of all it may have; its job's line says fixing. A job of one step:
 all on its line. A merge's conflicts: resolving them."
   (let* ((workflow '(:name "github"
@@ -827,9 +827,9 @@ all on its line. A merge's conflicts: resolving them."
           (should (equal (plist-get (car (plist-get green :steps)) :status) "done"))
           (should (equal (plist-get watch :status) "failed"))
           (should (equal (plist-get watch :detail) "run: watch.sh · ci fixing it · try 1 of 6")))
-        ;; The agent fixing it known: its profile.
+        ;; The agent fixing it known: its agent.
         (setf (plist-get (cdr (assoc "green" (agent-workflow-run-jobs run))) :agent)
-              (agent-workflow-agent--make :issue "github" :job "green" :profile "fixer")
+              (agent-workflow-agent--make :issue "github" :job "green" :definition "fixer")
               (plist-get (cdr (assoc "green" (agent-workflow-run-jobs run))) :tries) '((0 . 1) (1 . 3)))
         (should (equal (plist-get (nth 1 (plist-get (item "green") :steps)) :detail)
                        "run: watch.sh · fixer fixing it · try 3 of 6"))
@@ -861,7 +861,7 @@ running), none. Show session and Show output pressed: shown."
                                       :on-fail-run "rerun.sh")))
                             ("docs" :name "docs" :steps ((:kind agent :agent "docs" :name "write"))))))
          (session (generate-new-buffer " *test agent session*"))
-         (agent (agent-workflow-agent--make :issue "github" :job "green" :profile "ci" :buffer session))
+         (agent (agent-workflow-agent--make :issue "github" :job "green" :definition "ci" :buffer session))
          (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running :workflow workflow
                                         :spent '(:cost 0 :tokens 0)
                                         :jobs (list (cons "green" (list :status 'running :step 1 :retry 1 :agent agent
@@ -971,7 +971,7 @@ running), none. Show session and Show output pressed: shown."
   "The live boxes at the Run section's bottom: under Rounds, even one
 shown before Rounds came (all shown again under it)."
   (let* ((session (generate-new-buffer " *test agent session*"))
-         (agent (agent-workflow-agent--make :issue "github" :job "docs" :profile "docs" :buffer session))
+         (agent (agent-workflow-agent--make :issue "github" :job "docs" :definition "docs" :buffer session))
          (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running
                                         :workflow '(:name "github" :jobs (("docs" :name "docs" :steps ((:kind agent :agent "docs")))))
                                         :spent '(:cost 0 :tokens 0)

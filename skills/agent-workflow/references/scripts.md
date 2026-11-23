@@ -14,13 +14,13 @@ Its environment: `ISSUE`, `BRANCH`, `MAIN` (the user's checkout), `MAIN_BRANCH`,
 | It returns | Then |
 |---|---|
 | 0 | the next step |
-| 1 | the work is wrong: its output goes to the job's agent (or one with the step's `on-fail` profile, in a job with none), which fixes it and says done; the step runs again (from its `retry-from` step), up to its `retries` |
+| 1 | the work is wrong: its output goes to the job's agent (or one with the step's `on-fail` agent, in a job with none), which fixes it and says done; the step runs again (from its `retry-from` step), up to its `retries` |
 | 3 | it can't go on: the run failed (its last line why), its agents stopped, its issue open again: for what no agent can fix (a tool missing, the wrong branch) |
 | another code, or past its `timeout` | it broke: no agent is sent; the run asks the user (run it again, skip it, stop) |
 
 Retries used up, the run asks the user: go on (with a note for the agent fixing it), skip the step, or stop.
 
-An `on-fail` script (`on-fail: {run: SCRIPT}`, or `{run: SCRIPT, agent: PROFILE}`) runs first on an exit 1, where
+An `on-fail` script (`on-fail: {run: SCRIPT}`, or `{run: SCRIPT, agent: AGENT}`) runs first on an exit 1, where
 the step ran, with `FAILED_STEP` (its name, else its number) and `FAILED_OUTPUT` (its output's last 200 lines) in its
 environment: 0, it fixed it (the step runs again, its try counted, no agent); 1, it couldn't (to the job's agent, else
 the `on-fail` one, told the step's output and the script's; none, the run asks the user); another code, or past the
