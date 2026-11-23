@@ -76,6 +76,13 @@ if there's no such column."
       (condition-case err
           (agent-ui-check-actions actions)
         (agent-ui-error (agent-ui--fail "table: row-%s" (agent-ui-error-message err)))))
+    (when-let* ((open (plist-get props :row-open)))
+      (unless (agent-ui--plist-p open)
+        (agent-ui--fail "table: row-open is {\"prompt\": ..., \"submit\": ..., \"help\": ...}"))
+      (condition-case err
+          (agent-ui-check-actions (list (append (list :label "open") open)))
+        (agent-ui-error (agent-ui--fail "table: row-open: %s"
+                                        (string-replace "action 1's " "its " (agent-ui-error-message err))))))
     (plist-put props :key (agent-ui-table--key-index (plist-get props :key) columns))
     ;; Asking the user to pick rows (doom-ord): its settings; what's picked,
     ;; each a row's key cell (or its first; `agent-ui-table--row-answers').
@@ -222,7 +229,8 @@ versions: 1.2.9 before 1.2.10); DESCENDING the other way; empty cells last."
                               (t (funcall before a b))))))))
 
 (defun agent-ui-table--fill (prompt columns row)
-  "PROMPT with {COLUMN} as ROW's cell in that column, {row} as all of them."
+  "PROMPT with {COLUMN} as ROW's cell in that column (a column by its name,
+else its index: {0}), {row} as all of them."
   (replace-regexp-in-string
    "{\\([^{}]+\\)}"
    (lambda (match)
@@ -234,6 +242,8 @@ versions: 1.2.9 before 1.2.10); DESCENDING the other way; empty cells last."
                              collect (if (string-empty-p c) cell (format "%s: %s" c cell)))
                     ", "))
         ((cl-position name columns :test #'equal) (nth (cl-position name columns :test #'equal) row))
+        ((and (string-match-p "\\`[0-9]+\\'" name) (< (string-to-number name) (length row)))
+         (nth (string-to-number name) row))
         (t match))))
    prompt t t))
 
@@ -368,7 +378,9 @@ the whole table, its header, \"no rows yet\" and what's left out too."
         (align (plist-get layout :align))
         ;; Asking (select): a mark before each row, the row a button picking it.
         (select (plist-get layout :select))
-        (props (plist-get layout :props)))
+        (props (plist-get layout :props))
+        ;; NOWRAP: a cell too wide cut, …, not wrapped: a row a line.
+        (nowrap (eq (plist-get (plist-get layout :props) :nowrap) t)))
     ;; Its text made plain in a buffer, where its cells' faces and columns go
     ;; noted, then put on the string taken out once: each made once (joined
     ;; as strings, every cell's properties were copied at each join; put in
@@ -394,7 +406,11 @@ the whole table, its header, \"no rows yet\" and what's left out too."
                              (pieces (and (cl-loop for w in cell-widths for width in widths
                                                    thereis (> w width))
                                           (cl-loop for cell in cells for w in cell-widths for width in widths
-                                                   collect (and (> w width) (agent-ui-table--wrap cell width)))))
+                                                   collect (and (> w width)
+                                                                (if nowrap
+                                                                    (let ((cut (truncate-string-to-width cell width nil nil "…")))
+                                                                      (list (cons cut (string-width cut))))
+                                                                  (agent-ui-table--wrap cell width))))))
                              (height (if pieces (apply #'max (mapcar #'length pieces)) 1)))
                         (dotimes (k height)
                           (unless (= k 0)
@@ -458,6 +474,23 @@ the whole table, its header, \"no rows yet\" and what's left out too."
                                 ;; The row (its mark and cells, not its buttons) a
                                 ;; button picking it, while it can be.
                                 (pickable (lambda ()
+                                            (if-let* ((open (and (not (plist-get layout :pick))
+                                                                 (not (plist-get ctx :still))
+                                                                 (plist-get props :row-open))))
+                                                ;; ROW-OPEN: the row itself a button.
+                                                (let ((end (point))
+                                                      (prompt (agent-ui-table--fill (plist-get open :prompt) columns row))
+                                                      (submit (eq (plist-get open :submit) t)))
+                                                  (dolist (prop (list (list 'agent-ui-action
+                                                                            (lambda () (funcall agent-ui-action-function prompt submit)))
+                                                                      (list 'keymap agent-ui-button-map)
+                                                                      (list 'mouse-face 'highlight)
+                                                                      (list 'help-echo
+                                                                            (if-let* ((help (plist-get open :help)))
+                                                                                (concat "RET: " help)
+                                                                              (format "RET: %s \"%s\"" (if submit "send" "put into the prompt")
+                                                                                      (truncate-string-to-width prompt 60 nil nil "…"))))))
+                                                    (push (list row-start end (car prop) (cadr prop)) marks)))
                                             (when (plist-get layout :pick)
                                               (let ((end (point))
                                                     (toggled (agent-ui-ask-toggled props answer multiple)))
@@ -468,7 +501,7 @@ the whole table, its header, \"no rows yet\" and what's left out too."
                                                                     (list 'mouse-face 'highlight)
                                                                     (list 'help-echo (if multiple "RET: (un)check it"
                                                                                        "RET: choose it"))))
-                                                  (push (list row-start end (car prop) (cadr prop)) marks)))))))
+                                                  (push (list row-start end (car prop) (cadr prop)) marks))))))))
                            (when select
                              (insert (agent-ui-ask-mark (agent-ui-ask-picked-p props answer) multiple) " "))
                            (cond
@@ -589,7 +622,8 @@ pending... are coloured. With KEY (a column's index or name),
 appending a row whose key is there replaces that row: append
 {\"rows\": [[\"parser\", \"failed\", \"1.2s\"]]}. SORT orders its rows by a
 column (DESCENDING the other way); ROW-ACTIONS are buttons on each row
-putting a prompt with its cells into the session's prompt. SELECT asks the
+putting a prompt with its cells into the session's prompt; ROW-OPEN makes
+the row itself one (a commit's line opening it). SELECT asks the
 user to pick rows (which to fix): marks before them, Send puts \"Answer to
 ID (QUESTION): their keys\" into your prompt."
   :props ((columns list "The columns' names (all \"\": no header, the rows alone)" :required t)
@@ -599,6 +633,8 @@ ID (QUESTION): their keys\" into your prompt."
           (sort any "The column (index from 0, or name) its rows are sorted by (s on a column in the canvas)")
           (descending boolean "Sorted the other way: largest first")
           (row-actions list "Buttons on each row: [{\"label\", \"prompt\", \"submit\"}], the prompt's {Column} its cell, {row} all")
+          (nowrap boolean "Each row a line: a cell too wide cut, …, not wrapped")
+          (row-open any "The row itself a button (RET or a click on it): {\"prompt\", \"submit\", \"help\"}, the prompt's {Column} (or {0}, by its index) its cell")
           (select any "Ask the user to pick rows: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their KEY cells (else the first; a row whose cell another's is too, by its cells)")
           (selected list "The rows picked so far (their key cells): a default, or the user's")
           (note-text string "The user's note")

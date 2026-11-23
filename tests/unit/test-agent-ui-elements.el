@@ -671,6 +671,36 @@ past the width); clickable either way."
     (let ((text (agent-ui-render element (agent-ui-context :width 34))))
       (should (get-text-property (string-search "⏵ Fix it" text) 'agent-ui-action text)))))
 
+;; RET or a click on a row: its prompt, its cells filled in.
+(ert-deftest agent-ui-elements/table-rows-opened-on-one-line ()
+  "ROW-OPEN: the row itself a button (no button drawn), its prompt's {0} its
+first cell; its help hovered. NOWRAP: a cell too wide cut, …, the row a
+line. A row-open not an action: refused."
+  (let* ((element '(:type "table" :columns ("" "") :nowrap t
+                    :rows (("abc1234" "A commit whose subject is far too long for the pane it is in")
+                           ("def5678" "Short"))
+                    :row-open (:prompt "{0}" :help "show this commit")))
+         (text (agent-ui-render element (agent-ui-context :width 40)))
+         (lines (split-string (substring-no-properties text) "\n" t)))
+    (should (= (length lines) 2))
+    (should (string-suffix-p "…" (string-trim-right (car lines))))
+    (dolist (line lines) (should (<= (string-width line) 40)))
+    (should-not (string-search "⏵" text))
+    (let* ((at (string-search "def5678" text))
+           (pressed nil)
+           (agent-ui-action-function (lambda (prompt submit) (setq pressed (list prompt submit)))))
+      (should (equal (get-text-property at 'help-echo text) "RET: show this commit"))
+      (funcall (get-text-property at 'agent-ui-action text))
+      (should (equal pressed '("def5678" nil)))))
+  ;; Wrapped without NOWRAP.
+  (should (> (length (split-string (+test-aue-draw '(:type "table" :columns ("" "")
+                                                     :rows (("abc1234" "A commit whose subject is far too long for the pane it is in"))
+                                                     :row-open (:prompt "{0}"))
+                                                   :width 40)
+                                   "\n" t))
+             1))
+  (should (string-match-p "row-open" (+test-aue-error '(:type "table" :columns ("a") :rows (("x")) :row-open "open")))))
+
 (ert-deftest agent-ui-elements/table-columns-that-fit ()
   "More columns than fit, each cut to its narrowest: those on the left that
 fit, the others said under it (it stayed wider than its width)."
