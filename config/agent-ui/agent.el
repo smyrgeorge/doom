@@ -11,6 +11,9 @@
 ;;   the most recently used.
 ;; - A canvas is named after its session, its others after it ("SESSION /
 ;;   tests"); killing the session kills them.
+;; - A session's canvas shown in a section of another (`agent-ui-host'): its
+;;   elements there are its, as on its own canvas (its actions, questions);
+;;   killing the session removes them, the section staying.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -146,6 +149,48 @@ panes, each a few lines high)."
   "The session's buffer is killed: its canvases too."
   (mapc #'kill-buffer (agent-ui-session-canvases (current-buffer))))
 
+(defun agent-ui--key-hosts (canvas key)
+  "The canvas (its name) the section of the element of key KEY in CANVAS
+hosts (`agent-ui-host'), or nil."
+  (with-current-buffer canvas
+    (when-let* ((section (agent-ui--find-section (agent-ui--key-section key))))
+      (agent-ui--section-hosts section))))
+
+(defun agent-ui--key-session (canvas key)
+  "The session the element of key KEY in CANVAS is of: the one whose canvas
+its section hosts (`agent-ui-host'), else CANVAS's (nil: none)."
+  (if-let* ((hosted (agent-ui--key-hosts canvas key)))
+      (car (agent-ui--canvas-session hosted))
+    (buffer-local-value 'agent-ui--session-buffer canvas)))
+
+(defun agent-ui--canvas-sessions (canvas)
+  "The sessions with elements in CANVAS: its own, those whose canvases its
+sections host."
+  (with-current-buffer canvas
+    (delete-dups (delq nil (cons agent-ui--session-buffer
+                                 (mapcar (lambda (section)
+                                           (when-let* ((hosted (agent-ui--section-hosts section)))
+                                             (car (agent-ui--canvas-session hosted))))
+                                         agent-ui--sections))))))
+
+(defun agent-ui--hosted-h (name host _section)
+  "Canvas NAME shown in a section of HOST (`agent-ui-host-functions'): if
+it's a session's, the session killed removes its elements there; HOST
+killed, the session's question mark looked at again."
+  (when-let* ((session (car (agent-ui--canvas-session name))))
+    (with-current-buffer session
+      (add-hook 'kill-buffer-hook #'agent-ui--unhost-session nil t))
+    (with-current-buffer host
+      (add-hook 'kill-buffer-hook #'agent-ui--question-closed-h nil t))))
+
+(add-hook 'agent-ui-host-functions #'agent-ui--hosted-h)
+
+(defun agent-ui--unhost-session ()
+  "The session's buffer is killed: its canvas shown in another's section
+no longer, its elements there removed (`agent-ui-unhost')."
+  (when agent-ui-session
+    (agent-ui-unhost agent-ui-session)))
+
 ;; A session's other canvas emptied (cleared, its last element removed) is
 ;; killed, as an answered question's: it stayed, an empty tab beside its
 ;; session's canvas. The next element shown there makes it again. The
@@ -245,6 +290,13 @@ their schemas: use whichever you like."
 
 ;; ====== ACTIONS ======
 
+(defvar-local agent-ui-answer-function nil
+  "In a canvas: called, if it's set, with an action's PROMPT and SUBMIT and
+the key of its element (`agent-ui-pressed'), instead of putting it into a
+session's prompt: the canvas answers its questions itself (an agent
+workflow's run's pane). Not for an element of a section hosting a
+session's canvas: that session's.")
+
 ;; While the agent works (its turn kept running by its sub-agents too),
 ;; agent-shell sends nothing ("Busy, try later"), though its prompt may still
 ;; take text (a prompt kept live meanwhile): a button sending its prompt
@@ -269,31 +321,46 @@ The canvas still current after it: agent-shell selects the session's window
 \(its buffer current then), and what the press does next (a question
 answered) is the canvas's. A project's panel (config/agent-ui/panels.el),
 of no session: the session working in its project, the latest."
-  (let ((session (and (derived-mode-p 'agent-ui-canvas-mode)
-                      (or agent-ui--session-buffer
-                          (and (bound-and-true-p agent-ui-panels--state)
-                               (agent-ui--session-buffer nil default-directory))))))
-    (unless (buffer-live-p session)
-      (user-error "%s" (if (bound-and-true-p agent-ui-panels--state)
-                      "No agent-shell session in this panel's project"
-                    "This canvas has no agent-shell session")))
-    (unless (fboundp 'agent-shell-insert)
-      (user-error "agent-shell isn't loaded"))
-    (cond
-     ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session submit)))
-      (save-current-buffer
-        (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
-     (submit
+  (let* ((canvas (derived-mode-p 'agent-ui-canvas-mode))
+         ;; Its element: the button's, else the one at point (a key's
+         ;; action, a slider's h / l).
+         (key (or agent-ui-pressed (and canvas (get-text-property (point) 'agent-ui-id))))
+         (hosted (and canvas key (agent-ui--key-hosts (current-buffer) key)))
+         (session (and canvas
+                       (not (and agent-ui-answer-function (not hosted)))
+                       ;; Its element's: a section's hosted session's.
+                       (or (agent-ui--key-session (current-buffer) key)
+                           (and (bound-and-true-p agent-ui-panels--state)
+                                (agent-ui--session-buffer nil default-directory))))))
+    ;; What it says of its element, of a section's: its id, not its key.
+    (setq prompt (agent-ui--unkeyed prompt (agent-ui--key-section key)))
+    (if (and canvas agent-ui-answer-function (not hosted))
+        (funcall agent-ui-answer-function prompt submit key)
+      (agent-ui--act-in session prompt submit))))
+
+(defun agent-ui--act-in (session prompt submit)
+  "PROMPT into SESSION's prompt (sent if SUBMIT), as `agent-ui--act' says."
+  (unless (buffer-live-p session)
+    (user-error "%s" (if (bound-and-true-p agent-ui-panels--state)
+                         "No agent-shell session in this panel's project"
+                       "This canvas has no agent-shell session")))
+  (unless (fboundp 'agent-shell-insert)
+    (user-error "agent-shell isn't loaded"))
+  (cond
+   ((not (and (fboundp 'agent-shell-prompt-queue) (agent-ui--session-busy-p session submit)))
+    (save-current-buffer
+      (agent-shell-insert :text prompt :submit submit :shell-buffer session)))
+   (submit
+    (with-current-buffer session
+      (agent-shell-prompt-queue prompt))
+    (message "Queued: sent once the agent's done"))
+   (t
+    (let ((prompt (with-current-buffer session
+                    (if (fboundp 'agent-shell--prompt-queue-read)
+                        (agent-shell--prompt-queue-read :initial prompt)
+                      (read-string "The agent's working; queue: " prompt)))))
       (with-current-buffer session
-        (agent-shell-prompt-queue prompt))
-      (message "Queued: sent once the agent's done"))
-     (t
-      (let ((prompt (with-current-buffer session
-                      (if (fboundp 'agent-shell--prompt-queue-read)
-                          (agent-shell--prompt-queue-read :initial prompt)
-                        (read-string "The agent's working; queue: " prompt)))))
-        (with-current-buffer session
-          (agent-shell-prompt-queue prompt)))))))
+        (agent-shell-prompt-queue prompt))))))
 
 (declare-function agent-shell-insert "agent-shell")
 (declare-function agent-shell-prompt-queue "agent-shell-prompt-queue")
@@ -326,22 +393,26 @@ ID)...): said then, not again.")
   "In a session: its last turn's end, (EVENT . QUESTIONS-SAID).")
 
 (defun agent-ui--waiting (session &optional except)
-  "SESSION's questions waiting on its canvases (a panel's children too), but
-EXCEPT's (a canvas being killed): ((CANVAS . ID)...), in their order."
+  "SESSION's questions waiting on its canvases (a panel's children too; in
+a section hosting its canvas too), but EXCEPT's (a canvas being killed):
+((CANVAS . KEY)...), in their order."
   (cl-loop for canvas in (agent-ui-canvases)
            when (and (not (eq canvas except))
-                     (eq (buffer-local-value 'agent-ui--session-buffer canvas) session))
+                     (memq session (agent-ui--canvas-sessions canvas)))
            append (with-current-buffer canvas
-                    (cl-loop for id in agent-ui--order
-                             for element = (agent-ui--entry-element (gethash id agent-ui--entries))
-                             append (cl-loop for e in (cons (plist-put (copy-sequence element) :id id)
+                    (cl-loop for key in agent-ui--order
+                             for section = (agent-ui--key-section key)
+                             for element = (agent-ui--entry-element (gethash key agent-ui--entries))
+                             when (eq (agent-ui--key-session canvas key) session)
+                             append (cl-loop for e in (cons (plist-put (copy-sequence element) :id key)
                                                             (agent-ui--descendants element))
                                              when (agent-ui-ask-waiting-p e)
-                                             collect (cons canvas (plist-get e :id)))))))
+                                             collect (cons canvas (agent-ui--key (plist-get e :id) section)))))))
 
 (defun agent-ui--show-question (canvas id &optional select)
-  "CANVAS's pane shown (SELECT: selected), the cursor on question ID, its
-line in view."
+  "CANVAS's pane shown (SELECT: selected), the cursor on question ID (a
+key), its line in view: its section unfolded."
+  (ignore-errors (agent-ui-reveal id canvas))
   (unless (get-buffer-window canvas t)
     (agent-ui--display canvas))
   (let ((window (get-buffer-window canvas t))
@@ -357,10 +428,13 @@ line in view."
       (select-window window))))
 
 (defun agent-ui--element-end (id start)
-  "Where element ID, from START in the current canvas, ends: after its last
-character (a panel's child: its last line's, its panel's lines its too)."
+  "Where the element of key ID, from START in the current canvas, ends:
+after its last character (a panel's child: its last line's, its panel's
+lines its too)."
   (let* ((top (get-text-property start 'agent-ui-id))
          (prop (if (equal top id) 'agent-ui-id 'agent-ui-child))
+         ;; A child's text says its id, not its key.
+         (id (if (eq prop 'agent-ui-child) (agent-ui--key-id id) id))
          (pos start)
          (end start))
     (while (and (< pos (point-max)) (equal (get-text-property pos 'agent-ui-id) top))
@@ -422,20 +496,22 @@ first new one shown and said."
 (add-hook 'agent-shell-mode-hook #'agent-ui--watch-questions-h)
 
 (defun agent-ui--question-changed-h ()
-  "A canvas changed (an answer given): its session's mark looked at again,
-if it had one."
-  (when (and (buffer-live-p agent-ui--session-buffer)
-             (buffer-local-value 'agent-ui--question-waiting agent-ui--session-buffer))
-    (agent-ui--question-check agent-ui--session-buffer)))
+  "A canvas changed (an answer given): its sessions' marks looked at again,
+those that had one."
+  (dolist (session (agent-ui--canvas-sessions (current-buffer)))
+    (when (and (buffer-live-p session)
+               (buffer-local-value 'agent-ui--question-waiting session))
+      (agent-ui--question-check session))))
 
 (add-hook 'agent-ui-changed-hook #'agent-ui--question-changed-h)
 
 (defun agent-ui--question-closed-h ()
-  "A canvas killed (q closes it): its session's mark looked at again,
-without it, if it had one (it stayed until the next turn's end)."
-  (when (and (buffer-live-p agent-ui--session-buffer)
-             (buffer-local-value 'agent-ui--question-waiting agent-ui--session-buffer))
-    (agent-ui--question-check agent-ui--session-buffer nil (current-buffer))))
+  "A canvas killed (q closes it): its sessions' marks looked at again,
+without it, those that had one (it stayed until the next turn's end)."
+  (dolist (session (agent-ui--canvas-sessions (current-buffer)))
+    (when (and (buffer-live-p session)
+               (buffer-local-value 'agent-ui--question-waiting session))
+      (agent-ui--question-check session nil (current-buffer)))))
 
 (defun agent-ui--question-mode-line ()
   "The mode line's mark, in a session with a question waiting."
@@ -495,23 +571,43 @@ Emacs is idle a moment."
 
 (add-hook 'agent-ui-shown-functions #'agent-ui--focus-question-h)
 
+(defun agent-ui--reveal-question-h (key element)
+  "A question shown in a section (`agent-ui-shown-functions'): the section
+unfolded, the question in view (taking the focus is another matter)."
+  (when (and (agent-ui--key-section key)
+             (not (bound-and-true-p agent-ui--restoring))
+             (agent-ui-ask-waiting-p element))
+    (agent-ui-reveal key (current-buffer))))
+
+(add-hook 'agent-ui-shown-functions #'agent-ui--reveal-question-h)
+
 (defun agent-ui--answered-going (canvas)
-  "The ids of CANVAS's elements that go now its questions are answered: the
-questions answered, and the elements shown with one (its id their :with). On
-a session's ask canvas, once no question waits there, all of them: whatever
-was shown there was the question's (mockups, notes it asked about)."
+  "The keys of CANVAS's elements that go now its questions are answered: the
+questions answered, and the elements shown with one (its id their :with).
+On a session's ask canvas (or what it showed on it, in a section hosting
+its canvas), once no question waits there, all of them: whatever was shown
+there was the question's (mockups, notes it asked about)."
   (with-current-buffer canvas
-    (let* ((element (lambda (id) (agent-ui--entry-element (gethash id agent-ui--entries))))
-           (answered (seq-filter (lambda (id) (agent-ui-ask-done-p (funcall element id))) agent-ui--order)))
-      (cond
-       ((null answered) nil)
-       ((and (equal agent-ui--canvas-part "ask")
-             (not (seq-some (lambda (id) (agent-ui-ask-waiting-p (funcall element id))) agent-ui--order)))
-        (copy-sequence agent-ui--order))
-       (t (seq-filter (lambda (id)
-                        (or (member id answered)
-                            (member (plist-get (funcall element id) :with) answered)))
-                      agent-ui--order))))))
+    (let* ((element (lambda (key) (agent-ui--entry-element (gethash key agent-ui--entries))))
+           (answered (seq-filter (lambda (key) (agent-ui-ask-done-p (funcall element key))) agent-ui--order))
+           ;; What's on an ask canvas together: the canvas, or a section's.
+           (asking (lambda (key)
+                     (if-let* ((section (agent-ui--key-section key)))
+                         (and (equal (agent-ui--entry-part (gethash key agent-ui--entries)) "ask") section)
+                       (and (equal agent-ui--canvas-part "ask") t))))
+           (over (delete-dups
+                  (seq-filter (lambda (ask)
+                                (and ask (not (seq-some (lambda (key) (and (equal (funcall asking key) ask)
+                                                                           (agent-ui-ask-waiting-p (funcall element key))))
+                                                        agent-ui--order))))
+                              (mapcar asking answered)))))
+      (when answered
+        (seq-filter (lambda (key)
+                      (or (member key answered)
+                          (member (agent-ui--key (plist-get (funcall element key) :with) (agent-ui--key-section key))
+                                  answered)
+                          (member (funcall asking key) over)))
+                    agent-ui--order)))))
 
 (defun agent-ui--close-answered (canvas)
   "CANVAS's questions answered gone, and what was shown with them
@@ -527,7 +623,7 @@ pane)."
           (agent-ui-remove id :canvas canvas)))
       ;; Emptied: its panes closed already (`agent-ui--close-if-empty'); a
       ;; session's other canvas, killed already (`agent-ui--close-emptied').
-      (when (and (buffer-live-p canvas) (null (buffer-local-value 'agent-ui--order canvas)))
+      (when (and (buffer-live-p canvas) (with-current-buffer canvas (agent-ui--empty-p)))
         (kill-buffer canvas))
       (when-let* ((window (and focused (not (buffer-live-p canvas))
                                (buffer-live-p session) (get-buffer-window session))))

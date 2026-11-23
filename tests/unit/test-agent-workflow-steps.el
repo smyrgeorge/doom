@@ -1,0 +1,344 @@
+;;; tests/unit/test-agent-workflow-steps.el -*- lexical-binding: t; -*-
+;; config/agent-workflow/steps.el: run steps (their exit codes: next, fixed by
+;; the job's agent or an on-fail one, broke; timeouts; retries used up, asked;
+;; their environment; your checkout's copy of a script), elisp steps, and the
+;; built-in merge (into your checkout, waiting for your changes, moving a
+;; branch not checked out, a conflict). Runs on a throwaway Beads project
+;; (skipped without bd), with stand-in agents (examples/agent-workspace/
+;; stand-in.el).
+;; run.sh: split 2 (stand-in sessions, bd)
+
+(require 'agent-shell)
+(require 'agent-shell-mock-agent)
+(require 'json)
+
+(setenv "GIT_CONFIG_GLOBAL" "/dev/null")
+(setenv "GIT_CONFIG_NOSYSTEM" "1")
+
+(+test-load "config/agent-shell" "config/agent-workflow")
+(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+
+(setq agent-shell-mock-agent-acp-command
+      (list (expand-file-name invocation-name invocation-directory)
+            "--batch" "-Q" (concat "--init-directory=" (+test-tmp-file "mock-acp-home/"))
+            "-l" (expand-file-name "examples/agent-workspace/stand-in.el" +test-root) "-f" "mock-acp-main"))
+(add-to-list 'agent-workflow-kinds '(mock :config agent-shell-mock-agent-make-agent-config :claude-code t))
+(load (expand-file-name "../helper-agent-workflow" (file-name-directory (or load-file-name buffer-file-name))) nil t)
+
+;; ====== HELPERS ======
+
+(defun +test-aws--workflow (project text)
+  "PROJECT's workflow feature: TEXT."
+  (write-region text nil (expand-file-name ".agent-workflow/workflows/feature.yml" project)))
+
+(defun +test-aws--log (run pattern)
+  "Non-nil if a log of RUN has PATTERN."
+  (seq-some (lambda (file) (with-temp-buffer (insert-file-contents file) (re-search-forward pattern nil t)))
+            (directory-files (expand-file-name "logs" (agent-workflow-run-dir run)) t "\\.log\\'")))
+
+(defun +test-aws--asks (run why)
+  "Wait for RUN to ask WHY."
+  (should (+test-awr--wait (lambda () (and (agent-workflow-asking run) (equal (agent-workflow-run-why run) why))))))
+
+;; ====== RUN STEPS ======
+
+(ert-deftest agent-workflow-steps/exit-1-fixed-by-the-job-s-agent ()
+  "Exit 1: the output to the job's agent, which fixes it and says done; the
+step runs again, passes; its output logged and journaled."
+  (+test-awr "fixed"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  build:
+    steps:
+      - agent: build
+      - run: test -f fixed.txt || { echo \"not fixed yet\"; exit 1; }
+        retries: 2
+")
+    (let* ((issue (+test-awr--issue project "Fixed"))
+           (run (agent-workflow-start-run project issue))
+           (worktree (agent-workflow-worktree-directory project issue))
+           (agent (+test-awr--agent run "build")))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'waiting))))
+      (agent-workflow-done agent nil "built")
+      ;; The script fails: its output sent to the same agent.
+      (should (+test-awr--wait
+               (lambda () (seq-some (lambda (prompt) (and (string-prefix-p (format "its step 2 (%s) returned 1 (try 1 of 3)"
+                                                                                   (agent-workflow--short "test -f fixed.txt || { echo \"not fixed yet\"; exit 1; }"))
+                                                                           prompt)
+                                                          (string-match-p "not fixed yet" prompt)))
+                                    (+test-awr--prompts "fixed")))))
+      (should (+test-aws--log run "not fixed yet"))
+      (should (eq (plist-get (agent-workflow--job run "build") :agent) agent))
+      ;; Fixed, said done: run again, it passes.
+      (write-region "x" nil (expand-file-name "fixed.txt" worktree))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'waiting))))
+      (agent-workflow-done agent nil "fixed")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should (equal (seq-filter (lambda (ev) (member ev '("script-ended" "fixing"))) (+test-awr--journal run))
+                     '("script-ended" "fixing" "script-ended"))))))
+
+(ert-deftest agent-workflow-steps/broke-timeout-skip ()
+  "Another exit code: it broke, asked (no agent sent); skip goes on. A
+timeout: broke too; stop waits, skip after."
+  (+test-awr "broke"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    steps:
+      - run: exit 3
+      - run: sleep 5
+        timeout: 1s
+      - run: echo fine
+")
+    (let ((run (agent-workflow-start-run project (+test-awr--issue project "Broke"))))
+      (+test-aws--asks run "check: its step 1 (exit 3) broke (it returned 3): run it again, skip it, or stop?")
+      (should-not (agent-workflow-agents project))
+      (should-error (agent-workflow-confirm run "accept") :type 'user-error)
+      (agent-workflow-confirm run "skip")
+      (+test-aws--asks run "check: its step 2 (sleep 5) ran out of time: run it again, skip it, or stop?")
+      (agent-workflow-confirm run "stop")
+      (should (equal (agent-workflow-run-why run) "check: stopped by you"))
+      (agent-workflow-confirm run "skip")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should (+test-aws--log run "fine")))))
+
+(ert-deftest agent-workflow-steps/retries-used-up-then-an-on-fail-agent ()
+  "A script-only job, no retries: its first failure asked; go, with a note:
+an agent with its on-fail profile started, told the output and your note;
+fixed, run again."
+  (+test-awr "onfail"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    run: test -f ok.txt || { echo missing ok.txt; exit 1; }
+    on-fail: build
+")
+    (let* ((issue (+test-awr--issue project "On fail"))
+           (run (agent-workflow-start-run project issue)))
+      (+test-aws--asks run (format "check: its step 1 (%s) returned 1, its retries used up: go on, skip it, or stop?"
+                                   (agent-workflow--short "test -f ok.txt || { echo missing ok.txt; exit 1; }")))
+      (should-not (agent-workflow-agents project))
+      (agent-workflow-confirm run "go" :notes '(("check" . "write ok.txt")))
+      (let ((agent (+test-awr--agent run "check")))
+        (should (equal (agent-workflow-agent-profile agent) "build"))
+        (should (+test-awr--wait
+                 (lambda () (seq-some (lambda (prompt) (and (string-match-p "missing ok.txt" prompt)
+                                                            (string-match-p "The user adds: write ok.txt" prompt)))
+                                      (+test-awr--prompts "onfail")))))
+        (write-region "x" nil (expand-file-name "ok.txt" (agent-workflow-worktree-directory project issue)))
+        (should (+test-awr--wait (lambda () (eq (+test-awr--job run "check") 'waiting))))
+        (agent-workflow-done agent nil "wrote it"))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
+
+(ert-deftest agent-workflow-steps/environment-shell-and-your-copy ()
+  "A script's environment; shell: its interpreter; a script of
+.agent-workflow/ run from your checkout, not the branch."
+  (+test-awr "env"
+    (make-directory (expand-file-name ".agent-workflow/scripts" project) t)
+    (write-region "echo from your checkout\n" nil (expand-file-name ".agent-workflow/scripts/check.sh" project))
+    (set-file-modes (expand-file-name ".agent-workflow/scripts/check.sh" project) #o755)
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    steps:
+      - shell: python3
+        run: |
+          import os
+          print(\"env\", os.environ[\"ISSUE\"], os.environ[\"JOB\"], os.environ[\"BRANCH\"], os.environ[\"MAIN_BRANCH\"], os.environ[\"TRY\"])
+      - run: .agent-workflow/scripts/check.sh
+")
+    (let* ((issue (+test-awr--issue project "Env"))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should (+test-aws--log run (format "^env %s check feat/%s-env %s 1$" (regexp-quote issue) (regexp-quote issue)
+                                          (agent-workflow-main-branch project))))
+      (should (+test-aws--log run "^from your checkout$")))))
+
+;; ====== LISP ======
+
+(ert-deftest agent-workflow-steps/elisp ()
+  "Lisp in your Emacs, the run's helpers bound: returning goes on;
+agent-workflow-fail is exit 1 (asked, no retries); another error broke."
+  (+test-awr "elisp"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  lisp:
+    steps:
+      - elisp: (setq +test-aws--seen (list (issue-id) (issue-type) default-directory))
+      - elisp: (signal 'agent-workflow-fail '(\"not good\"))
+      - elisp: (car 1)
+")
+    (defvar +test-aws--seen nil)
+    (let* ((issue (+test-awr--issue project "Lisp"))
+           (run (agent-workflow-start-run project issue)))
+      (+test-aws--asks run "lisp: its step 2 (elisp) returned 1, its retries used up: go on, skip it, or stop?")
+      (should (equal (butlast +test-aws--seen) (list issue 'feature)))
+      (should (string-prefix-p (agent-workflow-snapshot-directory project issue "lisp") (nth 2 +test-aws--seen)))
+      (agent-workflow-confirm run "skip")
+      (+test-aws--asks run "lisp: its step 3 (elisp) broke (it returned 2): run it again, skip it, or stop?")
+      (agent-workflow-confirm run "skip")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
+
+;; ====== MERGE ======
+
+(defconst +test-aws--merge "description: x
+for: [feature]
+jobs:
+  build:
+    agent: build
+  merge:
+    needs: build
+    uses: merge
+    with:
+      suite: test -f lexer.el
+    on-fail: build
+")
+
+(defun +test-aws--build (run project issue file text)
+  "RUN's build: its agent commits FILE with TEXT, says done."
+  (let ((agent (+test-awr--agent run "build"))
+        (worktree (agent-workflow-worktree-directory project issue)))
+    (let ((default-directory worktree))
+      (write-region text nil file)
+      (call-process "git" nil nil nil "add" file)
+      (call-process "git" nil nil nil "-c" "user.name=A" "-c" "user.email=a@a" "commit" "-q" "-m" (concat "Add " file)))
+    (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'waiting))))
+    (agent-workflow-done agent nil "built")))
+
+(ert-deftest agent-workflow-steps/merge-into-your-checkout ()
+  "Tried with its suite, then merged into your checkout's main branch;
+waiting first for your change to a file it changes; the issue closed."
+  (+test-awr "merge"
+    (+test-aws--workflow project +test-aws--merge)
+    (let* ((issue (+test-awr--issue project "Merged"))
+           (run (agent-workflow-start-run project issue))
+           (main (agent-workflow-main-branch project)))
+      ;; A change of yours to the file it adds.
+      (write-region "mine\n" nil (expand-file-name "lexer.el" project))
+      (+test-aws--build run project issue "lexer.el" "theirs\n")
+      (+test-aws--asks run "merge: its merge waits: your checkout has changes in lexer.el: commit or stash them, then go")
+      (delete-file (expand-file-name "lexer.el" project))
+      (agent-workflow-confirm run "go")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (let ((default-directory project))
+        (should (equal (string-trim (shell-command-to-string "git branch --show-current")) main))
+        (should (file-exists-p (expand-file-name "lexer.el" project)))
+        (should (string-match-p (concat "Merge feat/" (regexp-quote issue)) (shell-command-to-string "git log -1 --format=%s"))))
+      (should (equal (alist-get 'status (+test-awr--shown project issue)) "closed"))
+      (should-not (file-exists-p (agent-workflow-snapshot-directory project issue "merge-try"))))))
+
+(ert-deftest agent-workflow-steps/merge-a-branch-not-checked-out ()
+  "The main branch checked out nowhere: moved to the merge, no tree
+touched."
+  (+test-awr "moved"
+    (+test-aws--workflow project +test-aws--merge)
+    (let* ((issue (+test-awr--issue project "Moved"))
+           (main (agent-workflow-main-branch project))
+           (run (agent-workflow-start-run project issue)))
+      (let ((default-directory project)) (call-process "git" nil nil nil "checkout" "-q" "-b" "elsewhere"))
+      (+test-aws--build run project issue "lexer.el" "theirs\n")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (let ((default-directory project))
+        (should-not (file-exists-p (expand-file-name "lexer.el" project)))
+        (should (equal (shell-command-to-string (format "git show %s:lexer.el" main)) "theirs\n"))))))
+
+(ert-deftest agent-workflow-steps/merge-a-conflict ()
+  "A conflict no rebase gets past: the on-fail agent told to rebase,
+resolving; once it says done, the run goes back to its first job that
+edits."
+  (+test-awr "conflict"
+    (+test-aws--workflow project +test-aws--merge)
+    (let* ((issue (+test-awr--issue project "Conflict"))
+           (run (agent-workflow-start-run project issue)))
+      (+test-awr--agent run "build")
+      ;; The main branch gets its own lexer.el meanwhile.
+      (let ((default-directory project))
+        (write-region "main's\n" nil "lexer.el")
+        (call-process "git" nil nil nil "add" "lexer.el")
+        (call-process "git" nil nil nil "-c" "user.name=Y" "-c" "user.email=y@y" "commit" "-q" "-m" "main's lexer"))
+      (+test-aws--build run project issue "lexer.el" "theirs\n")
+      (should (+test-awr--wait
+               (lambda () (seq-some (lambda (prompt) (string-match-p "Rebase it onto" prompt))
+                                    (+test-awr--prompts "conflict")))))
+      (let ((fixer (plist-get (agent-workflow--job run "merge") :agent)))
+        (should fixer)
+        (should (+test-awr--wait (lambda () (eq (+test-awr--job run "merge") 'waiting))))
+        (agent-workflow-done fixer nil "rebased"))
+      ;; Back to build, round 2, told why.
+      (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) 2))))
+      (should (+test-awr--wait
+               (lambda () (seq-some (lambda (prompt) (string-match-p "\\`merge sent the work back to you, build (round 2), with this note: The branch was rebased onto the main branch" prompt))
+                                    (+test-awr--prompts "conflict"))))))))
+
+(ert-deftest agent-workflow-steps/merge-changing-what-runs-the-workflows ()
+  "A branch that changes .agent-workflow/ waits for your go before it's
+merged, whatever approve says; agents are denied editing it."
+  (+test-awr "protected"
+    (+test-aws--workflow project +test-aws--merge)
+    (let* ((issue (+test-awr--issue project "Protected"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "build")))
+      (should (member "Edit(.agent-workflow/**)"
+                      (let ((meta (alist-get :session-meta (agent-workflow--config agent))))
+                        (append (alist-get 'disallowedTools (alist-get 'options (alist-get 'claudeCode meta))) nil))))
+      (let ((worktree (agent-workflow-worktree-directory project issue)))
+        (make-directory (expand-file-name ".agent-workflow/scripts" worktree) t)
+        (+test-aws--build run project issue ".agent-workflow/scripts/check.sh" "exit 0\n")
+        (let ((default-directory worktree))
+          (write-region "x" nil "lexer.el")
+          (call-process "git" nil nil nil "add" "lexer.el")
+          (call-process "git" nil nil nil "-c" "user.name=A" "-c" "user.email=a@a" "commit" "-q" "-m" "lexer")))
+      (+test-aws--asks run "merge: its branch changes what runs the workflows (.agent-workflow/scripts/check.sh): merge it anyway (go), or stop?")
+      (agent-workflow-confirm run "go")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should (file-exists-p (expand-file-name ".agent-workflow/scripts/check.sh" project))))))
+
+;; ====== THE STARTERS ======
+
+(defmacro +test-aws--with-starters (&rest body)
+  "BODY with the starters as they ship, the project's own workflows and
+profiles gone."
+  (declare (indent 0))
+  `(progn
+     (delete-directory (expand-file-name ".agent-workflow" project) t)
+     (let ((agent-workflow-starters-directory (expand-file-name "config/agent-workflow/" +test-root))
+           (agent-workflow--profiles-cache (make-hash-table :test #'equal))
+           (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
+       ,@body)))
+
+(defun +test-aws--through (run jobs)
+  "RUN's JOBS, in order, each one's agent saying done (review: approved)."
+  (dolist (job jobs)
+    (let ((agent (+test-awr--agent run job)))
+      (should agent)
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run job) 'waiting))))
+      (agent-workflow-done agent (and (equal job "review") "approved") (format "%s done" job))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run job) 'done)))))))
+
+(ert-deftest agent-workflow-steps/the-starters ()
+  "The starters check with no problem; feature and bugfix run through, to
+the merge, the issue closed."
+  (+test-awr "starters"
+    (+test-aws--with-starters
+      (should-not (agent-workflow-check-problems project))
+      (should (equal (mapcar #'car (agent-workflow-workflows project)) '("bugfix" "feature" "quick")))
+      (should (equal (mapcar #'car (agent-workflow-profiles project))
+                     '("build" "docs" "investigate" "review" "security" "test")))
+      (let* ((feature (+test-awr--issue project "A feature"))
+             (run (agent-workflow-start-run project feature)))
+        (should (equal (plist-get (agent-workflow-run-workflow run) :name) "feature"))
+        (+test-aws--through run '("build" "docs" "review"))
+        (should (eq (+test-awr--job run "security") 'skipped))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (equal (alist-get 'status (+test-awr--shown project feature)) "closed")))
+      (let* ((bug (+test-awr--issue project "A bug" "--type" "bug"))
+             (run (agent-workflow-start-run project bug)))
+        (should (equal (plist-get (agent-workflow-run-workflow run) :name) "bugfix"))
+        (+test-aws--through run '("reproduce" "fix" "review"))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (equal (alist-get 'status (+test-awr--shown project bug)) "closed"))))))

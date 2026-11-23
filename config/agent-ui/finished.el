@@ -115,6 +115,12 @@ they wait); those at 0 closed. TIMER, the timer: stopped once CANVAS is gone."
           (with-current-buffer canvas
             (agent-ui--closing-timer)))))))
 
+(defvar-local agent-ui-closes-with nil
+  "In a canvas: the key of the element whose countdown closes it all, its
+sections too (an agent workflow's run's checklist: the run done, its pane
+goes): \"closing\", not \"removed\", under it; once it's over, the canvas
+cleared, its panes closed, it killed.")
+
 (defun agent-ui--close-finished (canvas ids)
   "IDS of CANVAS removed, their countdown over: the cursor back in its
 session if it was in CANVAS's pane, closed now (or CANVAS killed, emptied:
@@ -126,7 +132,10 @@ session if it was in CANVAS's pane, closed now (or CANVAS killed, emptied:
         (with-current-buffer canvas
           (remhash id agent-ui--closing)
           (when (member id agent-ui--order)
-            (agent-ui-remove id :canvas canvas)))))
+            (if (equal id agent-ui-closes-with)
+                (progn (agent-ui-clear :canvas canvas)
+                       (when (buffer-live-p canvas) (kill-buffer canvas)))
+              (agent-ui-remove id :canvas canvas))))))
     (when-let* (((and focused (not (and (buffer-live-p canvas) (get-buffer-window canvas)))))
                 (window (and (buffer-live-p session) (get-buffer-window session))))
       (select-window window))))
@@ -139,7 +148,10 @@ one, its words shortened if need be), while it counts down: closing, its
 canvas with it (its last element), or removed, the canvas staying
 \(`agent-ui-footer-functions')."
   (when-let* ((counting (and agent-ui--closing (gethash id agent-ui--closing))))
-    (let* ((verb (if (cl-some (lambda (other) (not (equal other id))) agent-ui--order) "removed" "closing"))
+    (let* ((verb (if (and (not (equal id agent-ui-closes-with))
+                          (or agent-ui--sections (cl-some (lambda (other) (not (equal other id))) agent-ui--order)))
+                     "removed"
+                   "closing"))
            (said (format "All done, %s in %ds" verb (cdr counting))))
       (when (and width (> (+ 2 (string-width said)) width))
         (setq said (format "%s in %ds" (capitalize verb) (cdr counting))))

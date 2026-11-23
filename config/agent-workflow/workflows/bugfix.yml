@@ -1,0 +1,33 @@
+name: bugfix
+description: A bug, reproduced as a failing test first, fixed, reviewed, merged.
+for: [bug]
+concurrency: 3
+
+jobs:
+  reproduce:
+    agent: test
+    prompt: |
+      Reproduce {issue}: {issue.title}, as a test that fails because of it, and only because of it.
+
+      {issue.description}
+
+  fix:
+    needs: reproduce
+    agent: build
+    prompt: |
+      Fix {issue}: {issue.title}. The test that shows it: {jobs.reproduce.notes}
+
+  review:
+    needs: fix
+    agent: review
+    prompt: |
+      Review {branch}, the fix of {issue}: {issue.title}. Its test: {jobs.reproduce.notes}
+    outcomes:
+      approved: continue
+      changes: rerun fix
+
+  merge:
+    needs: review
+    concurrency: 1
+    uses: merge
+    on-fail: build

@@ -413,7 +413,11 @@ field wrong: said in the form, nothing sent."
        (t
         (let ((answer (agent-ui-form--answer id props values)))
           (with-current-buffer canvas
-            (funcall agent-ui-action-function answer t)
+            ;; Its values its own first (a canvas answering itself reads
+            ;; them), its element the one acting (a section's session's).
+            (agent-ui-update id (list :values values) :canvas canvas)
+            (let ((agent-ui-pressed id))
+              (funcall agent-ui-action-function answer t))
             (agent-ui-update id (list :values values :answered answer) :canvas canvas))
           (agent-ui-form--close)))))))
 

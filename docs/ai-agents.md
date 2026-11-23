@@ -31,6 +31,15 @@ of it, is what every session reads.
 Claude Code in agent-shell is told where it is, and reads it from there: no need to install it. Install it as above
 (`agent-ui` for `emacs-profiling`) for other agents, or to have it in Claude Code's list of skills.
 
+## agent-workflow
+
+The [agent-workflow skill](../skills/agent-workflow/SKILL.md) teaches an agent to write, check and run
+[agent workflows](agent-workflow.md): a project's `.agent-workflow/` workflows and profiles, and `cmd/agent-workflow`.
+As `agent-ui`'s, its `SKILL.md` is what it reads first, its references only when it needs them. Claude Code in
+agent-shell is told where it is: no need to install it. Install it as above (`agent-workflow` for `emacs-profiling`) for
+other agents. The [agent-workflow-step skill](../skills/agent-workflow-step/SKILL.md) is for the agent doing a job of a
+run, which its system prompt points to.
+
 ## A crew of agents
 
 Several agents on one project at once, each with a role (its instructions, tools and permission mode, in a Markdown

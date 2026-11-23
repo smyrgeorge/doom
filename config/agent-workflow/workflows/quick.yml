@@ -1,0 +1,20 @@
+name: quick
+description: Something small, built, reviewed, merged.
+for: [chore]
+
+jobs:
+  build:
+    agent: build
+
+  review:
+    needs: build
+    agent: review
+    outcomes:
+      approved: continue
+      changes: rerun build
+
+  merge:
+    needs: review
+    concurrency: 1
+    uses: merge
+    on-fail: build
