@@ -734,6 +734,9 @@ the crew starts here, the lock this Emacs's; closed, the lock goes
             (should-error (agent-workspace-create :role "builder" :name "ada") :type 'user-error)
             (should-not (agent-workspace-agents project)))
         (delete-process other))
+      ;; `delete-process' only sends its kill: the process may still run a
+      ;; moment after (on Linux CI the lock was refused once more).
+      (should (+test-wait-for (lambda () (not (agent-workspace--crew-lock-holder project))) 5))
       ;; Gone: taken over.
       (agent-workspace-open t)
       (agent-workspace-create :role "builder" :name "ada")
