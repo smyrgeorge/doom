@@ -542,6 +542,21 @@ growing (no end)."
                 (list (list :job "green" :round 1 :start 100.0 :end 110.0 :outcome "failed")))
     (should (equal (plist-get (car (plist-get (agent-workflow--pane-rounds-element) :tasks)) :status) "failed"))))
 
+(ert-deftest agent-workflow-pane/a-step-s-try ()
+  "A running job's line: its step's first try says no try; its second, try
+2 (its tries count the one running)."
+  (let* ((workflow '(:name "github" :jobs (("green" :name "green" :steps ((:kind run :run "watch.sh" :name "watch"))))))
+         (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running :workflow workflow
+                                        :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "green" (list :status 'running :step 0 :tries '((0 . 1))))))))
+    (cl-flet ((detail () (with-temp-buffer
+                           (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+                           (plist-get (agent-workflow--pane-job run "green" (cdr (assoc "green" (agent-workflow-run-jobs run))))
+                                      :detail))))
+      (should-not (detail))
+      (setf (cdr (assoc "green" (agent-workflow-run-jobs run))) (list :status 'running :step 0 :tries '((0 . 2))))
+      (should (equal (detail) "try 2")))))
+
 (ert-deftest agent-workflow-pane/a-failed-run ()
   "A run that failed: its state line says why, red; its job failed (✗, an
 error in the graph), its steps done up to the one that failed, named, what

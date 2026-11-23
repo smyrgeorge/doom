@@ -549,8 +549,9 @@ it does (`agent-workflow--pane-step-does')."
                                   (and agent (not (eq status 'skipped)) (format "agent %s" (plist-get agent :agent)))
                                   (and (numberp (plist-get state :round)) (> (plist-get state :round) 1)
                                        (format "round %d" (plist-get state :round)))
-                                  (and (numberp tries) (> tries 0) (memq status '(running waiting))
-                                       (format "try %d" (1+ tries)))
+                                  ;; Its tries count the one running: a second, said.
+                                  (and (numberp tries) (> tries 1) (memq status '(running waiting))
+                                       (format "try %d" tries))
                                   (and (eq status 'done) outcome (not (equal outcome "done")) outcome)
                                   ;; What it left on the branch.
                                   (and (eq status 'done)
