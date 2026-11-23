@@ -168,6 +168,33 @@ agent's session."
         (should (equal (plist-get (request "run" "{\"issues\":[]}") :error)
                        "run: which issues? agent-workflow run ISSUE..., or a workflow with no ticket: agent-workflow run --workflow NAME"))))))
 
+(ert-deftest agent-workflow-runs/done-with-one-argument ()
+  "agent-workflow done with one argument: a word is the outcome (done
+changes: changes, refused if it isn't one of its job's), text with spaces
+the notes."
+  (+test-awr "done-one"
+    (let* ((issue (+test-awr--issue project "Done with one"))
+           (run (agent-workflow-start-run project issue)))
+      (+test-awr--finish run "build" nil "built")
+      (let ((review (+test-awr--agent run "review")))
+        (should (+test-awr--wait (lambda () (eq (+test-awr--job run "review") 'waiting))))
+        (cl-letf (((symbol-function 'agent-workflow--request-caller) (lambda (_pid) review)))
+          (should (string-match-p "Outcome nope: not one of done, approved, changes"
+                                  (cadr (should-error (agent-workflow--request-done '(:outcome "" :notes "" :one "nope") 1)
+                                                      :type 'user-error))))
+          (let ((reply (agent-workflow--request-done '(:outcome "" :notes "" :one "changes") 1)))
+            (should (equal (plist-get reply :outcome) "changes"))
+            (should (equal (plist-get (agent-workflow--job run "review") :outcome) "changes"))))
+        ;; Sent back to build: build done again, then review's notes as one argument.
+        (+test-awr--finish run "build" nil "again")
+        (let ((again (+test-awr--agent run "review")))
+          (should (+test-awr--wait (lambda () (eq (+test-awr--job run "review") 'waiting))))
+          (cl-letf (((symbol-function 'agent-workflow--request-caller) (lambda (_pid) again)))
+            (should (equal (plist-get (agent-workflow--request-done '(:outcome "" :notes "" :one "looks good to me") 1)
+                                      :outcome)
+                           "done"))
+            (should (equal (plist-get (agent-workflow--job run "review") :notes) "looks good to me"))))))))
+
 ;; ====== PARALLEL JOBS ======
 
 (ert-deftest agent-workflow-runs/parallel-jobs ()

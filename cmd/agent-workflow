@@ -34,7 +34,9 @@
 #                                from an agent of a run, in its session: its
 #                                step is done, with OUTCOME (default: done)
 #                                and NOTES (- reads them from stdin): what
-#                                the next jobs and the user need to know ->
+#                                the next jobs and the user need to know;
+#                                one argument: a word is the OUTCOME (done
+#                                changes), text with spaces the NOTES ->
 #                                {"ok": true, "issue", "job", "outcome"}
 #   agent-workflow back ISSUE JOB[.STEP] [NOTE|-] [--discard]
 #                                ISSUE's run sent back to JOB (its step STEP,
@@ -175,14 +177,19 @@ case "$op" in
     [ $# -gt 1 ] && fail 2 "status: unknown argument \"$2\"; agent-workflow status [ISSUE]"
     payload=$(printf '{"issue":%s}' "$(json_string "${1:-}")") ;;
   done)
-    outcome="" notes=""
+    outcome="" notes="" one=""
     [ $# -gt 2 ] && fail 2 "done: unknown argument \"$3\"; agent-workflow done [OUTCOME] [NOTES|-]"
     if [ $# -eq 2 ]; then outcome=$1; notes=$2
-    elif [ $# -eq 1 ]; then notes=$1
+    elif [ $# -eq 1 ]; then
+      # One argument: an outcome if it reads as one (a word: done changes
+      # is the outcome changes, never notes), else notes; Emacs decides,
+      # knowing the job's outcomes.
+      if [ "$1" = "-" ]; then notes=$(cat); else one=$1; fi
     fi
     [ "$notes" = "-" ] && notes=$(cat)
     case "$outcome" in -*) fail 2 "done: unknown argument \"$outcome\"; agent-workflow done [OUTCOME] [NOTES|-]" ;; esac
-    payload=$(printf '{"outcome":%s,"notes":%s}' "$(json_string "$outcome")" "$(json_string "$notes")") ;;
+    payload=$(printf '{"outcome":%s,"notes":%s,"one":%s}' "$(json_string "$outcome")" "$(json_string "$notes")" \
+                     "$(json_string "$one")") ;;
   back)
     issue="" target="" notes="" discard=false have_notes=""
     while [ $# -gt 0 ]; do

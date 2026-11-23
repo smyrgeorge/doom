@@ -253,8 +253,15 @@ one whose session's process is an ancestor of PID (the script's); nil."
 says: the reply."
   (let ((agent (or (agent-workflow--request-caller pid)
                    (user-error "done: only an agent of a run ends its step, from its own session"))))
-    (pcase-let ((`(,run ,job ,outcome)
-                 (agent-workflow-done agent (plist-get payload :outcome) (plist-get payload :notes))))
+    (pcase-let* ((one (let ((one (plist-get payload :one))) (and (stringp one) (not (string-empty-p one)) one)))
+                 ;; One argument, a word (an outcome's name, as `done changes'):
+                 ;; the outcome, refused if it isn't one of its job's; text
+                 ;; with spaces, the notes.
+                 (word (and one (string-match-p agent-workflow--name-regexp one)))
+                 (`(,run ,job ,outcome)
+                  (agent-workflow-done agent
+                                       (if word one (plist-get payload :outcome))
+                                       (if (and one (not word)) one (plist-get payload :notes)))))
       (list :ok t :issue (agent-workflow-run-issue run) :job job :outcome outcome))))
 
 (defun agent-workflow--request-back (directory payload pid)
