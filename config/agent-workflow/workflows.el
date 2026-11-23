@@ -86,19 +86,10 @@
   "Beads' issue types, a workflow's for: names (one of the project's own
 is only warned about).")
 
-(defconst agent-workflow--workflow-keys
-  '("name" "description" "ticket" "runs-in" "for" "concurrency" "budget" "max-rounds" "branch" "jobs")
-  "A workflow's keys.")
-
 (defconst agent-workflow--step-keys
   '("name" "agent" "prompt" "run" "shell" "elisp" "uses" "with" "timeout" "retries" "retry-from" "on-fail"
     "approve")
   "A step's keys.")
-
-(defconst agent-workflow--job-keys
-  '("needs" "if" "concurrency" "approve" "outcomes" "max-rounds" "steps")
-  "A job's keys, and one step's (`agent-workflow--step-keys') on the job
-itself.")
 
 (defvar agent-workflow--workflows-cache (make-hash-table :test #'equal)
   "A project's workflows, as last read: project to (STAMP (WORKFLOWS .

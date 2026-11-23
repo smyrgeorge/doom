@@ -50,7 +50,7 @@
 (declare-function agent-workflow--fix "agent-workflow/steps")
 (declare-function agent-workflow-run-spent-now "agent-workflow/budget")
 (declare-function agent-workflow--budget-more "agent-workflow/budget")
-(declare-function agent-workflow-cancel "agent-workflow/resume")
+(declare-function agent-workflow--cancel "agent-workflow/resume")
 (declare-function agent-workflow--continue-job "agent-workflow/resume")
 (declare-function agent-workflow--ensure-restored "agent-workflow/resume")
 (defvar agent-workflow--paused)
@@ -315,7 +315,7 @@ all it needs to come back after Emacs stops (resume.el)."
 (defun agent-workflow--set-state (run state &optional why)
   "RUN now in STATE, waiting for WHY (words) if it waits; journaled when it
 changes. Over (done, cancelled, failed), it stays so: only sending it back
-\(`agent-workflow-back', a done run) brings it back."
+\(`agent-workflow--back', a done run) brings it back."
   (unless (or (and (eq (agent-workflow-run-state run) state) (equal (agent-workflow-run-why run) why))
               (memq (agent-workflow-run-state run) agent-workflow--ended))
     ;; Its time: counted while it runs or waits for an agent, not for you.
@@ -1124,7 +1124,7 @@ end."
         (agent-workflow--job-set run job :resolving nil :retry nil)
         ;; Its agent's rebase: the jobs' commits there anew (watch.el).
         (agent-workflow--rebased run)
-        (agent-workflow-back run (agent-workflow--first-editing run job)
+        (agent-workflow--back run (agent-workflow--first-editing run job)
                              :note (format "The branch was rebased onto the main branch, its conflicts resolved by %s's agent: see that your work still holds." job)
                              :by job))
        ;; A step its agent fixed: run again, from its retry-from step.
@@ -1555,7 +1555,7 @@ again (its run's state not worked out again). Its run if it asked."
                (agent-workflow--git-lines "log" "--oneline" (concat commit "..HEAD")))
           (and (file-directory-p default-directory) (agent-workflow--git-lines "status" "--short")))))
 
-(cl-defun agent-workflow-back (run job &key (step 0) note discard (by "you"))
+(cl-defun agent-workflow--back (run job &key (step 0) note discard (by "you"))
   "Send RUN back to step STEP (from 0) of JOB, with NOTE, BY (you): see
 GOING BACK. DISCARD: the branch back to the commit JOB started from, its
 changes not committed gone (asked before, by its caller). A user error if
@@ -1632,7 +1632,7 @@ JOB hasn't run, or STEP isn't one."
                                 runs)))
            (cdr (assoc (completing-read "Run: " names nil t) names)))))))
 
-(defun agent-workflow-back-command (run job step note &optional discard)
+(defun agent-workflow-back (run job step note &optional discard)
   "Send RUN back to step STEP of JOB with NOTE (M-x agent-workflow-back).
 Interactively the run, the job (one that has run), its step (asked only
 when it has several), your note; with \[universal-argument], the work since
@@ -1660,7 +1660,7 @@ discarded, what's lost said and asked first."
                                                job (length commits) (if (= (length commits) 1) "" "s")
                                                (length changes) (if (= (length changes) 1) "" "s")))))))
      (list run job step note discard)))
-  (agent-workflow-back run job :step step :note note :discard discard)
+  (agent-workflow--back run job :step step :note note :discard discard)
   (message "%s: back to %s%s" (agent-workflow-run-name run) job (if discard ", the work since discarded" "")))
 
 ;; ====== APPROVAL ======
@@ -1715,7 +1715,7 @@ or a user error."
       (user-error "%s waits for no approval" (agent-workflow-run-name run)))
     asking))
 
-(cl-defun agent-workflow-approve (run &key (by "you"))
+(cl-defun agent-workflow--approve (run &key (by "you"))
   "Approve the result RUN waits for your OK on: the run goes on."
   (pcase-let ((`(,job . ,ask) (agent-workflow--approval-asked run)))
     (agent-workflow--journal run "answered" :job job :choice "approve" :by by)
@@ -1724,7 +1724,7 @@ or a user error."
     (agent-workflow--step-finished run job)
     job))
 
-(cl-defun agent-workflow-reject (run note &key (by "you"))
+(cl-defun agent-workflow--reject (run note &key (by "you"))
   "Reject the result RUN waits for your OK on, with NOTE: an agent step's
 back to its agent (its session, or resumed), asked again once it's done; a
 script's stops the run."
@@ -1746,7 +1746,7 @@ script's stops the run."
                                          note)))
      (t
       (agent-workflow--job-set run job :ask nil :approved nil)
-      (agent-workflow-back run job :step index :note (concat "Your result was rejected: " note) :by by)))
+      (agent-workflow--back run job :step index :note (concat "Your result was rejected: " note) :by by)))
     job))
 
 (defun agent-workflow--read-approval (prompt)
@@ -1761,17 +1761,17 @@ script's stops the run."
           (cdr (assoc (completing-read prompt names nil t) names)))
       (car asking))))
 
-(defun agent-workflow-approve-command (run)
+(defun agent-workflow-approve (run)
   "Approve the result RUN waits for your OK on (M-x agent-workflow-approve)."
   (interactive (list (agent-workflow--read-approval "Approve: ")))
-  (message "%s: %s approved" (agent-workflow-run-name run) (agent-workflow-approve run)))
+  (message "%s: %s approved" (agent-workflow-run-name run) (agent-workflow--approve run)))
 
-(defun agent-workflow-reject-command (run note)
+(defun agent-workflow-reject (run note)
   "Reject the result RUN waits for your OK on, with NOTE (M-x
-agent-workflow-reject)."
+agent-workflow--reject)."
   (interactive (let ((run (agent-workflow--read-approval "Reject: ")))
                  (list run (read-string "Why (the agent's told): "))))
-  (message "%s: %s rejected" (agent-workflow-run-name run) (agent-workflow-reject run note)))
+  (message "%s: %s rejected" (agent-workflow-run-name run) (agent-workflow--reject run note)))
 
 ;; ====== LOOPS ======
 ;; An agent's outcome can send the work back: review's changes: rerun build,
@@ -1855,7 +1855,7 @@ its if:, not yet): nothing to send back to, JOB waits for you, saying so
 (defun agent-workflow--rerun (run job other note &optional yours)
   "OTHER of RUN run again, sent back by JOB with NOTE (and YOURS, your note
 for it): going back, the work kept. JOB, if it isn't after OTHER, done."
-  (let ((replaced (agent-workflow-back run other :note (if (and yours (not (string-empty-p yours)))
+  (let ((replaced (agent-workflow--back run other :note (if (and yours (not (string-empty-p yours)))
                                                          (format "%s\n\nThe user adds: %s" (or note "") yours)
                                                        note)
                                        :by job)))
@@ -1879,7 +1879,7 @@ nil once RUN is over (a question left from before its cancel)."
   (when (memq (agent-workflow-run-state run) agent-workflow--ended)
     (user-error "%s is over (%s): it asks nothing" (agent-workflow-run-name run) (agent-workflow-run-state run))))
 
-(cl-defun agent-workflow-confirm (run choice &key notes more (by "you"))
+(cl-defun agent-workflow--confirm (run choice &key notes more (by "you"))
   "Answer RUN's question with CHOICE. A loop's (see LOOPS): go (on: the
 count starts again; NOTES, ((JOB . NOTE)...), for the job that sends it
 back and the one it's sent to), accept (it as it is: the run goes on as if
@@ -1944,7 +1944,7 @@ the run's pane" (agent-workflow-run-name run) (car agent)))
              (when (eq kind 'protected)
                (agent-workflow--job-set run job :protected-ok t))
              (agent-workflow--step-start run job index)))))
-      ("cancel" (agent-workflow-cancel run :by by))
+      ("cancel" (agent-workflow--cancel run :by by))
       ("skip"
        (agent-workflow--journal run "step-skipped" :job job :step (plist-get ask :step))
        ;; Skipped, it needs no OK of yours.
@@ -1985,7 +1985,7 @@ before it started, pending again, started as the run goes."
         (agent-workflow--tick-soon))
     (agent-workflow--continue-job run job by)))
 
-(defun agent-workflow-confirm-command (run choice &optional notes more)
+(defun agent-workflow-confirm (run choice &optional notes more)
   "Answer RUN's question (M-x agent-workflow-confirm): CHOICE, as the
 question allows (go, accept, skip, stop); going on, your notes (empty:
 none): for the job that sends it back and the one it's sent to, or for
@@ -2023,7 +2023,7 @@ the agent that fixes a step."
                         :time (let ((n (read-string "Time, as 45m or 1h (empty: none): ")))
                                 (and (not (string-empty-p n)) (agent-workflow--duration n)))))))
      (list run choice notes more)))
-  (agent-workflow-confirm run choice :notes notes :more more)
+  (agent-workflow--confirm run choice :notes notes :more more)
   (message "%s: %s" (agent-workflow-run-name run) choice))
 
 ;; ====== YOU ======

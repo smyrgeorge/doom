@@ -712,7 +712,7 @@ end, its branch deleted once merged."
       (dolist (name '("github" "screenshots"))
         (ert-info (name :prefix "workflow: ")
           (let* ((workflow (cdr (assoc name workflows)))
-                 (result (agent-workflow-dry-run workflow :info '(:id "demo-1" :type "task")
+                 (result (agent-workflow--dry-run workflow :info '(:id "demo-1" :type "task")
                                                  :definitions (agent-workflow-agent-definitions +test-root))))
             (should (equal (plist-get workflow :file)
                            (expand-file-name (format ".agent-workflow/workflows/%s.yml" name) +test-root)))
@@ -1066,7 +1066,7 @@ TYPE (default feature): its result."
          (definitions (list (cons "build" (list :name "build"))
                          (cons "reader" (list :name "reader" :deny '("Edit" "Write"))))))
     (should workflow)
-    (agent-workflow-dry-run workflow :info (list :id "demo-1" :type (or type "feature"))
+    (agent-workflow--dry-run workflow :info (list :id "demo-1" :type (or type "feature"))
                             :outcomes outcomes :exits exits :definitions definitions :pool 3)))
 
 (defun +test-awf--dry-lines (result)
@@ -1104,12 +1104,12 @@ stops."
     (should (member '(error 1 "branch maybe: delete (once merged: the default) or keep") (+test-awf--said problems))))
   (should (equal (plist-get (+test-awf--dry-run nil nil) :branch) "deleted, merged into the main branch"))
   (let ((definitions (list (cons "build" (list :name "build")))))
-    (should (equal (plist-get (agent-workflow-dry-run
+    (should (equal (plist-get (agent-workflow--dry-run
                                (car (+test-awf--workflow (concat "branch: keep\n" +test-awf--dry) '("build" "reader") "dry.yml"))
                                :info '(:id "demo-1" :type "feature") :definitions definitions :pool 3)
                               :branch)
                    "kept (branch: keep)"))
-    (should (equal (plist-get (agent-workflow-dry-run
+    (should (equal (plist-get (agent-workflow--dry-run
                                (car (+test-awf--workflow "description: x\njobs:\n  build:\n    agent: build\n" '("build") "dry.yml"))
                                :info '(:id "demo-1" :type "feature") :definitions definitions :pool 3)
                               :branch)
@@ -1137,7 +1137,7 @@ jobs:
         on-fail: build
 " '("build") "dry.yml")))
          (definitions (list (cons "build" (list :name "build"))))
-         (dry (lambda (exits) (agent-workflow-dry-run workflow :info '(:id "demo-1" :type "task")
+         (dry (lambda (exits) (agent-workflow--dry-run workflow :info '(:id "demo-1" :type "task")
                                                       :exits exits :definitions definitions :pool 3))))
     (should (equal (car (plist-get (funcall dry '(("green.3" 1 1 0))) :waves))
                    '("green: its run step 1 (check) passes"

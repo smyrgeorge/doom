@@ -365,7 +365,7 @@ jobs:
           (agent-ui-show '(:id "run" :type "text" :text "stale") :canvas pane))
         (agent-workflow--pane-where-tick)
         (should (equal (car (+test-awp--figure (agent-ui-get "run" :canvas pane) "State")) "● running"))
-        (agent-workflow-cancel run)))))
+        (agent-workflow--cancel run)))))
 
 (ert-deftest agent-workflow-pane/a-cancelled-run-asks-nothing ()
   "A run waiting for your OK, cancelled: it asks nothing more; approve,
@@ -376,16 +376,16 @@ pick it; it stays cancelled, no agent started."
            (run (car (car (let ((agent-workflow-from-shell t)) (agent-workflow-run-ticket (list issue) nil project))))))
       (+test-awr--finish-step run "build" "built it")
       (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
-      (agent-workflow-cancel run)
+      (agent-workflow--cancel run)
       (should-not (agent-workflow-asking run))
       (should-not (plist-get (agent-workflow--job run "build") :ask))
       (should (string-match-p "is over (cancelled)"
-                              (cadr (should-error (agent-workflow-approve run) :type 'user-error))))
-      (should-error (agent-workflow-reject run "no") :type 'user-error)
-      (should-error (agent-workflow-confirm run "go") :type 'user-error)
+                              (cadr (should-error (agent-workflow--approve run) :type 'user-error))))
+      (should-error (agent-workflow--reject run "no") :type 'user-error)
+      (should-error (agent-workflow--confirm run "go") :type 'user-error)
       (should (equal (cadr (should-error (agent-workflow--read-approval "Approve: ") :type 'user-error))
                      "No run waits for your OK"))
-      (should-error (call-interactively #'agent-workflow-confirm-command) :type 'user-error)
+      (should-error (call-interactively #'agent-workflow-confirm) :type 'user-error)
       (should (eq (agent-workflow-run-state run) 'cancelled))
       (should-not (seq-some (lambda (agent) (buffer-live-p (agent-workflow-agent-buffer agent)))
                             (agent-workflow-agents project))))))
@@ -419,7 +419,7 @@ one ls-files --others."
           (should (> (git-calls #'agent-workflow--pane-where-tick) 0))
           (git-calls (lambda () (agent-workflow--where-files worktree "HEAD")))
           (should (= (seq-count (lambda (args) (equal (car args) "ls-files")) calls) 1))))
-      (agent-workflow-cancel run))))
+      (agent-workflow--cancel run))))
 
 (ert-deftest agent-workflow-pane/each-run-its-own-pane ()
   "Two runs of an issue with one workflow (the first failed, its pane kept):
@@ -429,7 +429,7 @@ its own."
     (let* ((issue (+test-awr--issue project "Twice"))
            (one (car (car (agent-workflow-run-ticket (list issue) nil project))))
            (one-pane (agent-workflow-run-pane one)))
-      (agent-workflow-cancel one)
+      (agent-workflow--cancel one)
       (let* ((two (car (car (agent-workflow-run-ticket (list issue) nil project))))
              (two-pane (agent-workflow-run-pane two)))
         (should (= (agent-workflow-run-n two) 2))
@@ -437,7 +437,7 @@ its own."
         (should (equal (buffer-name two-pane) (format "Agent UI: %s · feature · run 2" issue)))
         (should (eq (buffer-local-value 'agent-workflow--pane-run one-pane) one))
         (should (eq (buffer-local-value 'agent-workflow--pane-run two-pane) two))
-        (agent-workflow-cancel two)))))
+        (agent-workflow--cancel two)))))
 
 (defun +test-awp--ask (pane)
   "The question in PANE's Needs you, if there's one."
@@ -471,7 +471,7 @@ the question asked here again; answered there: running, Needs you gone."
       (should (string-suffix-p (concat "waits for you: " why " → answer it in its agent's session, or in the run's pane")
                                (car (last (agent-workflow-log-lines run)))))
       (should (string-match-p "asks you in its session"
-                              (cadr (should-error (agent-workflow-confirm run "go") :type 'user-error))))
+                              (cadr (should-error (agent-workflow--confirm run "go") :type 'user-error))))
       ;; Needs you: agent-shell's buttons, and Go to it.
       (should (+test-awr--wait (lambda () (+test-awp--ask pane))))
       (let ((ask (+test-awp--ask pane)))
@@ -1203,7 +1203,7 @@ their folders; RET opens a run's pane, selected."
   (+test-awp "list"
     (let* ((one (+test-awr--issue project "One"))
            (run (car (car (let ((agent-workflow-from-shell t)) (agent-workflow-run-ticket (list one) nil project))))))
-      (agent-workflow-cancel run)
+      (agent-workflow--cancel run)
       ;; Read from its folder, as after Emacs started again.
       (let ((agent-workflow--runs nil))
         (save-window-excursion
@@ -1263,7 +1263,7 @@ log, or its journal; status: its state, its jobs."
           (should-not (agent-workflow-run-pane run))
           (+test-awr--finish-step run "build")
           (should (+test-awr--wait (lambda () (agent-workflow-asking run))))
-          (agent-workflow-approve run))
+          (agent-workflow--approve run))
         (pcase-let ((`(,status . ,output) (+test-awp--ended process)))
           (should (= status 0))
           (let ((lines (split-string output "\n")))
@@ -1300,7 +1300,7 @@ log, or its journal; status: its state, its jobs."
                                                                             :started))
                                                           :log))))
           (let ((process (+test-awp--script "logs" two "-f")))
-            (agent-workflow-cancel (agent-workflow-run-of project two))
+            (agent-workflow--cancel (agent-workflow-run-of project two))
             (pcase-let ((`(,status . ,output) (+test-awp--ended process)))
               (should (= status 1))
               (should (string-suffix-p "run cancelled, by you" output)))))

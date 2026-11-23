@@ -204,9 +204,9 @@ agent freed: the waiting run gets it, nothing else happening."
            (b (progn (+test-awr--agent a "build")
                      (agent-workflow-start-run project (+test-awr--issue project "B")))))
       (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why b) "build: waiting for an agent: 1 of 1 work"))))
-      (agent-workflow-cancel a)
+      (agent-workflow--cancel a)
       (should (+test-awr--agent b "build"))
-      (agent-workflow-cancel b))))
+      (agent-workflow--cancel b))))
 
 ;; ====== PARALLEL JOBS ======
 
@@ -304,17 +304,17 @@ jobs:
            (issue (+test-awr--issue project "Going back"))
            (run (agent-workflow-start-run project issue))
            (worktree (agent-workflow-worktree-directory project issue)))
-      (should (equal (cadr (should-error (agent-workflow-back run "review") :type 'user-error))
+      (should (equal (cadr (should-error (agent-workflow--back run "review") :type 'user-error))
                      (format "review hasn't run in %s · feature" issue)))
       (+test-awr--agent run "build")
       (+test-awr--commit worktree "lexer.el" "Lexer: escapes read")
       (+test-awr--finish run "build" nil "built")
       (+test-awr--finish run "lint")
       (+test-awr--agent run "review")
-      (should (equal (cadr (should-error (agent-workflow-back run "build" :step 3) :type 'user-error))
+      (should (equal (cadr (should-error (agent-workflow--back run "build" :step 3) :type 'user-error))
                      "build has no step 3 (1 step)"))
       ;; Back to build: build and review replaced, lint kept.
-      (should (equal (agent-workflow-back run "build" :note "handle the empty list too") '("build" "review")))
+      (should (equal (agent-workflow--back run "build" :note "handle the empty list too") '("build" "review")))
       (should (eq (+test-awr--job run "lint") 'done))
       (should (file-exists-p (expand-file-name "lexer.el" worktree)))
       (let ((build (+test-awr--agent run "build")))
@@ -333,7 +333,7 @@ jobs:
       ;; Round 2's work, then back again, discarding it.
       (+test-awr--commit worktree "empty.el" "Lexer: the empty list")
       (should (equal (car (agent-workflow-back-lost run "build")) (list (car (process-lines "git" "-C" worktree "log" "--oneline" "-1")))))
-      (agent-workflow-back run "build" :note "start this round over" :discard t)
+      (agent-workflow--back run "build" :note "start this round over" :discard t)
       (should-not (file-exists-p (expand-file-name "empty.el" worktree)))
       (should (file-exists-p (expand-file-name "lexer.el" worktree)))
       (should (eql (plist-get (agent-workflow--job run "build") :round) 3))
@@ -398,10 +398,10 @@ jobs:
         (should (equal (plist-get (cdr (agent-workflow-asking run)) :notes) '("fix 1" "fix 2" "fix 3")))
         (should (eq (+test-awr--job run "build") 'done))
         ;; Stop: it waits.
-        (agent-workflow-confirm run "stop")
+        (agent-workflow--confirm run "stop")
         (should (equal (agent-workflow-run-why run) "review: stopped by you"))
         ;; Go on, a note for each.
-        (agent-workflow-confirm run "go" :notes '(("review" . "only bugs now") ("build" . "use a table")))
+        (agent-workflow--confirm run "go" :notes '(("review" . "only bugs now") ("build" . "use a table")))
         (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) 4))))
         (should (+test-awr--wait
                  (lambda () (seq-some (lambda (prompt) (string-match-p "fix 3\n\nThe user adds: use a table" prompt))
@@ -414,7 +414,7 @@ jobs:
         (should (seq-some (lambda (prompt) (string-match-p "\\`The user's note for you: only bugs now" prompt))
                           (+test-awr--prompts "loops")))
         ;; Accept: the run goes on, done.
-        (agent-workflow-confirm run "accept")
+        (agent-workflow--confirm run "accept")
         (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
         (should (equal (seq-filter (lambda (ev) (member ev '("rerun" "asked" "answered"))) (+test-awr--journal run))
                        '("rerun" "rerun" "asked" "answered" "answered" "asked" "answered")))))))
@@ -486,22 +486,22 @@ jobs:
       (let ((look (agent-workflow-to-look-at run "build")))
         (should (equal (plist-get look :notes) "first try"))
         (should (string-match-p "lexer.el" (plist-get look :diff))))
-      (should-error (agent-workflow-confirm run "go") :type 'user-error)
+      (should-error (agent-workflow--confirm run "go") :type 'user-error)
       ;; Rejected: its agent told, then asked again.
-      (agent-workflow-reject run "name it lexer-escapes.el")
+      (agent-workflow--reject run "name it lexer-escapes.el")
       (should (+test-awr--wait
                (lambda () (seq-some (lambda (prompt) (string-match-p "\\`The user rejected your result: name it lexer-escapes\\.el" prompt))
                                     (+test-awr--prompts "approval")))))
       (should (eq (plist-get (agent-workflow--job run "build") :agent) agent))
       (+test-awr--finish-step run "build" "renamed")
       (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
-      (agent-workflow-approve run)
+      (agent-workflow--approve run)
       (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'done))))
       ;; A script's: rejected, the run stops; skipped, on.
       (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'approve))))
-      (agent-workflow-reject run "not like this")
+      (agent-workflow--reject run "not like this")
       (should (equal (agent-workflow-run-why run) "check: its result rejected by you (not like this): run it again, skip it, or stop?"))
-      (agent-workflow-confirm run "skip")
+      (agent-workflow--confirm run "skip")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should (equal (seq-filter (lambda (ev) (member ev '("asked" "answered"))) (+test-awr--journal run))
                      '("asked" "answered" "asked" "answered" "asked" "answered" "answered"))))))
@@ -531,7 +531,7 @@ again; its project noted; continued with the workflow as it is now."
         ;; The workflow changed meanwhile: continued with it as it is now.
         (write-region (concat +test-awr--feature "  extra:\n    needs: review\n    agent: build\n") nil
                       (expand-file-name ".agent-workflow/workflows/feature.yml" project))
-        (agent-workflow-continue run :current t)
+        (agent-workflow--continue run :current t)
         (should (eq (+test-awr--job run "extra") 'pending))
         (let ((again (+test-awr--agent run "review")))
           (should (equal (agent-workflow-agent-resumed again) "mock-session"))
@@ -589,7 +589,7 @@ jobs:
         (+test-awr--wait (lambda () nil) 1)
         (should (eq (agent-workflow-run-state back) 'waiting))
         (should (eq (+test-awr--job back "b") 'pending))
-        (agent-workflow-cancel back)))))
+        (agent-workflow--cancel back)))))
 
 (ert-deftest agent-workflow-runs/interrupted-waiting-for-an-agent ()
   "A job whose agent step waits for a free agent (the pool full),
@@ -617,7 +617,7 @@ jobs:
       (should (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'interrupted))
       ;; Waiting for one again (as it was), then cancelled: none for it.
       (agent-workflow--job-set run "a" :pool 1)
-      (agent-workflow-cancel run)
+      (agent-workflow--cancel run)
       (should-not (plist-get (agent-workflow--job run "a") :pool))
       (agent-workflow-tick)
       (should-not (agent-workflow-agents project)))))
@@ -651,7 +651,7 @@ jobs:
       (agent-workflow-done fixer nil "wrote it")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state one) 'done))))
       (should (+test-awr--agent two "a"))
-      (agent-workflow-cancel two))))
+      (agent-workflow--cancel two))))
 
 (ert-deftest agent-workflow-runs/back-from-m-x ()
   "M-x agent-workflow-back: the run picked (the only one), the job, the
@@ -664,11 +664,11 @@ note asked; sent back."
       (should (eq (agent-workflow--pick-run project) run))
       (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "build"))
                 ((symbol-function 'read-string) (lambda (&rest _) "again, please")))
-        (call-interactively #'agent-workflow-back-command))
+        (call-interactively #'agent-workflow-back))
       (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :round) 2))))
       (should (+test-awr--wait (lambda () (seq-some (lambda (prompt) (string-search "with this note: again, please" prompt))
                                                     (+test-awr--prompts "back-command")))))
-      (agent-workflow-cancel run))))
+      (agent-workflow--cancel run))))
 
 (ert-deftest agent-workflow-runs/pause-and-cancel ()
   "Paused: nothing new starts, saying so; with now, a running script stopped,
@@ -691,14 +691,14 @@ jobs:
             (agent-workflow-pause t)
             (should (equal (agent-workflow-run-why run) "check: interrupted (paused): continue it, skip its step, or stop?"))
             (agent-workflow-unpause)
-            (agent-workflow-continue run)
+            (agent-workflow--continue run)
             (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)) 10))
             (should (+test-aws--any-log run "slept"))))
       (setq agent-workflow--paused nil))
     (let* ((issue (+test-awr--issue project "Cancelled"))
            (run (agent-workflow-start-run project issue))
            (agent (+test-awr--agent run "build")))
-      (agent-workflow-cancel run)
+      (agent-workflow--cancel run)
       (should (eq (agent-workflow-run-state run) 'cancelled))
       (should-not (buffer-live-p (agent-workflow-agent-buffer agent)))
       (should (equal (alist-get 'status (+test-awr--shown project issue)) "open"))
@@ -767,7 +767,7 @@ stopped, asked; go on with more: continued; kept with the run."
                        "review: its run's budget is used up ($10.50 of $10): go on with more, or stop?"))
         (should-not (buffer-live-p (agent-workflow-agent-buffer review))))
       ;; More: on again, its session resumed.
-      (agent-workflow-confirm run "go" :more '(:cost 5))
+      (agent-workflow--confirm run "go" :more '(:cost 5))
       (should (equal (agent-workflow-run-budget run) '(:cost 15 :tokens nil :time nil)))
       (should (equal (agent-workflow-agent-resumed (+test-awr--agent run "review")) "mock-session"))
       ;; Its time: counted while it ran, not while it waited for you.
@@ -806,7 +806,7 @@ stopped, asked."
       (should (equal (agent-workflow-run-why run)
                      "build: its issue was closed by hand: go on (it's in progress again), or cancel the run?"))
       (should-not (plist-get (agent-workflow--job run "build") :agent))
-      (agent-workflow-confirm run "go")
+      (agent-workflow--confirm run "go")
       (should (equal (alist-get 'status (+test-awr--shown project issue)) "in_progress"))
       (should (+test-awr--agent run "build"))
       ;; Its commit, then build done; a new blocker: nothing new starts (docs

@@ -1153,13 +1153,13 @@ rejection without a note)."
                             :time (let ((time (funcall text :time)))
                                     (and time (agent-workflow--duration time))))))
             (if (equal choice "stop")
-                (lambda () (agent-workflow-confirm run "stop" :by by))
-              (lambda () (agent-workflow-confirm run "go" :by by :more more))))
+                (lambda () (agent-workflow--confirm run "stop" :by by))
+              (lambda () (agent-workflow--confirm run "go" :by by :more more))))
         (let* ((other (plist-get (cdr (agent-workflow-asking run)) :other))
                (notes (delq nil (list (and (funcall text :note-job) (cons job (funcall text :note-job)))
                                       (and (funcall text :note-other) (cons other (funcall text :note-other))))))
                (choice (pcase choice ("accept it as it is" "accept") ("stop" "stop") (_ "go"))))
-          (lambda () (agent-workflow-confirm run choice :by by :notes notes))))))
+          (lambda () (agent-workflow--confirm run choice :by by :notes notes))))))
    (t
     (let* ((line (equal (plist-get element :type) "text"))
            (picked (if line pressed (car (plist-get element :selected))))
@@ -1176,20 +1176,20 @@ rejection without a note)."
       (pcase kind
         ('approve
          (if (equal picked "Approve")
-             (lambda () (agent-workflow-approve run :by by))
+             (lambda () (agent-workflow--approve run :by by))
            (unless note (user-error "Say why in a note: the agent's told it"))
-           (lambda () (agent-workflow-reject run note :by by))))
+           (lambda () (agent-workflow--reject run note :by by))))
         ('nil
          (if (string-prefix-p "Cancel" picked)
-             (lambda () (agent-workflow-cancel run :by by))
-           (lambda () (agent-workflow-back run job :step (or (plist-get (agent-workflow--job run job) :step) 0)
+             (lambda () (agent-workflow--cancel run :by by))
+           (lambda () (agent-workflow--back run job :step (or (plist-get (agent-workflow--job run job) :step) 0)
                                            :note note :by by))))
         (_
          (let ((choice (cond ((string-prefix-p "Go on" picked) "go")
                              ((string-prefix-p "Skip" picked) "skip")
                              ((string-prefix-p "Cancel" picked) "cancel")
                              (t "stop"))))
-           (lambda () (agent-workflow-confirm run choice :by by :notes (and note (list (cons job note))))))))))))
+           (lambda () (agent-workflow--confirm run choice :by by :notes (and note (list (cons job note))))))))))))
 
 ;; ====== WHAT EACH JOB RUNS, LIVE ======
 

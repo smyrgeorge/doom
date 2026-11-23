@@ -161,7 +161,7 @@ jobs:
       (with-temp-buffer
         (insert-file-contents (expand-file-name "log.txt" (agent-workflow-run-dir run)))
         (should (search-forward "run failed: check: its step 2, gh" nil t)))
-      (should-error (agent-workflow-back run "check") :type 'user-error)
+      (should-error (agent-workflow--back run "check") :type 'user-error)
       ;; Read back (Emacs started again): failed, its job too; not restored.
       (let ((back (agent-workflow--read-run (agent-workflow-run-dir run))))
         (should (eq (agent-workflow-run-state back) 'failed))
@@ -216,12 +216,12 @@ jobs:
     (let ((run (agent-workflow-start-run project (+test-awr--issue project "Broke"))))
       (+test-aws--asks run "check: its step 1 (exit 4) broke (it returned 4): run it again, skip it, or stop?")
       (should-not (agent-workflow-agents project))
-      (should-error (agent-workflow-confirm run "accept") :type 'user-error)
-      (agent-workflow-confirm run "skip")
+      (should-error (agent-workflow--confirm run "accept") :type 'user-error)
+      (agent-workflow--confirm run "skip")
       (+test-aws--asks run "check: its step 2 (sleep 5) ran out of time: run it again, skip it, or stop?")
-      (agent-workflow-confirm run "stop")
+      (agent-workflow--confirm run "stop")
       (should (equal (agent-workflow-run-why run) "check: stopped by you"))
-      (agent-workflow-confirm run "skip")
+      (agent-workflow--confirm run "skip")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should (+test-aws--log run "fine")))))
 
@@ -242,7 +242,7 @@ jobs:
       (+test-aws--asks run (format "check: its step 1 (%s) returned 1, its retries used up: go on, skip it, or stop?"
                                    (agent-workflow--short "test -f ok.txt || { echo missing ok.txt; exit 1; }")))
       (should-not (agent-workflow-agents project))
-      (agent-workflow-confirm run "go" :notes '(("check" . "write ok.txt")))
+      (agent-workflow--confirm run "go" :notes '(("check" . "write ok.txt")))
       (let ((agent (+test-awr--agent run "check")))
         (should (equal (agent-workflow-agent-definition agent) "build"))
         (should (+test-awr--wait
@@ -332,7 +332,7 @@ jobs:
       (should (string-match-p "its on-fail script broke (it returned 7)"
                               (plist-get (agent-workflow--job run "other") :why)))
       (should-not (agent-workflow-agents project))
-      (agent-workflow-cancel run))))
+      (agent-workflow--cancel run))))
 
 (ert-deftest agent-workflow-steps/sent-back-to-a-step-once ()
   "A job sent back to its step 2: that round starts there; a later round of
@@ -365,10 +365,10 @@ jobs:
                           ("step-starting" (when started (push (plist-get event :step) from) (setq started nil))))))
                     (nreverse from))))
         (waits)
-        (agent-workflow-back run "check" :step 1)
+        (agent-workflow--back run "check" :step 1)
         (should (+test-awr--wait (lambda () (equal (starts) '(0 1)))))
         (waits)
-        (agent-workflow-back run "build" :step 0)
+        (agent-workflow--back run "build" :step 0)
         (should (+test-awr--wait (lambda () (equal (starts) '(0 1 0)))))
         (waits)
         (should-not (plist-get (plist-get (agent-workflow--job run "check") :back) :step))))))
@@ -399,7 +399,7 @@ jobs:
       (should (+test-awr--wait (lambda () (eq (+test-awr--job run "review") 'waiting))))
       (agent-workflow-done agent "insecure" "not safe")
       (+test-aws--asks run "review: its outcome insecure reruns security, which hasn't run (skipped): run its step again, skip it (on as if done), or stop?")
-      (agent-workflow-confirm run "skip")
+      (agent-workflow--confirm run "skip")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
 (ert-deftest agent-workflow-steps/a-script-that-can-t-start ()
@@ -418,7 +418,7 @@ jobs:
       (should (string-match-p "\\`check: its step 1 can't start: .*no-such-interpreter-here" (agent-workflow-run-why run)))
       (should (eq (+test-awr--job run "check") 'waiting))
       (should-not (plist-get (agent-workflow--job run "check") :process))
-      (agent-workflow-cancel run))))
+      (agent-workflow--cancel run))))
 
 (ert-deftest agent-workflow-steps/a-fix-interrupted ()
   "A failed step's agent fixing it, interrupted (budget, pause now):
@@ -445,8 +445,8 @@ jobs:
         (should-not (plist-get (agent-workflow--job run "check") :retry))
         (write-region "x" nil (expand-file-name "ok.txt" (agent-workflow-worktree-directory project issue)))
         (pcase answer
-          ('continue (agent-workflow-continue run))
-          ('skip (agent-workflow-confirm run "skip")))
+          ('continue (agent-workflow--continue run))
+          ('skip (agent-workflow--confirm run "skip")))
         (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
         ;; After the interrupt: test run once (continued) or not (skipped).
         (let ((after (cdr (member "interrupted" (mapcar (lambda (event)
@@ -503,9 +503,9 @@ jobs:
       (+test-aws--asks run "lisp: its step 2 (elisp) returned 1, its retries used up: go on, skip it, or stop?")
       (should (equal (butlast +test-aws--seen) (list issue 'feature)))
       (should (string-prefix-p (agent-workflow-snapshot-directory project issue "lisp") (nth 2 +test-aws--seen)))
-      (agent-workflow-confirm run "skip")
+      (agent-workflow--confirm run "skip")
       (+test-aws--asks run "lisp: its step 3 (elisp) broke (it returned 2): run it again, skip it, or stop?")
-      (agent-workflow-confirm run "skip")
+      (agent-workflow--confirm run "skip")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
 ;; ====== MERGE ======
@@ -547,7 +547,7 @@ waiting first for your change to a file it changes; the issue closed."
       (+test-aws--build run project issue "lexer.el" "theirs\n")
       (+test-aws--asks run "merge: its merge waits: your checkout has changes in lexer.el: commit or stash them, then go")
       (delete-file (expand-file-name "lexer.el" project))
-      (agent-workflow-confirm run "go")
+      (agent-workflow--confirm run "go")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (let ((default-directory project))
         (should (equal (string-trim (shell-command-to-string "git branch --show-current")) main))
@@ -578,7 +578,7 @@ its agent asked to rebase); your checkout never left mid-merge."
       ;; aside, never committed here).
       (should-not (seq-remove (lambda (line) (string-prefix-p "?? " line)) (agent-workflow--git-lines "status" "--porcelain")))
       (should (equal (agent-workflow--git "log" "-1" "--format=%s") "your lexer"))
-      (agent-workflow-cancel run))))
+      (agent-workflow--cancel run))))
 
 (ert-deftest agent-workflow-steps/merge-a-branch-not-checked-out ()
   "The main branch checked out nowhere: moved to the merge, no tree
@@ -695,7 +695,7 @@ jobs:
             (should (equal (plist-get (aref (plist-get reply :started) 0) :issue) "solo"))
             (should (equal (agent-workflow-run-name next) "solo · run 2"))
             (should (equal (agent-workflow-agent-branch (+test-awr--agent next "build")) "run/solo-2"))
-            (agent-workflow-cancel next)))
+            (agent-workflow--cancel next)))
         (should-not bd)))))
 
 (ert-deftest agent-workflow-steps/a-run-in-your-checkout ()
@@ -732,7 +732,7 @@ once it's done."
         (let ((agent (+test-awr--agent run "build")))
           (should (equal (agent-workflow-agent-worktree agent) project))
           (should (equal (agent-workflow-agent-branch agent) branch))
-          (should-error (agent-workflow-back run "build" :discard t) :type 'user-error)
+          (should-error (agent-workflow--back run "build" :discard t) :type 'user-error)
           (+test-awr--commit project "here.txt" "here")
           (+test-awr--finish run "build"))
         (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
@@ -902,7 +902,7 @@ merged, whatever approve says; agents are denied editing it."
           (call-process "git" nil nil nil "add" "lexer.el")
           (call-process "git" nil nil nil "-c" "user.name=A" "-c" "user.email=a@a" "commit" "-q" "-m" "lexer")))
       (+test-aws--asks run "merge: its branch changes what runs the workflows (.agent-workflow/scripts/check.sh): merge it anyway (go), or stop?")
-      (agent-workflow-confirm run "go")
+      (agent-workflow--confirm run "go")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should (file-exists-p (expand-file-name ".agent-workflow/scripts/check.sh" project))))))
 

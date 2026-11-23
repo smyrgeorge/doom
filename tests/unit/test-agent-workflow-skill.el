@@ -94,3 +94,18 @@ reference there; a job's agent told where it is."
          (told (agent-workflow-agent-context)))
     (should (string-match-p "skills/agent-workflow-step/SKILL\\.md first\\." told))
     (should (string-match-p "one of done, approved, changes" told))))
+
+(ert-deftest agent-workflow-skill/its-commands-are-commands ()
+  "Every M-x agent-workflow-... the docs, the skill and the code name is a
+command (seven of them were functions, their commands NAME-command)."
+  (let ((named nil))
+    (dolist (file (append (list (expand-file-name "docs/agent-workflow.md" +test-root)
+                                (expand-file-name "config/agent-workflow.el" +test-root))
+                          (directory-files-recursively (expand-file-name "skills/agent-workflow" +test-root) "\\.md\\'")
+                          (directory-files (expand-file-name "config/agent-workflow" +test-root) t "\\.el\\'")))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (while (re-search-forward "M-x \\(agent-workflow-[a-z-]*[a-z]\\)" nil t)
+          (cl-pushnew (match-string 1) named :test #'equal))))
+    (should (> (length named) 10))
+    (should-not (seq-remove (lambda (name) (commandp (intern name))) named))))

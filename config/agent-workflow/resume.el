@@ -60,10 +60,6 @@
 
 ;; ====== READING ONE BACK ======
 
-(defun agent-workflow--from-json-plist (object)
-  "OBJECT (a JSON object as a plist) as Lisp, its nested objects too."
-  (cl-loop for (key value) on object by #'cddr append (list key value)))
-
 (defun agent-workflow--job-from-json (object)
   "A job's state as state.json has it (a plist), as the run had it."
   (let ((state nil))
@@ -154,7 +150,7 @@ that were running interrupted, waiting for you; the others looked at
       (let ((runs (with-demoted-errors "agent workflow: %S" (agent-workflow-restore project))))
         (when agent-workflow-continue-on-start
           (dolist (run runs)
-            (with-demoted-errors "agent workflow: %S" (agent-workflow-continue run))))))))
+            (with-demoted-errors "agent workflow: %S" (agent-workflow--continue run))))))))
 
 (defun agent-workflow--ensure-restored (project)
   "PROJECT's runs read back, if they haven't been (before a command uses
@@ -182,7 +178,7 @@ names, new ones pending, gone ones dropped), its copy replaced."
                   (plist-get now :jobs)))
     (agent-workflow--journal run "workflow-changed" :workflow name)))
 
-(cl-defun agent-workflow-continue (run &key current (by "you"))
+(cl-defun agent-workflow--continue (run &key current (by "you"))
   "Continue RUN's interrupted jobs: an agent step's session resumed, told
 it was interrupted; a script run again. CURRENT: with its project's
 workflow as it is now. Return the jobs continued."
@@ -258,7 +254,7 @@ status); every job's question dropped. Return their names."
         (agent-workflow--job-set run (car job) :ask nil)))
     (nreverse cancelled)))
 
-(cl-defun agent-workflow-cancel (run &key (by "you"))
+(cl-defun agent-workflow--cancel (run &key (by "you"))
   "Cancel RUN: its agents stopped, its scripts killed, its snapshots gone,
 its jobs running or waiting cancelled (journaled: :jobs); the run over, its
 issue open again; its branch and worktree kept."
@@ -312,19 +308,19 @@ needing you is (`agent-workflow-needs-you-functions')."
 
 ;; ====== YOU ======
 
-(defun agent-workflow-continue-command (&optional current)
+(defun agent-workflow-continue (&optional current)
   "Continue every interrupted run of the current project (M-x
-agent-workflow-continue); with \\[universal-argument], with its workflow as
+agent-workflow--continue); with \\[universal-argument], with its workflow as
 it is now."
   (interactive "P")
   (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
          (runs (progn (agent-workflow--ensure-restored project)
                       (seq-filter #'agent-workflow--interrupted (agent-workflow-runs-of project)))))
     (unless runs (user-error "No run of %s was interrupted" (file-name-nondirectory (directory-file-name project))))
-    (dolist (run runs) (agent-workflow-continue run :current current))
+    (dolist (run runs) (agent-workflow--continue run :current current))
     (message "Continued: %s" (mapconcat #'agent-workflow-run-name runs ", "))))
 
-(defun agent-workflow-cancel-command (run)
+(defun agent-workflow-cancel (run)
   "Cancel RUN (M-x agent-workflow-cancel), asked first."
   (interactive (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
                       (runs (progn (agent-workflow--ensure-restored project)
@@ -337,13 +333,13 @@ it is now."
 
 (cl-defun agent-workflow-cancel-asked (run &key (by "you"))
   "Cancel RUN, BY you, once you said yes to what it stops and keeps (M-x
-agent-workflow-cancel, its pane's Cancel). Non-nil if it was."
+agent-workflow--cancel, its pane's Cancel). Non-nil if it was."
   (when (yes-or-no-p (format "Cancel %s? Its agents and scripts stop, its issue is open again; %s. "
                              (agent-workflow-run-name run)
                              (if (agent-workflow-run-checkout-p run)
                                  "its commits in your checkout are kept"
                                "its branch and worktree are kept")))
-    (agent-workflow-cancel run :by by)
+    (agent-workflow--cancel run :by by)
     (message "%s cancelled" (agent-workflow-run-name run))
     t))
 

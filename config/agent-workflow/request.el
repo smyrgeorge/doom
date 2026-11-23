@@ -64,13 +64,14 @@
 (require 'json)
 
 (declare-function agent-workflow-pause "agent-workflow/resume")
-(declare-function agent-workflow-dry-run "agent-workflow/dry")
+(declare-function agent-workflow--dry-run "agent-workflow/dry")
 (declare-function agent-workflow-unpause "agent-workflow/resume")
-(declare-function agent-workflow-cancel "agent-workflow/resume")
-(declare-function agent-workflow-continue "agent-workflow/resume")
+(declare-function agent-workflow--cancel "agent-workflow/resume")
+(declare-function agent-workflow--continue "agent-workflow/resume")
 (declare-function agent-workflow--interrupted "agent-workflow/resume")
 (declare-function agent-workflow--ensure-restored "agent-workflow/resume")
 (defvar agent-workflow--paused)
+(defvar agent-workflow-from-shell)
 
 (defun agent-workflow--request-check (directory payload)
   "Check DIRECTORY's project's workflows and agents, or PAYLOAD's file:
@@ -280,7 +281,7 @@ reply. Not from an agent's session."
          (step (or (plist-get payload :step) 0))
          (discard (plist-get payload :discard))
          (lost (and discard (agent-workflow-back-lost run job)))
-         (replaced (agent-workflow-back run job :step step :note (plist-get payload :note) :discard discard
+         (replaced (agent-workflow--back run job :step step :note (plist-get payload :note) :discard discard
                                         :by "you")))
     (list :ok t :issue issue :job job :step step :replaced (vconcat replaced)
           :lost (vconcat (append (car lost) (cdr lost))))))
@@ -301,7 +302,7 @@ reply. Not from an agent's session."
          (more (let ((more (plist-get payload :more)))
                  (and more (list :cost (plist-get more :cost) :tokens (plist-get more :tokens)
                                  :time (and (plist-get more :time) (agent-workflow--duration (plist-get more :time)))))))
-         (choice (agent-workflow-confirm run (plist-get payload :choice) :notes notes :more more)))
+         (choice (agent-workflow--confirm run (plist-get payload :choice) :notes notes :more more)))
     (list :ok t :issue issue :job job :choice choice)))
 
 (defun agent-workflow--request-approval (directory payload pid reject)
@@ -316,8 +317,8 @@ an agent's session."
          (_ (agent-workflow--ensure-restored project))
          (run (or (agent-workflow-run-of project issue) (user-error "%s has no run" issue)))
          (job (if reject
-                  (agent-workflow-reject run (or (plist-get payload :note) ""))
-                (agent-workflow-approve run))))
+                  (agent-workflow--reject run (or (plist-get payload :note) ""))
+                (agent-workflow--approve run))))
     (list :ok t :issue issue :job job)))
 
 (defun agent-workflow--request-project (directory pid what)
@@ -343,7 +344,7 @@ DIRECTORY's project): the reply."
     (list :ok t :continued
           (vconcat (mapcar (lambda (run)
                              (list :issue (agent-workflow-run-issue run)
-                                   :jobs (vconcat (agent-workflow-continue run :current (plist-get payload :current)))))
+                                   :jobs (vconcat (agent-workflow--continue run :current (plist-get payload :current)))))
                            runs)))))
 
 (defun agent-workflow--request-dry-run (directory payload)
@@ -358,7 +359,7 @@ DIRECTORY's project): the reply."
          (chosen (lambda (object)
                    (cl-loop for (key value) on object by #'cddr
                             collect (cons (substring (symbol-name key) 1) (append value nil)))))
-         (result (agent-workflow-dry-run spec :info info :outcomes (funcall chosen (plist-get payload :outcomes))
+         (result (agent-workflow--dry-run spec :info info :outcomes (funcall chosen (plist-get payload :outcomes))
                                          :exits (funcall chosen (plist-get payload :exits))
                                          :definitions (agent-workflow-agent-definitions project))))
     (list :ok t
@@ -408,7 +409,7 @@ its reply written to DIR/reply. Return t."
                    (let* ((project (agent-workflow--request-project directory pid "cancel"))
                           (issue (plist-get payload :issue))
                           (run (or (agent-workflow-run-of project issue) (user-error "%s has no run" issue))))
-                     (agent-workflow-cancel run)
+                     (agent-workflow--cancel run)
                      (list :ok t :issue issue)))
                   ((or "pause" "unpause")
                    (agent-workflow--request-project directory pid op)

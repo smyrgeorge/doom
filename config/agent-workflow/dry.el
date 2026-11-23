@@ -24,7 +24,7 @@
 (defvar agent-workflow-pool)
 (defvar agent-workflow-max-rounds)
 
-(cl-defun agent-workflow-dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) definitions)
+(cl-defun agent-workflow--dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) definitions)
   "WORKFLOW (a plist, as read) walked, nothing run: a plist (:waves :end
 :stopped :branch), :waves a list of waves, each a list of lines (what
 happened), :end the jobs' statuses, :stopped why it would stop, or nil,
@@ -242,7 +242,7 @@ of the first type it's for; SPEC with no ticket: its own (ISSUE left)."
         (issue (agent-workflow-issue project issue))
         (t (list :id "(none)" :title "(a dry run)" :type (or (car (plist-get spec :for)) "task")))))
 
-(defun agent-workflow-dry-run-command (workflow issue outcomes exits)
+(defun agent-workflow-dry-run (workflow issue outcomes exits)
   "Dry run of WORKFLOW (M-x agent-workflow-dry-run) on ISSUE (its id, or
 nil: one of the first type it's for), OUTCOMES and EXITS as typed
 \(\"review=changes,approved\", \"build.2=1,0\"): what would happen, in a
@@ -261,7 +261,7 @@ buffer."
          (spec (or (alist-get workflow (agent-workflow-workflows project) nil nil #'equal)
                    (user-error "No workflow %s" workflow)))
          (info (agent-workflow--dry-info project spec issue))
-         (result (agent-workflow-dry-run spec :info info :outcomes (agent-workflow--parse-chosen outcomes)
+         (result (agent-workflow--dry-run spec :info info :outcomes (agent-workflow--parse-chosen outcomes)
                                          :exits (agent-workflow--parse-chosen exits)
                                          :definitions (agent-workflow-agent-definitions project)))
          (buffer (get-buffer-create "*agent-workflow dry run*")))
