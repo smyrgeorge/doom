@@ -214,17 +214,45 @@ the job's place), its output logged; ON-EXIT called with its exit status
          (process nil)
          (timer nil))
     (make-directory (file-name-directory log) t)
-    (setq process
-          (make-process
+    (condition-case err
+        (setq process (agent-workflow--spawn-process
+                       buffer command log run job index on-exit (lambda () timed-out) (lambda () timer)))
+      ;; It can't start (its interpreter missing, its folder gone): its step
+      ;; broke, as one that returned other than 0, 1, 3 (never left running).
+      (error
+       (when (buffer-live-p buffer)
+         (let ((stderr (get-buffer-process buffer)))
+           (when stderr (delete-process stderr)))
+         (kill-buffer buffer))
+       (agent-workflow--journal run "script-ended" :job job :step index :exit "can't start"
+                                :tail (error-message-string err))
+       (run-at-time 0 nil #'agent-workflow--broke run job index
+                    (format "its step %d can't start: %s" (1+ index) (error-message-string err)))))
+    (when process
+      (agent-workflow--job-set run job :process process)
+      (when timeout
+        (setq timer (run-at-time timeout nil (lambda ()
+                                               (when (process-live-p process)
+                                                 (setq timed-out t)
+                                                 (interrupt-process process)
+                                                 (run-at-time 2 nil (lambda () (when (process-live-p process)
+                                                                                 (kill-process process))))))))))
+    process))
+
+(defun agent-workflow--spawn-process (buffer command log run job index on-exit timed-out timer)
+  "`agent-workflow--spawn''s process: COMMAND, its output in BUFFER, then
+LOG; ON-EXIT called once it ends; TIMED-OUT and TIMER functions of no
+argument saying whether it ran out of time, and its timer."
+  (make-process
            :name "agent-workflow-script" :buffer buffer :command command :connection-type 'pipe :noquery t
            ;; Its errors in its output, without a word of the pipe's own.
            :stderr (make-pipe-process :name "agent-workflow-script errors" :buffer buffer :noquery t
                                       :sentinel #'ignore)
            :sentinel (lambda (process _event)
                        (unless (process-live-p process)
-                         (when timer (cancel-timer timer))
+                         (when (funcall timer) (cancel-timer (funcall timer)))
                          (let ((output (with-current-buffer buffer (buffer-string)))
-                               (status (if timed-out 'timeout (process-exit-status process))))
+                               (status (if (funcall timed-out) 'timeout (process-exit-status process))))
                            (kill-buffer buffer)
                            (let ((coding-system-for-write 'utf-8-unix))
                              (write-region output nil log nil 'silent))
@@ -238,15 +266,6 @@ the job's place), its output logged; ON-EXIT called with its exit status
                              ;; agent a message, which agent-shell can't from
                              ;; inside one.
                              (run-at-time 0 nil on-exit status output)))))))
-    (agent-workflow--job-set run job :process process)
-    (when timeout
-      (setq timer (run-at-time timeout nil (lambda ()
-                                             (when (process-live-p process)
-                                               (setq timed-out t)
-                                               (interrupt-process process)
-                                               (run-at-time 2 nil (lambda () (when (process-live-p process)
-                                                                               (kill-process process)))))))))
-    process))
 
 (defun agent-workflow--step-done-or-failed (run job index status output what)
   "Step INDEX of JOB of RUN ended with STATUS (its exit, or timeout),

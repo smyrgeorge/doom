@@ -322,6 +322,24 @@ jobs:
       (agent-workflow-confirm run "skip")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
+(ert-deftest agent-workflow-steps/a-script-that-can-t-start ()
+  "A run: step whose interpreter isn't there: its step broke, the run
+asking (not its job left running)."
+  (+test-awr "cant-start"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    shell: no-such-interpreter-here
+    run: print('x')
+")
+    (let ((run (agent-workflow-start-run project (+test-awr--issue project "Can't start"))))
+      (should (+test-awr--wait (lambda () (eq (plist-get (cdr (agent-workflow-asking run)) :kind) 'broke))))
+      (should (string-match-p "\\`check: its step 1 can't start: .*no-such-interpreter-here" (agent-workflow-run-why run)))
+      (should (eq (+test-awr--job run "check") 'waiting))
+      (should-not (plist-get (agent-workflow--job run "check") :process))
+      (agent-workflow-cancel run))))
+
 (ert-deftest agent-workflow-steps/environment-shell-and-your-copy ()
   "A script's environment; shell: its interpreter; a script of
 .agent-workflow/ run from your checkout, not the branch."
