@@ -908,6 +908,13 @@ name) doubled, as itself: the mode line's text."
 
 (add-to-list 'mode-line-misc-info '(:eval (agent-workspace--tally-mode-line)) t)
 
+(defun agent-workspace--open-project (project)
+  "Open PROJECT's crew (`agent-workspace-open'), from a buffer of no agent:
+the one current, another crew's session, would say its own."
+  (with-temp-buffer
+    (setq default-directory (file-name-as-directory project))
+    (agent-workspace-open)))
+
 (defun agent-workspace-tally-open (event)
   "Open the crew whose tally was clicked (EVENT)."
   (interactive "e")
@@ -915,8 +922,7 @@ name) doubled, as itself: the mode line's text."
          (text (posn-string posn))
          (project (and text (get-text-property (cdr text) 'agent-workspace-project (car text)))))
     (when project
-      (let ((default-directory project))
-        (agent-workspace-open)))))
+      (agent-workspace--open-project project))))
 
 ;; ====== SELECTING ======
 
@@ -941,8 +947,7 @@ cursor on its issue; done, it's seen. GO: the cursor in its pane."
 (defun agent-workspace--select-from-anywhere (agent)
   "Select AGENT (a click on its name in a file's mode line): its crew's app
 opened, its pane open, the cursor in it."
-  (let ((default-directory (agent-workspace-agent-project agent)))
-    (agent-workspace-open))
+  (agent-workspace--open-project (agent-workspace-agent-project agent))
   (agent-workspace-select agent t))
 
 (setq agent-workspace-select-function #'agent-workspace--select-from-anywhere)
@@ -1132,8 +1137,7 @@ its holding work you choose (`agent-workspace-read-branch')."
   (let ((app (agent-workspace--app (agent-workspace-agent-project agent))))
     (if (and app (agent-workspace--shown-p app))
         app
-      (let ((default-directory (agent-workspace-agent-project agent)))
-        (agent-workspace-open)))))
+      (agent-workspace--open-project (agent-workspace-agent-project agent)))))
 
 (defun agent-workspace--side-show (agent &optional tab)
   "AGENT's side area showing TAB (else the one it shows), its pane open (its

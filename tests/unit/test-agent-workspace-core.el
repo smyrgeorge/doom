@@ -104,6 +104,18 @@ not its role's; none of its own: its role's (doom-pbk.175)."
     (should (equal (agent-workspace-model-of sonnet) "sonnet"))
     (should (equal (plist-get (agent-workspace--crew-entry own) :model) "inherit"))))
 
+(ert-deftest agent-workspace/another-crew-opened-from-a-session ()
+  "Another crew opened from an agent's session (its tally clicked, one of
+its agents selected): that crew, not the session's (doom-pbk.173)."
+  (let ((opened nil))
+    (with-temp-buffer
+      ;; A session of crew A.
+      (setq-local agent-workspace--agent (+test-awc--agent :project "/tmp/project-a/"))
+      (cl-letf (((symbol-function 'agent-workspace-open)
+                 (lambda (&rest _) (setq opened (list (agent-workspace-buffer-agent) default-directory)))))
+        (agent-workspace--open-project "/tmp/project-b")))
+    (should (equal opened '(nil "/tmp/project-b/")))))
+
 (ert-deftest agent-workspace/a-free-colour ()
   "The first colour no agent has; all taken, the one fewest have."
   (let ((agent-workspace-colours '("blue" "green" "red")))
