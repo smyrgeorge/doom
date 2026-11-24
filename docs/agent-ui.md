@@ -130,7 +130,8 @@ plists (`(:type progress :value 3)`), as `json-parse-string` makes them with `:o
   ("closing" when it's the canvas's last element and the canvas goes with it, "removed" when the canvas stays); the
   pane closes with its last element. One that failed stays; a change meanwhile starts the countdown again or stops it.
   The agent's `"close"` on it decides for it: seconds, or `false` to keep it. `(setq agent-ui-close-finished nil)` in
-  `config.el`: only those whose `close` asks. A project panel never closes.
+  `config.el`: only those whose `close` asks. A project panel never closes. One back with its resumed session stays
+  (as kept), until it changes.
 - **Each element** is the text between two markers, its id in a text property. Drawing replaces that text only;
   point and each window's scroll stay where they were.
 - **Redraws are throttled:** an update marks the element dirty, and a timer (`agent-ui-redraw-delay`, 0.1s) redraws the

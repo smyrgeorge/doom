@@ -232,6 +232,16 @@ empty: how many of its elements; nil if not."
                      (cl-incf count))
             ;; One of a type gone since (discarded, dropped): left out.
             (agent-ui-error nil))))
+      ;; Those finished come back kept, no countdown (the user's Keep isn't
+      ;; saved; theirs was running as it ended): until they change.
+      (when-let* ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+        (with-current-buffer canvas
+          (unless agent-ui--kept (setq agent-ui--kept (make-hash-table :test #'equal)))
+          (dolist (id agent-ui--order)
+            (let ((element (agent-ui--entry-element (gethash id agent-ui--entries))))
+              (when (eq (agent-ui-finished element) 'done)
+                (puthash id element agent-ui--kept))))
+          (agent-ui--finished-check)))
       count)))
 
 (defun agent-ui--persist-watch ()

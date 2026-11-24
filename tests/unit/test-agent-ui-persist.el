@@ -166,6 +166,10 @@ lost)."
     ;; As they were; the one of a type gone, left out; no source started.
     (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas name)) '("b" "s")))
     (should (equal (plist-get (agent-ui-get "b" :canvas name) :status) "done"))
+    ;; Finished, it stays: no countdown closing it again (doom-ht6.60).
+    (with-current-buffer (get-buffer (agent-ui-canvas-buffer-name name))
+      (should-not (and agent-ui--closing (gethash "b" agent-ui--closing)))
+      (should (gethash "b" agent-ui--kept)))
     (should-not (plist-get (agent-ui-get "s" :canvas name) :source))
     (should-not (agent-ui-source-status "s" :canvas name))
     ;; Tied to its session, as any.
