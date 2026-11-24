@@ -51,8 +51,12 @@ window), questions not taking the focus; the workflow gate there too."
          (dolist (buffer (agent-ui-canvases)) (kill-buffer buffer))))))
 
 (defun +test-awp--box-lines (box)
-  "BOX's lines' texts (a line text, or {level, text})."
-  (mapcar (lambda (line) (if (stringp line) line (plist-get line :text))) (plist-get box :lines)))
+  "BOX's lines' texts (a line text, or {level, text, mark}), each its mark
+first."
+  (mapcar (lambda (line)
+            (if (stringp line) line (concat (if (plist-get line :mark) (concat (plist-get line :mark) " ") "")
+                                            (plist-get line :text))))
+          (plist-get box :lines)))
 
 (defun +test-awp--sections (pane &optional all)
   "PANE's sections' names; but Needs you, unless ALL (a stand-in's turn
@@ -169,8 +173,8 @@ counting down, until closed (q)."
         (should (+test-awr--wait (lambda () (ignore-errors (agent-ui-get "now-build" :canvas pane :section "run")))))
         (should (equal (+test-awp--sections pane) '("run" "log")))
         (let ((box (agent-ui-get "now-build" :canvas pane :section "run")))
-          (should (member (plist-get box :type) '("text" "log")))
-          (should (string-prefix-p "build · " (plist-get box :title)))
+          (should (equal (plist-get box :type) "activity"))
+          (should (equal (plist-get box :owner) "build"))
           (should (equal (+test-awp--labels box) '("Show session"))))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas pane :section "run"))
                        '("graph" "jobs" "rounds" "now-build")))
@@ -863,14 +867,17 @@ all on its line. A merge's conflicts: resolving them."
           (should (equal (plist-get (nth 1 (plist-get green :steps)) :detail) "run: watch.sh")))))))
 
 (ert-deftest agent-workflow-pane/live-boxes ()
-  "A job running, its live box: its agent at work (fixing a failed step,
-its agent step) titled what on and its turn's time, its actions as they
-come (the latest last, the box's lines at most, a tool call's line where
-it came, its text as it's known better), Show session (Go to it while it
-asks); else its script running, titled its step, try, command and time,
-its output's last lines (colour codes gone, a line redrawn in place its
-last state), Show output; neither (its agent kept, stopped; nothing
-running), none. Show session and Show output pressed: shown."
+  "A job running, its live box (Agent UI's activity, its job its owner): its
+agent at work (fixing a failed step, its agent step), what on and its
+turn's time in its header, its actions as they come (the latest last and
+bright, the box's lines at most, a tool call's line where it came, its text
+as it's known better, each marked by its kind), counted; Show session (Go
+to it while it asks, ◆, its question its last line); else its script
+running, named, its step of all, its try and its time in its header, its
+command first, its output's last lines (colour codes gone, a line redrawn
+in place its last state), its lines counted; Show output; neither (its
+agent kept, stopped; nothing running), none. Show session and Show output
+pressed: shown."
   (let* ((workflow '(:name "github"
                      :jobs (("green" :name "green"
                              :steps ((:kind run :run "push.sh" :name "push")
@@ -899,13 +906,21 @@ running), none. Show session and Show output pressed: shown."
                       agent-workflow--pane-times (make-hash-table :test #'equal))
           (let ((element (funcall box "green")))
             (should (equal (plist-get element :id) "now-green"))
-            (should (equal (plist-get element :title) "green · agent ci · fixing step 2 (watch) · try 1 of 6"))
-            ;; Nothing yet: said, a muted line, no log (its 1 line counted).
-            (should (equal (plist-get element :type) "text"))
-            (should (equal (plist-get element :text) "Nothing done yet in this turn.")))
+            (should (equal (plist-get element :type) "activity"))
+            (should (equal (plist-get element :owner) "green"))
+            (should (equal (plist-get element :sources) '("green" "docs")))
+            (should (equal (plist-get element :label) "agent ci"))
+            (should (equal (plist-get element :detail) "fixing step 2 (watch) · try 1 of 6"))
+            (should (equal (plist-get element :mark) "●"))
+            ;; Nothing yet: said.
+            (should-not (plist-get element :lines))
+            (should-not (plist-get element :footer))
+            (should (equal (plist-get element :empty) "Nothing done yet in this turn."))
+            (should (agent-ui-check 'activity element)))
           (funcall event 'tool-call-update "t0" "read" "Read a.el")
           (let ((element (funcall box "green")))
-            (should (equal (plist-get element :type) "log"))
+            (should (equal (+test-awp--box-lines element) '("≡ Read a.el")))
+            (should (equal (plist-get element :footer) "1 action in this turn"))
             (should (equal (+test-awp--labels element) '("Show session"))))
           ;; Its turn, its actions as they come.
           (funcall event 'input-submitted)
@@ -913,19 +928,28 @@ running), none. Show session and Show output pressed: shown."
           (funcall event 'tool-call-update "t2" "read" "Read `config/stripe/gui.el`")
           (funcall event 'tool-call-update "t1" "execute" "gh run view 1 --log-failed")
           (let ((element (funcall box "green")))
-            (should (string-match-p "\\`green · agent ci · fixing step 2 (watch) · try 1 of 6 · its turn " (plist-get element :title)))
-            (should (equal (+test-awp--box-lines element) '("⚙ gh run view 1 --log-failed" "📖 Read config/stripe/gui.el"))))
+            (should (string-match-p "\\`its turn [0-9]+s\\'" (plist-get element :right)))
+            (should (equal (+test-awp--box-lines element) '("❯ gh run view 1 --log-failed" "≡ Read config/stripe/gui.el"))))
           (funcall event 'tool-call-update "t3" "edit" "Edit tests.yml")
-          (funcall event 'tool-call-update "t4" "think" "Thinking")
-          (should (equal (+test-awp--box-lines (funcall box "green"))
-                         '("📖 Read config/stripe/gui.el" "✎ Edit tests.yml" "• Thinking")))
-          ;; An action's words no level: no error counted.
-          (should (equal (plist-get (car (plist-get (funcall box "green") :lines)) :level) "info"))
+          (funcall event 'tool-call-update "t4" "other" "Thinking")
+          (let ((element (funcall box "green")))
+            (should (equal (+test-awp--box-lines element)
+                           '("≡ Read config/stripe/gui.el" "± Edit tests.yml" "• Thinking")))
+            ;; Counted: all its turn's, more than shown.
+            (should (equal (plist-get element :footer) "4 actions in this turn"))
+            ;; The latest bright, those before muted; their words no level
+            ;; (no error found in them).
+            (should (equal (mapcar (lambda (line) (list (plist-get line :mark-face) (plist-get line :level)))
+                                   (plist-get element :lines))
+                           '(("muted" "debug") ("muted" "debug") ("accent" nil)))))
           ;; It asks you: said, its button at the question.
           (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
                 (append (list :status 'waiting :agent-asks '(:kind permission :what "Bash")) (funcall state "green")))
           (let ((element (funcall box "green")))
-            (should (string-suffix-p " · asks you" (plist-get element :title)))
+            (should (equal (list (plist-get element :mark) (plist-get element :mark-face)) '("◆" "warning")))
+            (should (equal (list (plist-get element :right) (plist-get element :right-face)) '("asks you" "warning")))
+            (should (equal (car (last (+test-awp--box-lines element))) "? may it: Bash"))
+            (should (equal (plist-get element :footer) "4 actions in this turn · waiting for your answer"))
             (should (equal (+test-awp--labels element) '("Go to it"))))
           ;; Fixed, its script running again, its agent kept: its script's box.
           (let* ((output (generate-new-buffer " *test script*"))
@@ -935,19 +959,27 @@ running), none. Show session and Show output pressed: shown."
                   (puthash "green" (list :steps (list (cons 1 (list :started (- (float-time) 75))))) agent-workflow--pane-times)
                   (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
                         (list :status 'running :step 1 :agent agent :process process :tries '((1 . 2))))
-                  ;; No output yet: said, a muted line.
+                  ;; No output yet: its command alone.
                   (let ((element (funcall box "green")))
-                    (should (equal (plist-get element :type) "text"))
-                    (should (equal (plist-get element :text) "No output yet.")))
+                    (should (equal (+test-awp--box-lines element) '("❯ watch.sh")))
+                    (should-not (plist-get element :footer)))
                   (with-current-buffer output
                     (insert "\e[32mstep one\e[0m\n\nprogress 10%\rprogress 90%\nstep two\nstep three\n"))
                   (puthash "green" (list :steps (list (cons 1 (list :started (- (float-time) 75))))) agent-workflow--pane-times)
                   (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
                         (list :status 'running :step 1 :agent agent :process process :tries '((1 . 2))))
                   (let ((element (funcall box "green")))
-                    (should (equal (plist-get element :title) "green · script · step 2 (watch) · try 2 · watch.sh · 1m 15s"))
-                    (should (equal (+test-awp--box-lines element) '("progress 90%" "step two" "step three")))
-                    (should (equal (+test-awp--labels element) '("Show output"))))
+                    (should (equal (mapcar (lambda (key) (plist-get element key)) '(:owner :label :detail :right))
+                                   '("green" "watch" "step 2 of 2 · try 2" "1m 15s")))
+                    (should (equal (+test-awp--box-lines element) '("❯ watch.sh" "progress 90%" "step two" "step three")))
+                    ;; Its lines counted, all (not blank), more than shown.
+                    (should (equal (plist-get element :footer) '("the last 3 of 4 lines")))
+                    (should (equal (+test-awp--labels element) '("Show output")))
+                    (should (agent-ui-check 'activity element)))
+                  ;; More, an error: counted, those read before not again.
+                  (with-current-buffer output (insert "error: refused\nhalf a li"))
+                  (should (equal (plist-get (funcall box "green") :footer)
+                                 '("the last 3 of 5 lines" " · " (:text "1 error" :face "error"))))
                   (let (shown)
                     (cl-letf (((symbol-function 'pop-to-buffer) (lambda (buffer &rest _) (setq shown buffer))))
                       (agent-workflow--pane-answer "output green" nil "run/now-green"))
@@ -960,8 +992,10 @@ running), none. Show session and Show output pressed: shown."
                   (setf (alist-get "green" (agent-workflow-run-jobs run) nil nil #'equal)
                         (list :status 'running :step 1 :retry 1 :fix-script t :agent agent :process process
                               :tries '((1 . 2))))
-                  (should (equal (plist-get (funcall box "green") :title)
-                                 "green · on-fail script · fixing step 2 (watch) · try 2 of 6 · rerun.sh · 20s")))
+                  (let ((element (funcall box "green")))
+                    (should (equal (mapcar (lambda (key) (plist-get element key)) '(:label :detail :right))
+                                   '("on-fail script" "fixing watch · try 2 of 6" "20s")))
+                    (should (equal (car (+test-awp--box-lines element)) "❯ rerun.sh"))))
               (delete-process process)
               (kill-buffer output)))
           ;; Nothing running: none.
@@ -971,7 +1005,8 @@ running), none. Show session and Show output pressed: shown."
           ;; An agent step: its name; Show session pressed, its session.
           (setf (alist-get "docs" (agent-workflow-run-jobs run) nil nil #'equal)
                 (list :status 'running :step 0 :agent agent))
-          (should (string-prefix-p "docs · agent ci · step 1 (write)" (plist-get (funcall box "docs") :title)))
+          (should (equal (mapcar (lambda (key) (plist-get (funcall box "docs") key)) '(:owner :label :detail))
+                         '("docs" "agent ci" "step 1 (write)")))
           (let (opened)
             (cl-letf (((symbol-function 'agent-workflow--pane-open-session) (lambda (_run job) (setq opened job))))
               (agent-workflow--pane-answer "session docs" nil "run/now-docs"))

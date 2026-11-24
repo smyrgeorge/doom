@@ -30,7 +30,7 @@ description, on one line, its backquotes gone; nil if it has neither."
 (defun agent-workflow--pane-agent-event (agent event)
   "An event of AGENT's session: its turn begun (its last actions forgotten)
 or over, a tool call's (its line, kept where it came, its text as it's
-known better); its box drawn again at the next tick. In
+known better; a new one counted); its box drawn again at the next tick. In
 `agent-workflow-agent-event-functions'."
   (let ((activity (gethash agent agent-workflow--pane-activity))
         (changed t))
@@ -50,7 +50,8 @@ known better); its box drawn again at the next tick. In
              (setq changed nil)
            (if-let* ((action (assoc id actions)))
                (setcdr action (list kind text))
-             (setq actions (seq-take (cons (list id kind text) actions) agent-workflow-pane-box-lines)))
+             (setq actions (seq-take (cons (list id kind text) actions) agent-workflow-pane-box-lines)
+                   activity (plist-put activity :count (1+ (or (plist-get activity :count) 0)))))
            (setq activity (plist-put activity :actions actions))
            (unless (plist-get activity :turn)
              (setq activity (plist-put activity :turn (float-time)))))))
@@ -76,21 +77,30 @@ kept for later)."
                          (1+ (or (plist-get step :retries) 0))))
           ((and step (eq (plist-get step :kind) 'agent)) name))))
 
-(defun agent-workflow--pane-box-of (id title lines none actions)
-  "A live box: ID, TITLE, its LINES (texts, or {level, text}) as a log, the
-last `agent-workflow-pane-box-lines'; none yet, NONE said, muted (a log of
-it was counted as a line of output: 1 line); its ACTIONS."
-  (append (list :id id :title title)
-          (if lines
-              (list :type "log" :show agent-workflow-pane-box-lines :lines lines)
-            (list :type "text" :face "muted" :text none))
+(cl-defun agent-workflow--pane-box-of (id job &key label detail right right-face waiting lines footer empty actions)
+  "A live box, Agent UI's activity: ID; JOB in its colour (its Log's, by
+its place in its run), what it runs (LABEL), DETAIL muted, RIGHT at its
+end (in RIGHT-FACE); ● (◆, yellow, WAITING for you); its LINES under it (a
+log's: text, or {text, level, mark, mark-face}), all shown, EMPTY said
+while there are none; FOOTER closing them; its ACTIONS. In the pane's
+buffer."
+  (append (list :id id :type "activity" :owner job :label (or label "")
+                :sources (mapcar #'car (agent-workflow-run-jobs agent-workflow--pane-run))
+                :show (max 1 (length lines)) :lines lines)
+          (if waiting (list :mark "◆" :mark-face "warning") (list :mark "●" :mark-face "accent"))
+          (and detail (list :detail detail))
+          (and right (list :right right))
+          (and right-face (list :right-face right-face))
+          (and footer (list :footer footer))
+          (and empty (list :empty empty))
           (list :actions actions)))
 
 (defun agent-workflow--pane-agent-box (job state)
   "JOB's live box while its agent works (STATE its job's; nil else): its
-job, its agent (agent ci), what on, how long its turn's been (or that it
-asks you) as its title; its last actions, the latest last, each marked by
-its kind; Show session (at its question, if it asks)."
+agent (agent ci), what on, how long its turn's been (or that it asks you,
+◆) in its header; its last actions, each marked by its kind, the latest
+bright, those before muted; what it asks you after them; how many in its
+turn; Show session (at its question, if it asks)."
   (when-let* (((not (plist-get state :fix-script)))
               (agent (plist-get state :agent))
               ((agent-workflow-agent-p agent))
@@ -99,30 +109,88 @@ its kind; Show session (at its question, if it asks)."
               (doing (agent-workflow--pane-agent-doing agent-workflow--pane-run job state)))
     (let* ((activity (gethash agent agent-workflow--pane-activity))
            (turn (plist-get activity :turn))
-           (asks (and (eq (plist-get state :status) 'waiting) (plist-get state :agent-asks))))
+           (asks (and (eq (plist-get state :status) 'waiting) (plist-get state :agent-asks)))
+           (actions (reverse (plist-get activity :actions)))
+           (count (or (plist-get activity :count) (length actions)))
+           (newest (car (last actions))))
       (agent-workflow--pane-box-of
-            (agent-workflow--pane-box-id job)
-            ;; An agent's, said (its name alone read as part of its job's
-            ;; name: a script's box, it looked).
-            (string-join (delq nil (list job (concat "agent " (agent-workflow-agent-definition agent)) doing
-                                                (cond (asks "asks you")
-                                                      (turn (format "its turn %s"
-                                                                    (agent-workflow--duration-words
-                                                                     (round (- (float-time) turn))))))))
-                                " · ")
-            ;; Its actions, not output: no level found in their words (a
-            ;; command's --log-failed no error).
-            (mapcar (lambda (action)
-                      (list :level "info"
-                            :text (format "%s %s" (or (cdr (assoc (nth 1 action) agent-workflow--pane-action-marks)) "•")
-                                          (nth 2 action))))
-                    (reverse (plist-get activity :actions)))
-            "Nothing done yet in this turn."
-            ;; Its own (`agent-workflow--pane-answer'): hovered, what it opens.
-            (list (if asks
-                      (list :label "Go to it" :prompt (concat "session " job) :help "its session, at its question")
-                    (list :label "Show session" :prompt (concat "session " job)
-                          :help "its agent-shell session, whole")))))))
+       (agent-workflow--pane-box-id job) job
+       ;; An agent's, said (its name alone read as part of its job's: a
+       ;; script's box, it looked).
+       :label (concat "agent " (agent-workflow-agent-definition agent))
+       :detail doing
+       :waiting (or asks (eq (plist-get state :status) 'waiting))
+       :right (cond (asks "asks you")
+                    (turn (format "its turn %s" (agent-workflow--duration-words (round (- (float-time) turn))))))
+       :right-face (and asks "warning")
+       ;; Its actions, the latest last, bright (what it's at), those
+       ;; before muted; what it asks you after them. Their words no
+       ;; level (a command's --log-failed no error).
+       :lines (append (mapcar (lambda (action)
+                                (let ((mark (or (cdr (assoc (nth 1 action) agent-workflow--pane-action-marks)) "•")))
+                                  (if (and (eq action newest) (not asks))
+                                      (list :mark mark :mark-face "accent" :text (nth 2 action))
+                                    (list :mark mark :mark-face "muted" :level "debug" :text (nth 2 action)))))
+                              actions)
+                      (and asks
+                           (list (list :mark "?" :mark-face "warning" :level "warning"
+                                       :text (concat (if (eq (plist-get asks :kind) 'permission) "may it: " "")
+                                                     (or (plist-get asks :what) "its question, in its session"))))))
+       :footer (and (or actions asks)
+                    (concat (format "%d action%s in this turn" count (if (= count 1) "" "s"))
+                            (if asks " · waiting for your answer" "")))
+       :empty "Nothing done yet in this turn."
+       ;; Its own (`agent-workflow--pane-answer'): hovered, what it opens.
+       :actions (list (if asks
+                          (list :label "Go to it" :prompt (concat "session " job) :help "its session, at its question")
+                        (list :label "Show session" :prompt (concat "session " job)
+                              :help "its agent-shell session, whole")))))))
+
+(defvar agent-workflow--pane-output-counts (make-hash-table :test #'eq :weakness 'key)
+  "Each script's output counted so far, by its process: (:pos POS :lines N
+:errors N :warnings N), POS where it's read up to (its lines read once).")
+
+(defun agent-workflow--pane-output-counts (process)
+  "PROCESS's output counted (`agent-workflow--pane-output-counts'): its
+lines not blank, its errors and warnings (by their words, as a log finds
+them), read on from where it was last; nil without its buffer."
+  (when-let* ((buffer (process-buffer process))
+              ((buffer-live-p buffer)))
+    (with-current-buffer buffer
+      (let* ((counts (gethash process agent-workflow--pane-output-counts))
+             (counts (if (and counts (<= (plist-get counts :pos) (point-max)))
+                         (copy-sequence counts)
+                       (list :pos (point-min) :lines 0 :errors 0 :warnings 0)))
+             (end (save-excursion (goto-char (point-max)) (skip-chars-backward "^\n") (point))))
+        (when (> end (plist-get counts :pos))
+          (dolist (line (split-string (ansi-color-filter-apply
+                                       (buffer-substring-no-properties (plist-get counts :pos) end))
+                                      "\n"))
+            (let ((line (or (car (last (split-string line "\r" t))) "")))
+              (unless (string-blank-p line)
+                (setq counts (plist-put counts :lines (1+ (plist-get counts :lines))))
+                (pcase (agent-ui-log--level line)
+                  ('error (setq counts (plist-put counts :errors (1+ (plist-get counts :errors)))))
+                  ('warning (setq counts (plist-put counts :warnings (1+ (plist-get counts :warnings)))))))))
+          (setq counts (plist-put counts :pos end)))
+        (puthash process counts agent-workflow--pane-output-counts)))))
+
+(defun agent-workflow--pane-output-footer (process shown)
+  "PROCESS's output's counts, its box's footer, SHOWN its lines shown: the
+last 5 of 214 lines (5 lines, all), its errors and warnings in their
+colours; nil without output."
+  (when-let* ((counts (agent-workflow--pane-output-counts process))
+              (all (max (plist-get counts :lines) shown))
+              ((> all 0)))
+    (let ((errors (plist-get counts :errors))
+          (warnings (plist-get counts :warnings)))
+      (append (list (if (> all shown)
+                        (format "the last %d of %d lines" shown all)
+                      (format "%d line%s" all (if (= all 1) "" "s"))))
+              (and (> errors 0) (list " · " (list :text (format "%d error%s" errors (if (= errors 1) "" "s"))
+                                                    :face "error")))
+              (and (> warnings 0) (list " · " (list :text (format "%d warning%s" warnings (if (= warnings 1) "" "s"))
+                                                      :face "warning")))))))
 
 (defun agent-workflow--pane-output-lines (process)
   "PROCESS's output so far, its last lines (`agent-workflow-pane-box-lines'):
@@ -142,10 +210,10 @@ its colours' codes gone, a line redrawn in place (\\r) its last state."
 
 (defun agent-workflow--pane-script-box (job state)
   "JOB's live box while a script step of its runs (STATE its job's; nil
-else): its job, script (else what its step does), its step, its try, its
-command and how long it's run as its title; its on-fail script fixing it,
-on-fail script, what it fixes, its command. Its output's last lines as it
-comes; Show output."
+else): its script's name (else its file), its step of all and its try, how
+long it's run; its on-fail script fixing it, said, what it fixes and its
+try. Its command first, muted, its output's last lines under it as it
+comes; how many lines, errors and warnings in all; Show output."
   (when-let* ((process (plist-get state :process))
               ((processp process))
               ((process-live-p process)))
@@ -158,30 +226,32 @@ comes; Show output."
            (started (if fixing
                         (plist-get times :fix-started)
                       (plist-get (alist-get index (plist-get times :steps)) :started)))
-           (command (lambda (text)
-                      (truncate-string-to-width (car (split-string (string-trim (format "%s" text)) "\n"))
-                                                60 nil nil "…"))))
-      (agent-workflow--pane-box-of
-            (agent-workflow--pane-box-id job)
-            (string-join
-                    (delq nil (if fixing
-                                  (list job "on-fail script"
-                                        (and step (format "fixing step %d (%s)" (1+ index) (agent-workflow--pane-step-name step)))
-                                        (and (numberp try) (format "try %d of %d" try (1+ (or (plist-get step :retries) 0))))
-                                        (funcall command (plist-get step :on-fail-run))
-                                        (and started (agent-workflow--duration-words (round (- (float-time) started)))))
-                                (list job
-                                    ;; A script's, said; its command after its step.
-                                    (if (eq (plist-get step :kind) 'run) "script" (and step (agent-workflow--pane-step-does step)))
-                                    (and step (format "step %d (%s)" (1+ index) (agent-workflow--pane-step-name step)))
-                                    (and (numberp try) (> try 1) (format "try %d" try))
-                                    (and (eq (plist-get step :kind) 'run) (funcall command (plist-get step :run)))
-                                    (and started (agent-workflow--duration-words (round (- (float-time) started)))))))
-                    " · ")
-            (agent-workflow--pane-output-lines process)
-            "No output yet."
-            (list (list :label "Show output" :prompt (concat "output " job)
-                        :help "its output so far, whole"))))))
+           ;; Its first line: the box cuts it to its width.
+           (command (lambda (text) (car (split-string (string-trim (format "%s" text)) "\n")))))
+      (let ((output (agent-workflow--pane-output-lines process))
+            (count (length (plist-get (agent-workflow--job-spec run job) :steps))))
+        (agent-workflow--pane-box-of
+         (agent-workflow--pane-box-id job) job
+         ;; A script's, named (else its file); its on-fail script, said.
+         :label (if fixing "on-fail script" (agent-workflow--pane-log-step run (list :job job :step index)))
+         :detail (if fixing
+                     (string-join (delq nil (list (and step (format "fixing %s" (agent-workflow--pane-log-step
+                                                                                 run (list :job job :step index))))
+                                                  (and (numberp try)
+                                                       (format "try %d of %d" try (1+ (or (plist-get step :retries) 0))))))
+                                  " · ")
+                   (concat (format "step %d of %d" (1+ index) count)
+                           (if (and (numberp try) (> try 1)) (format " · try %d" try) "")))
+         :right (and started (agent-workflow--duration-words (round (- (float-time) started))))
+         ;; Its command first, muted; its output's last lines under it.
+         :lines (append (when-let* ((text (if fixing (plist-get step :on-fail-run) (and (eq (plist-get step :kind) 'run)
+                                                                                         (plist-get step :run)))))
+                          (list (list :mark "❯" :mark-face "muted" :level "debug" :text (funcall command text))))
+                        output)
+         :footer (agent-workflow--pane-output-footer process (length output))
+         :empty "No output yet."
+         :actions (list (list :label "Show output" :prompt (concat "output " job)
+                              :help "its output so far, whole")))))))
 
 (defun agent-workflow--pane-box (job state)
   "JOB's live box (STATE its job's), while it runs: its agent's at work,

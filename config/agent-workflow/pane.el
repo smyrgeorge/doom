@@ -131,9 +131,10 @@ shows a job running.")
 last shown (drawn again only once it changed).")
 
 (defconst agent-workflow--pane-action-marks
-  '(("execute" . "⚙") ("read" . "📖") ("search" . "📖") ("fetch" . "📖")
-    ("edit" . "✎") ("delete" . "✎") ("move" . "✎"))
-  "A tool call's kind (ACP's) as its mark before it; others: •.")
+  '(("execute" . "❯") ("read" . "≡") ("search" . "◎") ("fetch" . "↓")
+    ("edit" . "±") ("delete" . "⊖") ("move" . "→") ("think" . "∴"))
+  "A tool call's kind (ACP's) as its mark before it in its job's box;
+others: •. A column each, in the font itself (📖, an emoji, took two).")
 
 ;; ====== THE PANE ======
 

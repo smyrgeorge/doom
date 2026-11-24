@@ -351,6 +351,11 @@ flow
 ○ merge
 rounds
 build ▬▬ docs ▬ review → changes ▬ build · round 2 ▬ …   (a timeline)
+◆  review  agent review · step 1 (review)       asks you
+   │ ≡ Read lexer.el
+   │ ? Should the escape table also cover Unicode escapes?
+   ╰ 2 actions in this turn · waiting for your answer
+⏵ Go to it
 ▾ Needs you ◆ review ─────────────────────────
 Unicode
 review asks: Should the escape table also cover Unicode escapes?
@@ -384,7 +389,13 @@ review asks: Should the escape table also cover Unicode escapes?
   a step that failed while an agent fixes it, ✗ and who and its try, `ci fixing it · try 1 of 6`, its job `fixing`;
   a job its run's cancel or failure stopped, grey, `cancelled`, ⊘ in the graph);
   `rounds`, its rounds as a timeline, each job's runs as bars, one sent back said (`review → changes`),
-  the one running growing.
+  the one running growing. Under them, a box for each job running, drawn again each second: its header a line (● running,
+  ◆ waiting for you; its job in its Log's colour; what it runs, the step and its try muted; how long it's run), its last
+  lines under it on a rail, a footer closing them. A script's: its command first, muted, then its output's last lines
+  (errors red, warnings yellow; colour codes gone, a line redrawn in place its last state), `the last 5 of 214 lines ·
+  1 error`, **Show output**. An agent's: its last actions, each marked by its kind (❯ a command, ≡ read, ◎ search, ↓
+  fetch, ± edit, ⊖ delete, → move, ∴ think), the latest bright, those before muted; what it asks you last (◆, `asks
+  you`); `4 actions in this turn`, **Show session** (**Go to it** while it asks).
 - **Needs you**, only while the run waits for you: what on, a line coloured, its answers buttons: an approval
   (Approve, or Reject…, which asks its note), retries used up, a step that broke (go on, skip it, stop; go on with a
   note…), a merge waiting, a turn that ended without `done` (run its step again, with a note…, or cancel the run); the
