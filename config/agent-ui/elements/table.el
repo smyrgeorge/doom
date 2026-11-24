@@ -652,7 +652,7 @@ ID (QUESTION): their keys\" into your prompt."
           (row-actions list "Buttons on each row: [{\"label\", \"prompt\", \"submit\"}], the prompt's {Column} its cell, {row} all")
           (nowrap boolean "Each row a line: a cell too wide cut, …, not wrapped")
           (row-open any "The row itself a button (RET or a click on it): {\"prompt\", \"submit\", \"help\"}, the prompt's {Column} (or {0}, by its index) its cell")
-          (select any "Ask the user to pick rows: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their KEY cells (else the first; a row whose cell another's is too, by its cells)")
+          (select any "Ask the user to pick rows: {\"question\", \"multiple\", \"note\"} (its answer sent at once); the answer names their KEY cells (else the first; a row whose cell another's is too, by its cells)")
           (selected list "The rows picked so far (their key cells): a default, or the user's")
           (note-text string "The user's note")
           (answered string "The answer given (then it can't be changed)"))

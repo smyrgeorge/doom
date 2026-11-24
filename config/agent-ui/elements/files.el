@@ -244,7 +244,7 @@ opens it, at its line. For what you touched, or where the errors are."
           (tree boolean "Group them by folder, a tree" :default :false)
           (folded list "The folders folded (the user's)")
           (dir file "Where they are (default: your directory)" :default :here)
-          (select any "Ask the user to pick files: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their paths")
+          (select any "Ask the user to pick files: {\"question\", \"multiple\", \"note\"} (its answer sent at once); the answer names their paths")
           (selected list "The files picked so far (their paths): a default, or the user's")
           (note-text string "The user's note")
           (answered string "The answer given (then it can't be changed)"))

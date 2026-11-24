@@ -168,7 +168,7 @@ putting it into your prompt. Append a tag whose label is there to change it
 \(its count). With SELECT, the user picks chips (labels to apply, platforms to
 build for): \"Answer to ID (QUESTION): bug, docs\" comes into your prompt."
   :props ((tags list "The chips: labels, or {\"label\": ..., \"face\": ..., \"count\": ...}")
-          (select any "Ask the user to pick chips: {\"question\", \"multiple\", \"note\", \"submit\"}; the answer names their labels")
+          (select any "Ask the user to pick chips: {\"question\", \"multiple\", \"note\"} (its answer sent at once); the answer names their labels")
           (selected list "The chips picked so far (labels): a default, or the user's")
           (note-text string "The user's note")
           (answered string "The answer given (then it can't be changed)"))

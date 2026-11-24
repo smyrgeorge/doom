@@ -3301,6 +3301,16 @@ with their first cell; in a still picture: marks, no buttons."
     (should-not (string-search "⏵" still))
     (should-not (string-search "Add a note" still))))
 
+(ert-deftest agent-ui-elements/select-as-its-types-say ()
+  "A select's keys as agent-ui types lists them, each taken: question,
+multiple, note; no submit (its answer is sent at once) (doom-ht6.64)."
+  (dolist (type '(table files tags))
+    (ert-info ((symbol-name type))
+      (let ((doc (agent-ui-prop-doc (cl-find :select (agent-ui-type-props (agent-ui-type type)) :key #'agent-ui-prop-key))))
+        (should-not (string-search "submit" doc))
+        (should (string-search "\"question\", \"multiple\", \"note\"" doc)))))
+  (should-not (agent-ui-ask-select-check "table" '(:question "Q?" :multiple t :note t))))
+
 (ert-deftest agent-ui-elements/table-select-a-number-s-key ()
   "Rows whose key cells are numbers: picked before by their numbers, as
 given (doom-ht6.66)."
