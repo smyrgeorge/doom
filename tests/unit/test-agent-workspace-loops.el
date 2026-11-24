@@ -813,8 +813,12 @@ condition not met) is an answer: not run again."
                         (while (< (float-time) end)))))))
         (advice-add 'make-process :around busy)
         (unwind-protect
-            (should (equal (run "claimed" (lambda () (agent-workspace--bd-claim ada "demo-1")))
-                           '("issue already claimed by ken" 1)))
+            ;; Its exit seen at once, not at the deadline: its errors' pipe
+            ;; read as it's waited for (doom-pbk.184: 10 s, each claim).
+            (let ((start (float-time)))
+              (should (equal (run "claimed" (lambda () (agent-workspace--bd-claim ada "demo-1")))
+                             '("issue already claimed by ken" 1)))
+              (should (< (- (float-time) start) (/ agent-workspace-claim-timeout 2.0))))
           (advice-remove 'make-process busy))))))
 
 (ert-deftest agent-workspace-loops/killed-it-gives-its-issue-back ()

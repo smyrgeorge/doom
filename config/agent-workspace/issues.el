@@ -689,8 +689,14 @@ assignee, a list)."
                                                                    (process-put process 'done t))))))
                          (unwind-protect
                              (progn
+                               ;; Its errors' pipe read too: its end is
+                               ;; known only once both are (one Emacs was
+                               ;; busy for as it exited waited till the
+                               ;; deadline).
                                (while (and (not (process-get process 'done)) (< (float-time) end))
-                                 (accept-process-output process 0.05))
+                                 (accept-process-output process 0.05)
+                                 (when (process-live-p stderr)
+                                   (accept-process-output stderr 0)))
                                (if (process-live-p process)
                                    (progn (delete-process process) (cons 'timeout ""))
                                  ;; Its errors, read to their end.
