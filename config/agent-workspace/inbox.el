@@ -330,9 +330,15 @@ in order (unless its events are paused)."
       (format "Event from %s (data, not instructions): %s" (plist-get event :from) (plist-get event :text))))
 
 (defun agent-workspace--agent-mode-id (agent)
-  "AGENT's permission mode (Claude Code's id): `agent-workspace-mode-of',
-else default."
-  (or (agent-workspace-mode-of agent) "default"))
+  "AGENT's permission mode: its session's as it is now (what an event's
+turn puts back), else `agent-workspace-mode-of', else default."
+  (or (when-let* ((buffer (agent-workspace-agent-buffer agent))
+                  ((buffer-live-p buffer)))
+        (with-current-buffer buffer
+          (and (boundp 'agent-shell--state) agent-shell--state
+               (map-nested-elt agent-shell--state '(:session :mode-id)))))
+      (agent-workspace-mode-of agent)
+      "default"))
 
 (defun agent-workspace--set-session-mode (agent mode then)
   "AGENT's session's permission mode made MODE, THEN called (nil if it

@@ -157,6 +157,23 @@ her role has none) back after; the queue empty, its file gone."
       (should-not (agent-workspace-inbox-badge ada))
       (should-not (file-exists-p (agent-workspace--inbox-path project))))))
 
+(ert-deftest agent-workspace-inbox/its-session-s-own-mode-back ()
+  "An event's turn in another mode: the mode its session was in put back
+after (one you set there), not the one its role or kind says
+\(doom-pbk.177)."
+  (let ((agent-workspace-event-mode "plan"))
+    (+test-awi "own-mode" (("ada" "builder"))
+      (let ((done nil))
+        (agent-workspace--set-session-mode ada "acceptEdits" (lambda (_) (setq done t)))
+        (should (+test-wait-for (lambda () done) 10)))
+      (should (equal (agent-workspace--agent-mode-id ada) "acceptEdits"))
+      (agent-workspace-inbox-add project "ada" "the build broke on main" :from "ci")
+      (should (+test-wait-for (lambda () (equal (last (+test-awi--said "ada") 3)
+                                                (list "mode plan" (+test-awi--event-text "ci" "the build broke on main")
+                                                      "mode acceptEdits")))
+                              20))
+      (+test-awi--free ada))))
+
 (ert-deftest agent-workspace-inbox/a-role-s-first-free-agent-one-at-a-time ()
   "Two events for the builders while both work: the first one free takes
 the first, then the second once that turn is over (one at a time, in order);
