@@ -842,6 +842,28 @@ stopped, asked; go on with more: continued; kept with the run."
         ;; Every turn's tokens, review's kept as it stopped at its budget.
         (should (equal (plist-get (plist-get saved :spent) :tokens) 6000))))))
 
+(ert-deftest agent-workflow-runs/budget-at-a-turns-end ()
+  "Its budget used up by the cost its agent's turn says at its end, after
+it said done: its step not run again as it goes on, the job ending, the
+next starting (doom-38o.74)."
+  (+test-awr "budget-end"
+    (write-region (concat "budget:\n  cost: 1\n" +test-awr--feature) nil
+                  (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (let* ((issue (+test-awr--issue project "Budget at the end"))
+           (run (agent-workflow-start-run project issue))
+           (build (+test-awr--agent run "build")))
+      (should (+test-awr--wait (lambda () (agent-workflow-agent-session build))))
+      ;; It said done, its turn not over: then its cost comes.
+      (agent-workflow--job-set run "build" :status 'running :finished t :outcome "done")
+      (+test-awr--spend build 2.0 1000)
+      (agent-workflow-check-budget run)
+      (should (equal (agent-workflow--interrupted run) nil))
+      (should (equal (plist-get (plist-get (agent-workflow--job run "build") :ask) :kind) 'budget))
+      (agent-workflow--confirm run "go" :more '(:cost 5))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'done))))
+      (should (+test-awr--agent run "review"))
+      (should (= (seq-count (lambda (ev) (equal ev "job-started")) (+test-awr--journal run)) 2)))))
+
 ;; ====== CHANGED BY HAND ======
 
 (ert-deftest agent-workflow-runs/changed-by-hand ()

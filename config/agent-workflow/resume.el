@@ -196,16 +196,25 @@ workflow as it is now. Return the jobs continued."
 
 (defun agent-workflow--continue-job (run job by)
   "JOB of RUN, interrupted, continued BY: its step again, an agent's
-session resumed, told so."
+session resumed, told so; an agent step its agent was done with already
+\(it said so, its turn not over yet when it was stopped: a budget's cost
+came at its end), it ends: the job goes on from there, its work not done
+again."
   (let* ((state (agent-workflow--job run job))
          (index (plist-get (plist-get state :ask) :step))
          (step (nth index (plist-get (agent-workflow--job-spec run job) :steps))))
     (agent-workflow--journal run "continued" :job job :step index :by by)
-    (agent-workflow--job-set run job :ask nil :status 'running :why nil :finished nil
-                             :back (and (eq (plist-get step :kind) 'agent)
-                                        (list :step index :interrupted t :by by :session (plist-get state :session))))
-    (agent-workflow--refresh run)
-    (agent-workflow--step-start run job index)))
+    ;; Its own agent step (not a fix of a script's, run afresh).
+    (if (and (plist-get state :finished) (eq (plist-get step :kind) 'agent))
+        (progn
+          (agent-workflow--job-set run job :ask nil :status 'running :why nil)
+          (agent-workflow--refresh run)
+          (agent-workflow--step-finished run job))
+      (agent-workflow--job-set run job :ask nil :status 'running :why nil :finished nil
+                               :back (and (eq (plist-get step :kind) 'agent)
+                                          (list :step index :interrupted t :by by :session (plist-get state :session))))
+      (agent-workflow--refresh run)
+      (agent-workflow--step-start run job index))))
 
 (defun agent-workflow--interrupt (run job)
   "JOB of RUN stopped at once: its agent stopped (its session kept), its
