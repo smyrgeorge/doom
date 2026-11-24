@@ -74,7 +74,7 @@ JOB hasn't run, or STEP isn't one."
               (agent-workflow-snapshot-remove project issue other))
             (agent-workflow--job-set run other :status 'pending :agent nil :finished nil :why nil :pool nil
                                      :outcome nil :notes nil :snapshot nil :process nil :retry nil
-                                     :resolving nil :tries nil :ask nil :back nil
+                                     :resolving nil :fix-script nil :protected-ok nil :tries nil :ask nil :back nil
                                      :round (1+ (or (plist-get other-state :round) 1))))))
       (agent-workflow--job-set run job :back (list :step step :note note :by by :session session))
       (when discard

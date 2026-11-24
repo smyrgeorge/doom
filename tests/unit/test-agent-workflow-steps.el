@@ -260,6 +260,32 @@ jobs:
         (agent-workflow-done agent nil "wrote it"))
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
+(ert-deftest agent-workflow-steps/sent-back-while-its-on-fail-script-runs ()
+  "Sent back while its on-fail script runs: the script stopped, the job
+not left waiting on it (its agent heard again), nor an OK to a protected
+merge kept for its next round (doom-38o.72)."
+  (+test-awr "onfail-back"
+    ;; Its first round fails, its next passes: a file outside its
+    ;; worktree (a job's own, made again for its next round).
+    (+test-aws--workflow project (format "description: x
+for: [feature]
+jobs:
+  check:
+    run: test -f %s || { touch %s; exit 1; }
+    retries: 1
+    on-fail:
+      run: sleep 30
+" (+test-tmp-file "onfail-back-ok") (+test-tmp-file "onfail-back-ok")))
+    (let* ((issue (+test-awr--issue project "On fail back"))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (plist-get (agent-workflow--job run "check") :fix-script))))
+      (agent-workflow--job-set run "check" :protected-ok t)
+      (agent-workflow--back run "check")
+      (should-not (plist-get (agent-workflow--job run "check") :fix-script))
+      (should-not (plist-get (agent-workflow--job run "check") :protected-ok))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (should-not (plist-get (agent-workflow--job run "check") :fix-script)))))
+
 (ert-deftest agent-workflow-steps/an-on-fail-script ()
   "on-fail: {run: ...}: a failed step's script first, FAILED_STEP and
 FAILED_OUTPUT in its environment, its output a log of its own. Exit 0 it
