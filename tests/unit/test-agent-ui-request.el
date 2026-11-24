@@ -260,6 +260,12 @@ so (it was ok false, the element half added)."
         (should (eq (plist-get reply :ok) :false))
         (should (string-match-p "couldn't be written as JSON" (plist-get reply :error)))))))
 
+;; A list starting with false: an array, not an object (doom-ht6.57).
+(ert-deftest agent-ui-request/false-first-in-a-list ()
+  (should (equal (json-serialize (agent-ui-to-json '(:rows ((:false "beta-ui") (:false 1 :false 2)))))
+                 "{\"rows\":[[false,\"beta-ui\"],[false,1,false,2]]}"))
+  (should (equal (json-serialize (agent-ui-to-json '(:a :false :b nil))) "{\"a\":false,\"b\":null}")))
+
 ;; render, define: the agent sees what it draws; makes a type.
 (ert-deftest agent-ui-request/render ()
   (+test-aur

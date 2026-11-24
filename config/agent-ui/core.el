@@ -1200,7 +1200,10 @@ arrays, symbols as strings, nil as null; a string's raw bytes as U+FFFD
    ((memq value '(nil :null)) :null)
    ((eq value :false) :false)
    ((stringp value) (agent-ui--json-string value))
-   ((agent-ui--plist-p value)
+   ;; A list with :false (JSON's false) as a key isn't a plist: a row
+   ;; [false, "beta"] is an array.
+   ((and (agent-ui--plist-p value)
+         (not (cl-loop for (k _) on value by #'cddr thereis (memq k '(:false :null)))))
     (cl-loop for (k v) on value by #'cddr nconc (list k (agent-ui-to-json v))))
    ((consp value) (vconcat (mapcar #'agent-ui-to-json value)))
    ((vectorp value) (vconcat (mapcar #'agent-ui-to-json value)))
