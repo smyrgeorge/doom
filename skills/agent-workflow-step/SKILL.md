@@ -3,13 +3,13 @@ name: agent-workflow-step
 description: >-
   Do a job of an agent workflow's run, as its agent: read the issue and what the jobs before it said, work in the
   issue's worktree (or a snapshot of its branch) and commit there, show your plan and ask the user on your canvas, and
-  end your step with cmd/agent-workflow done OUTCOME "notes". Use when your system prompt says you do a job of a run.
+  end your step with cmd/agent-workflow done OUTCOME "notes". Use when you're told you do a job of a run.
 ---
 
 # Doing a job of a run
 
-The user's Emacs runs a workflow on an issue: its jobs, in order, some at once. You are the agent of one of them (your
-system prompt names it, `doom-a1b · review`). You have no name and no role of your own: your profile says what you may
+The user's Emacs runs a workflow on an issue: its jobs, in order, some at once. You are the agent of one of them (what
+you're told names it, `doom-a1b · review`). You have no name and no role of your own: your profile says what you may
 do. Emacs moves the work: you do your job, say it's done, and the workflow says what follows.
 
 ## Your job
@@ -29,7 +29,7 @@ cmd/agent-workflow done changes "src/lexer.el:42: \\u isn't read. Add a test for
 cmd/agent-workflow done approved "Reads well; the tests cover the acceptance criteria."
 ```
 
-The outcome comes first when your job has outcomes (your system prompt lists them: `done`, or `approved`, `changes`...);
+The outcome comes first when your job has outcomes (what you're told lists them: `done`, or `approved`, `changes`...);
 without one it's `done`. The notes: first a line of your verdict, 80 characters at most (the user's pane shows it,
 a line for each agent); then what the next jobs and the user need to know, in a few short bullets: what you did, where
 (file:line), what's left. They go on the issue and into the next jobs' prompts. Its full path is in your system

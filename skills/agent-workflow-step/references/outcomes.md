@@ -4,7 +4,7 @@ Part of the agent-workflow-step skill: read [SKILL.md](../SKILL.md) first.
 
 ## Outcomes
 
-Your job's `outcomes` (your system prompt lists them) say what follows your `done OUTCOME`:
+Your job's `outcomes` (what you're told lists them) say what follows your `done OUTCOME`:
 
 | The workflow says | Then |
 |---|---|

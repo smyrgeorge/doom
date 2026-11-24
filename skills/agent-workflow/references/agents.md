@@ -25,11 +25,11 @@ Build what the issue asks for, with its tests. Commit as you go. Never push.
 | `name` | its file's, if given | another: an error |
 | `description` | what it's for | none: an error |
 | `kind` | its agent: `claude-code`, `codex`, `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor`; none: the user's (`agent-workflow-kind`) | another: an error |
-| `tools` | allowed without asking (Claude Code's `allowedTools`), a list | `Tool` or `Tool(pattern)` |
-| `deny` | never offered (`disallowedTools`) | the same |
-| `model` | `fable`, `opus`, `sonnet`, `haiku`, a model's id; none: the user's default | another: a warning |
-| `effort` | how hard it thinks: `low`, `medium`, `high`, `xhigh`, `max`; none: its model's default | another: a warning |
-| `mode` | Claude Code's permission mode: `default`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions`; none: auto | another: an error |
+| `tools` | allowed without asking (Claude Code's `allowedTools`; another agent: its requests allowed), a list | `Tool` or `Tool(pattern)` |
+| `deny` | never offered (`disallowedTools`; another agent: its requests refused, weaker) | the same |
+| `model` | Claude Code's: `fable`, `opus`, `sonnet`, `haiku`, a model's id; another agent's own; none: the user's default | Claude Code's not one: a warning |
+| `effort` | how hard it thinks: Claude Code's `low`, `medium`, `high`, `xhigh`, `max`; another agent's own; none: its model's default | Claude Code's not one: a warning |
+| `mode` | its permission mode: Claude Code's `default`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions` (none: auto); another agent's own (none: its default) | Claude Code's not one: an error |
 | `icon`, `verb`, `colour` | how its steps are shown | |
 
 An agent that denies both `Edit` and `Write` only reads: its jobs work on a snapshot of the branch, beside the others.
