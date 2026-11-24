@@ -19,14 +19,6 @@ stash; not its process log."
        (or (derived-mode-p 'magit-status-mode 'magit-revision-mode 'magit-stash-mode)
            (not (+my/tiling--in-magit-p (window-buffer (selected-window)))))))
 
-(defun +my/tiling-beads-issue-new-pane-p ()
-  "In a Beads issue's buffer being shown (config/beads.el): non-nil if it opens
-in a new pane: not a list's preview (P), where it asks: a list's own
-\(*Beads Preview: NAME*, config/beads/preview.el, beside it), or beads.el's
-\(*Beads Preview*, a side window, without config/beads.el). (A second issue
-goes to the first one's pane: config/beads/project.el.)"
-  (not (string-prefix-p "*Beads Preview" (buffer-name))))
-
 (defun +my/tiling--chosen ()
   "The applications' names `+my/tiling-apps' chooses (a list), an old name
 as its new one (`+my/tiling-renamed-apps')."
@@ -227,9 +219,9 @@ in, a split made instead): in the pane used last, as a file."
 ;; is a tab there, the application one too, shown again when the file's tab
 ;; closes. Doom's frames only go back to real buffers (`buffer-predicate':
 ;; `doom-buffer-frame-predicate'), and tabs (config/editor/tabs.el) keep only
-;; those besides files: Beads' issues and the Markdown preview weren't, so
-;; their tab went once a file covered them, and closing the file's showed
-;; another buffer (a file of another pane) in their place. SPC b b lists them.
+;; those besides files: the Markdown preview wasn't, so its tab went once a
+;; file covered it, and closing the file's showed another buffer (a file of
+;; another pane) in its place. SPC b b lists them.
 (add-hook 'doom-real-buffer-functions #'+my/tiling-app-p)
 
 ;; A PANE CLOSED WITH ITS LAST TAB (see config/tiling.el)

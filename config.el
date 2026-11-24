@@ -106,9 +106,9 @@
 
 ;; The applications tiling opens in a new pane (config/tiling.el): all of them,
 ;; or a list of: agent-shell (your agent's sessions), terminal, preview (the
-;; Markdown and Mermaid previews), drawings, magit, issues (Beads), agent-ui
-;; (Agent UI's canvas), html (a page in WebKit). One left out opens as it would
-;; without tiling.
+;; Markdown and Mermaid previews), drawings, magit, agent-ui (Agent UI's
+;; canvas), html (a page in WebKit). One left out opens as it would without
+;; tiling.
 (setq +my/tiling-apps 'all)
 
 ;; Your agent: Claude Code. SPC o c / SPC o C start it, as new shells (the

@@ -103,17 +103,13 @@ first of *Beads: NAME*, *Beads: PARENT/NAME* and *Beads: PATH* no buffer has."
 (advice-add 'beads-project-buffer-name :override #'+my/beads-list-name-a)
 
 ;; PANES
-;; Issues are an application (config/tiling.el's TILING FIRST): SPC o i
-;; opens the list in a new pane where tiling puts it (its pane, shown
-;; already), not in place of the current buffer as beads.el has it; an issue
-;; opened from it (RET) in a new pane too, the next ones in that pane (as its
-;; tabs), not each in a new one.
+;; SPC o i opens the list in the current window, as beads.el has it (issues
+;; aren't one of tiling's applications); an issue opened from it (RET) as
+;; beads.el has it (below), the next ones in that issue's window, not each in
+;; a new one.
 (defun +my/beads--show-list (root &optional filter)
   "ROOT's issue list shown (see above), with FILTER (beads.el's) if given."
-  (let ((default-directory root)
-        ;; beads.el shows its list with `switch-to-buffer': as `display-buffer'
-        ;; would (tiling's application in a new pane).
-        (switch-to-buffer-obey-display-actions t))
+  (let ((default-directory root))
     ;; All of beads.el: its list uses beads.el's own (`beads-show-hint').
     (require 'beads)
     ;; Its list's bd run at its root (see EACH PROJECT ITS LIST).

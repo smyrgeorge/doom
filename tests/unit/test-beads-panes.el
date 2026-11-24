@@ -1,5 +1,5 @@
 ;;; tests/unit/test-beads-panes.el -*- lexical-binding: t; -*-
-;; config/beads.el: the list and its issues in panes, the preview, tiling; keys
+;; config/beads.el: the list and its issues in panes (not tiling's), the preview; keys
 ;; over Vim's; the theme's colours (shared: tests/helper-beads.el).
 
 (load (expand-file-name "../helper-beads" (file-name-directory (or load-file-name buffer-file-name))) nil t)
@@ -7,8 +7,9 @@
 ;; ====== PANES ======
 
 (ert-deftest beads/the-list-and-issues-in-panes ()
-  "Tiling's applications: SPC o i, a new pane (its own, shown already); an
-issue, a new pane, the next one in it (not the list's preview's)."
+  "Not tiling's applications: SPC o i, the current window, always (another
+pane showing the list already too); an issue, below the list, the next one
+in its window (not the list's preview's)."
   (+test-beads-with-project
     (let ((this-command 'test)
           (+my/tiling-strategy 'tall)
@@ -17,29 +18,37 @@ issue, a new pane, the next one in it (not the list's preview's)."
           (second (+test-beads--create "Second"))
           (file (+test-buffer "notes.txt" "Notes\n")))
       (switch-to-buffer file)
-      (+my/beads-project)
-      (should (= (length (+my/tiling--panes)) 2))
-      (should (eq (window-buffer (car (+my/tiling--panes))) file))
-      (let ((list-window (selected-window)))
-        (should (with-current-buffer (window-buffer list-window) (derived-mode-p 'beads-list-mode)))
-        ;; Again, from the file: its pane.
-        (select-window (car (+my/tiling--panes)))
+      (let ((here (selected-window)))
         (+my/beads-project)
-        (should (= (length (+my/tiling--panes)) 2))
-        (should (eq (selected-window) list-window))
-        ;; An issue: a new pane; the next one: that pane.
-        (beads-detail-open (beads-client-show first))
-        (should (= (length (+my/tiling--panes)) 3))
-        (let ((issue-window (selected-window)))
-          (should (string-match-p first (buffer-name (window-buffer issue-window))))
-          ;; Not in the list's pane's history (drawn there, not shown).
-          (should-not (seq-find (lambda (entry) (string-match-p "Beads Detail" (buffer-name (car entry))))
-                                (window-prev-buffers list-window)))
-          (select-window list-window)
-          (beads-detail-open (beads-client-show second))
-          (should (= (length (+my/tiling--panes)) 3))
-          (should (eq (selected-window) issue-window))
-          (should (string-match-p second (buffer-name (window-buffer issue-window)))))))))
+        (should (eq (selected-window) here))
+        (should (= (length (window-list nil 'nomini)) 1))
+        (should (with-current-buffer (window-buffer here) (derived-mode-p 'beads-list-mode)))
+        (let ((list (window-buffer here)))
+          ;; Again, from another pane: that one, the list's left as it is.
+          (let ((other (split-window here nil 'right)))
+            (set-window-buffer other file)
+            (select-window other)
+            (+my/beads-project)
+            (should (eq (selected-window) other))
+            (should (eq (window-buffer other) list))
+            (should (eq (window-buffer here) list))
+            (delete-window other))
+          (select-window here)
+          ;; An issue: below the list; the next one: that window.
+          (beads-detail-open (beads-client-show first))
+          (let ((issue-window (selected-window)))
+            (should-not (eq issue-window here))
+            (should (eq (window-in-direction 'below here) issue-window))
+            (should (eq (window-buffer here) list))
+            (should (string-match-p first (buffer-name (window-buffer issue-window))))
+            ;; Not in the list's window's history (drawn there, not shown).
+            (should-not (seq-find (lambda (entry) (string-match-p "Beads Detail" (buffer-name (car entry))))
+                                  (window-prev-buffers here)))
+            (select-window here)
+            (beads-detail-open (beads-client-show second))
+            (should (= (length (window-list nil 'nomini)) 2))
+            (should (eq (selected-window) issue-window))
+            (should (string-match-p second (buffer-name (window-buffer issue-window))))))))))
 
 ;; doom-o5t.10
 (ert-deftest beads/bd-the-preview-beside-its-list ()
@@ -100,42 +109,32 @@ it, the list squeezed to 21; bd waited for on each row; left behind."
             (should-not (buffer-live-p preview))
             (should-not (window-live-p shown))))))))
 
-(ert-deftest beads/issues-are-tiling-s-applications ()
-  (dolist (mode '(beads-list-mode beads-detail-mode beads-detail-vui-mode))
-    (should (seq-find (lambda (app) (eq (if (consp app) (car app) app) mode)) (+my/tiling--apps))))
-  ;; A list's preview (config/beads/preview.el's), beads.el's own: where they
-  ;; ask; an issue: a new pane.
-  (dolist (case '(("*Beads Preview: doom*" . nil) ("*Beads Preview*" . nil)
-                  ("*Beads Detail: doom-1*" . t)))
-    (with-temp-buffer
-      (rename-buffer (car case) t)
-      (should (equal (buffer-name) (car case)))
-      (should (eq (and (+my/tiling-beads-issue-new-pane-p) t) (cdr case))))))
+(ert-deftest beads/issues-aren-t-tiling-s-applications ()
+  "Not one of tiling's applications, all of them chosen: a list or an issue
+isn't one."
+  (let ((+my/tiling-apps 'all))
+    (dolist (mode '(beads-list-mode beads-detail-mode beads-detail-vui-mode))
+      (should-not (seq-find (lambda (app) (eq (if (consp app) (car app) app) mode)) (+my/tiling--apps)))
+      (with-temp-buffer
+        (funcall mode)
+        (should-not (+my/tiling-app-p (current-buffer)))))))
 
-(ert-deftest beads/a-preview-shown-where-it-asks ()
-  "A list's preview shown through `display-buffer' (beads.el's own: a side
-window on the right): there, not in a new pane as an issue is."
+(ert-deftest beads/a-preview-and-an-issue-shown-where-they-ask ()
+  "A list's preview, and an issue, shown through `display-buffer' (beads.el's
+preview: a side window on the right): there, not in a new pane."
   (+test-with-reset
     (let ((this-command 'test)
           (+my/tiling-apps 'all))
-      (dolist (name '("*Beads Preview: doom*" "*Beads Preview*"))
-        (let ((preview (get-buffer-create name)))
+      (dolist (name '("*Beads Preview: doom*" "*Beads Preview*" "*Beads Detail: doom-1*"))
+        (let ((buffer (get-buffer-create name)))
           (unwind-protect
               (progn
-                (with-current-buffer preview (beads-detail-mode))
-                (let ((window (display-buffer preview '((display-buffer-in-side-window)
-                                                        (side . right) (window-width . 0.4)))))
+                (with-current-buffer buffer (beads-detail-mode))
+                (let ((window (display-buffer buffer '((display-buffer-in-side-window)
+                                                       (side . right) (window-width . 0.4)))))
                   (should (eq (window-parameter window 'window-side) 'right))
                   (should (= (length (+my/tiling--panes)) 1))))
-            (kill-buffer preview))))
-      (let ((issue (get-buffer-create "*Beads Detail: doom-1*")))
-        (unwind-protect
-            (progn
-              (with-current-buffer issue (beads-detail-mode))
-              (let ((window (display-buffer issue '((display-buffer-in-side-window) (side . right)))))
-                (should-not (window-parameter window 'window-side))
-                (should (= (length (+my/tiling--panes)) 2))))
-          (kill-buffer issue))))))
+            (kill-buffer buffer)))))))
 
 ;; ====== EVIL ======
 

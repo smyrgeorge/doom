@@ -38,8 +38,8 @@
   "BODY in a new git repo (`default-directory', also `repo'), with a temp HOME
 and global gitconfig, Doom's project root it; skipped without bd. One window
 on *scratch*, and again after (Beads' buffers killed). Lists drawn wide
-\(with their ids), however narrow their pane: the batch frame's 80 columns,
-halved by tiling, are narrow (see `beads/bd-a-narrow-pane-the-title-s-room')."
+\(with their ids), however narrow their pane: the batch frame's 80 columns
+are narrow (see `beads/bd-a-narrow-pane-the-title-s-room')."
   (declare (indent 0))
   `(progn
      (unless (executable-find "bd")

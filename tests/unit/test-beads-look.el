@@ -501,6 +501,8 @@ more, the id back where it was. No column title cut (\"T…\")."
            (id (+test-beads--create "Lexer: tokens, read in a pane narrower than the title is long"))
            (row (lambda () (+test-beads--line "Lexer: tokens"))))
       (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+        ;; SPC o i in a pane of half the batch frame's 80 columns.
+        (split-window nil nil 'right)
         (+my/beads-project)
         (let* ((list (+test-beads--list))
                (window (get-buffer-window list)))

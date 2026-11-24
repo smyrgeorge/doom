@@ -24,8 +24,8 @@ for you. Click it to answer (`C-g` there cancels it); the tint goes as soon as y
 
 Emacs is tiling first:
 
-- Applications (your agent's sessions, the terminal, magit, the Markdown preview, drawings, issues) open in a new pane
-  where the tiling strategy puts it; one already open (shown, or a tab under a file), in its pane. Inside magit, a log
+- Applications (your agent's sessions, the terminal, magit, the Markdown preview, drawings) open in a new pane where
+  the tiling strategy puts it; one already open (shown, or a tab under a file), in its pane. Inside magit, a log
   or a diff stays in its pane; a commit opens in a new one. `SPC o C` (your agent) and `SPC o T` (a terminal) open in
   the window you're in instead (`SPC o T` from a popup or the sidebar: in the last pane used).
 - Then they behave as any buffer: a file opened in their pane is a tab there, and they keep theirs.

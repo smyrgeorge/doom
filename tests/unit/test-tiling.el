@@ -2069,13 +2069,12 @@ selected; to fullscreen, the pane used last in front."
   (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
   ;; The applications, by name; all of them chosen.
   (should (equal (mapcar #'car +my/tiling-known-apps)
-                 '(agent-shell terminal preview drawings magit issues agent-ui html)))
+                 '(agent-shell terminal preview drawings magit agent-ui html)))
   (should (eq (default-value '+my/tiling-apps) 'all))
   (let ((+my/tiling-apps 'all))
     (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) (+my/tiling--apps))
                    '(agent-shell-mode ghostel-mode +md-preview-page-mode +my/mermaid-preview-page-mode
-                     +my/mermaid-preview-image-mode +my/excalidraw-mode magit-mode
-                     beads-list-mode beads-detail-mode beads-detail-vui-mode agent-ui-canvas-mode
+                     +my/mermaid-preview-image-mode +my/excalidraw-mode magit-mode agent-ui-canvas-mode
                      agent-ui-form-mode +my/html-page-mode)))))
 
 (ert-deftest tiling/apps-chosen-by-name ()
@@ -2086,17 +2085,17 @@ predicate kept); all: every one."
   ;; Its old name (claude): still agent-shell.
   (let ((+my/tiling-apps '(claude magit)))
     (should (equal (+my/tiling--apps) '(agent-shell-mode (magit-mode . +my/tiling-magit-new-pane-p)))))
-  (let ((+my/tiling-apps '(issues)))
-    (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) (+my/tiling--apps))
-                   '(beads-list-mode beads-detail-mode beads-detail-vui-mode))))
+  (let ((+my/tiling-apps '(preview)))
+    (should (equal (+my/tiling--apps)
+                   '(+md-preview-page-mode +my/mermaid-preview-page-mode +my/mermaid-preview-image-mode))))
   (let ((+my/tiling-apps nil))
     (should-not (+my/tiling--apps)))
   (let ((+my/tiling-apps 'all))
-    (should (= (length (+my/tiling--apps)) 13)))
+    (should (= (length (+my/tiling--apps)) 10)))
   ;; Not mended by them: the list known stays whole.
-  (let ((+my/tiling-apps '(issues)))
+  (let ((+my/tiling-apps '(preview)))
     (setcar (+my/tiling--apps) 'changed)
-    (should (eq (nth 1 (assq 'issues +my/tiling-known-apps)) 'beads-list-mode))))
+    (should (eq (nth 1 (assq 'preview +my/tiling-known-apps)) '+md-preview-page-mode))))
 
 (ert-deftest tiling/an-app-left-out-opens-as-without-tiling ()
   "An application not chosen opens as it asks (Doom's popup, the current
@@ -2122,7 +2121,7 @@ ones it knows; all, or known names: none."
       (let ((+my/tiling-apps '(agent-shell termnal)))
         (+my/tiling--check-apps))
       (should (equal (car warned)
-                     '(tiling "+my/tiling-apps: no application termnal; it's all, or a list of: agent-shell, terminal, preview, drawings, magit, issues, agent-ui, html")))
+                     '(tiling "+my/tiling-apps: no application termnal; it's all, or a list of: agent-shell, terminal, preview, drawings, magit, agent-ui, html")))
       (let ((+my/tiling-apps 'default))
         (+my/tiling--check-apps))
       (should (string-match-p "no application default;" (cadr (car warned))))
@@ -2137,7 +2136,7 @@ ones it knows; all, or known names: none."
   (should (equal (get '+my/tiling-apps 'custom-type)
                  '(choice (const :tag "All of them" all)
                           (set :tag "These" (const agent-shell) (const terminal) (const preview) (const drawings)
-                               (const magit) (const issues) (const agent-ui) (const html)))))
+                               (const magit) (const agent-ui) (const html)))))
   (should (custom-variable-p '+my/tiling-apps)))
 
 (ert-deftest tiling/config-el-chooses-the-apps-before-loading ()

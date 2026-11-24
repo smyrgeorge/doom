@@ -49,7 +49,7 @@
 ;; neighbour).
 ;; TILING FIRST (config/tiling/apps.el)
 ;; - Applications (`+my/tiling-known-apps': your agent's sessions, the terminal, the
-;;   Markdown and Mermaid previews, magit, drawings, issues, Agent UI's canvas, a page in
+;;   Markdown and Mermaid previews, magit, drawings, Agent UI's canvas, a page in
 ;;   WebKit; those chosen in config.el, `+my/tiling-apps') open in a new pane where the strategy
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
 ;;   already, or a tab of a pane (a file over it): that pane. But from a
@@ -151,9 +151,6 @@ ALONE above).")
              +my/mermaid-preview-image-mode)
     (drawings +my/excalidraw-mode)                  ; drawings (Option+Enter, C-c C-d)
     (magit (magit-mode . +my/tiling-magit-new-pane-p)) ; magit (SPC g g, SPC g d...)
-    (issues beads-list-mode                         ; issues (SPC o i, config/beads.el)
-            (beads-detail-mode . +my/tiling-beads-issue-new-pane-p) ; an issue (RET there)
-            (beads-detail-vui-mode . +my/tiling-beads-issue-new-pane-p))
     (agent-ui agent-ui-canvas-mode                  ; Agent UI's canvas (config/agent-ui.el)
               agent-ui-form-mode)                   ; a form of it, filled in (Fill in)
     (html +my/html-page-mode))                      ; a page in WebKit (config/html.el)
