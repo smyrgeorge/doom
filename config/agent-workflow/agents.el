@@ -13,6 +13,8 @@
 ;;                                 Code's allowedTools); a YAML list too
 ;;   deny: Bash(git push:*)        never available (disallowedTools)
 ;;   model: opus                   inherit (or none): your default
+;;   effort: high                  low, medium, high, xhigh, max; default
+;;                                 (or none): the model's
 ;;   mode: acceptEdits             its permission mode: default, acceptEdits,
 ;;                                 plan, auto, dontAsk, bypassPermissions
 ;;                                 (or accept-edits...)
@@ -29,9 +31,9 @@
 ;; description, a name (its file's) not a lowercase letter then lowercase
 ;; letters, digits or -, a name: not its file's, a tools or deny entry not
 ;; Tool or Tool(pattern), a mode or colour not one there is, a variable not
-;; one there is. Warnings: an unknown key, a key given twice, a model not one
-;; there is, an icon no nerd icon, a tool both allowed and denied, no
-;; instructions.
+;; one there is. Warnings: an unknown key, a key given twice, a model or an
+;; effort not one there is, an icon no nerd icon, a tool both allowed and
+;; denied, no instructions.
 ;;
 ;; Copied from config/agent-workspace/roles.el and adapted (never required:
 ;; either module goes without the other).
@@ -48,12 +50,17 @@
 (defconst agent-workflow-colours '("blue" "magenta" "green" "yellow" "cyan" "red" "white" "black")
   "The colours an agent may have: the theme's ANSI faces' (`ansi-color-blue'...).")
 
-(defvar agent-workflow-models '("opus" "sonnet" "haiku")
+(defvar agent-workflow-models '("fable" "opus" "sonnet" "haiku")
   "The models an agent names by their short names; a model's id
 \(claude-...) too.")
 
+(defvar agent-workflow-efforts '("low" "medium" "high" "xhigh" "max")
+  "The efforts an agent may name: how hard its model thinks (Claude
+Code's, a model offering some only: those it doesn't, skipped as its
+session starts, saying so).")
+
 (defconst agent-workflow--definition-keys
-  '("name" "description" "tools" "deny" "model" "mode" "icon" "verb" "colour")
+  '("name" "description" "tools" "deny" "model" "effort" "mode" "icon" "verb" "colour")
   "An agent's keys (color too, as Claude Code's agents spell it).")
 
 (defconst agent-workflow--definition-list-keys '("tools" "deny")
@@ -184,7 +191,7 @@ the last first), what's after it, trimmed."
 
 (defun agent-workflow-definition-read (file)
   "Read the agent FILE: (DEFINITION . PROBLEMS). DEFINITION is a plist (see the
-top of this file: :name :file :description :tools :deny :model :mode :icon
+top of this file: :name :file :description :tools :deny :model :effort :mode :icon
 :glyph :verb :colour :instructions), nil if FILE has errors; PROBLEMS, each
 \(error|warning \"FILE:LINE: what\" FILE LINE \"what\"), in the order
 of their lines."
@@ -230,6 +237,12 @@ of their lines."
                       (problem 'warning n "model %s: not inherit, one of %s, nor a model's id (claude-...)"
                                value (string-join agent-workflow-models ", ")))
                     (setq definition (plist-put definition :model value))))
+                 ("effort"
+                  (unless (member value '("" "default"))
+                    (unless (member value agent-workflow-efforts)
+                      (problem 'warning n "effort %s: not default, nor one of %s"
+                               value (string-join agent-workflow-efforts ", ")))
+                    (setq definition (plist-put definition :effort value))))
                  ("mode"
                   (if-let* ((id (agent-workflow--mode-id value)))
                       (setq definition (plist-put definition :mode id))

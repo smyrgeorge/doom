@@ -193,6 +193,13 @@ batch (the stand-in would exit)."
       (mock-acp--say session (format "ok: %s" text))
       (mock-acp--result id '(:stopReason "end_turn"))))))
 
+(defun mock-acp--config-options (effort)
+  "Claude Code's config options as claude-agent-acp lists them (its effort
+only), EFFORT its effort now."
+  (vector (list :id "effort" :name "Effort" :category "thought_level" :type "select" :currentValue effort
+                :options (vconcat (mapcar (lambda (level) (list :value level :name (capitalize level)))
+                                          '("default" "low" "medium" "high" "xhigh" "max"))))))
+
 (defun mock-acp--handle (message)
   "Handle MESSAGE, a JSON-RPC object (a hash table)."
   (let ((id (gethash "id" message))
@@ -207,7 +214,7 @@ batch (the stand-in would exit)."
                               :authMethods [])))
       ("session/new"
        ;; Claude Code's modes and models, as claude-agent-acp lists them.
-       (mock-acp--result id '(:sessionId "mock-session"
+       (mock-acp--result id `(:sessionId "mock-session"
                               :modes (:currentModeId "default"
                                       :availableModes [(:id "default" :name "Default")
                                                        (:id "acceptEdits" :name "Accept Edits")
@@ -219,9 +226,13 @@ batch (the stand-in would exit)."
                                        :availableModels [(:modelId "default" :name "Default")
                                                          (:modelId "opus" :name "Opus")
                                                          (:modelId "sonnet" :name "Sonnet")
-                                                         (:modelId "haiku" :name "Haiku")]))))
+                                                         (:modelId "haiku" :name "Haiku")])
+                              ;; Its effort, as claude-agent-acp offers it.
+                              :configOptions ,(mock-acp--config-options "default"))))
       ("session/set_mode" (mock-acp--result id '()))
       ("session/set_model" (mock-acp--result id '()))
+      ("session/set_config_option"
+       (mock-acp--result id (list :configOptions (mock-acp--config-options (gethash "value" params)))))
       ("session/prompt" (mock-acp--prompt id params))
       ("_session/steering"
        ;; A prompt steered into the running turn (agent-shell sends one only

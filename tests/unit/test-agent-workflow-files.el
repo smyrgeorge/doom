@@ -376,6 +376,60 @@ jobs:
                      (error 15 "retry-from 9: no such step of its job (one, two)")
                      (warning 17 "retry-from: an agent step isn't retried (its script's are): ignored"))))))
 
+(ert-deftest agent-workflow-files/a-step-s-model-and-effort ()
+  "An agent step's model and effort, over its agent's: read; one not one
+there is, warned; on a step not an agent's, or not text, an error; on an
+agent step after its job's first, warned (its session goes on)."
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  build:
+    agent: build
+    model: sonnet
+    effort: low
+  docs:
+    steps:
+      - agent: docs
+        model: claude-haiku-5-5
+      - run: check.sh
+      - agent: docs
+        model: opus
+        effort: max
+  review:
+    agent: review
+    model: gpt
+    effort: extreme
+")))
+    (should workflow)
+    (let ((step (car (plist-get (cdr (assoc "build" (plist-get workflow :jobs))) :steps))))
+      (should (equal (plist-get step :model) "sonnet"))
+      (should (equal (plist-get step :effort) "low")))
+    (should (equal (plist-get (car (plist-get (cdr (assoc "docs" (plist-get workflow :jobs))) :steps)) :model)
+                   "claude-haiku-5-5"))
+    (should (equal (+test-awf--said problems)
+                   '((warning 13 "model: its job's agent goes on in the session its step 1 started, with its model: ignored")
+                     (warning 14 "effort: its job's agent goes on in the session its step 1 started, with its effort: ignored")
+                     (warning 17 "model gpt: not one of fable, opus, sonnet, haiku, nor a model's id (claude-...)")
+                     (warning 18 "effort extreme: not one of low, medium, high, xhigh, max")))))
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  a:
+    run: x
+    model: opus
+    effort: high
+  b:
+    agent: build
+    model: [opus]
+    effort: 3
+")))
+    (should-not workflow)
+    (should (equal (+test-awf--said problems)
+                   '((error 5 "model: only for an agent: step")
+                     (error 6 "effort: only for an agent: step")
+                     (error 9 "model (\"opus\"): a model (fable, opus, sonnet, haiku, a model's id)")
+                     (error 10 "effort 3: one of low, medium, high, xhigh, max"))))))
+
 (ert-deftest agent-workflow-files/a-job-s-approve-beside-its-steps ()
   "A job's approve: true beside its steps: read, its last step's result
 waiting for your OK; one step's keys on the job, approve among them: the
@@ -587,6 +641,7 @@ tools:
   - 'Bash(git -C {main} commit:*)'
 deny: [WebFetch]
 model: opus
+effort: high
 mode: accept-edits
 icon: md-hammer ⚙
 verb: building
@@ -600,6 +655,7 @@ Build it on {branch}.
     (should (equal (plist-get definition :tools) '("Read" "Bash(git -C {main} commit:*)")))
     (should (equal (plist-get definition :deny) '("WebFetch")))
     (should (equal (plist-get definition :model) "opus"))
+    (should (equal (plist-get definition :effort) "high"))
     (should (equal (plist-get definition :mode) "acceptEdits"))
     (should (equal (plist-get definition :icon) "md-hammer"))
     (should (equal (plist-get definition :glyph) "⚙"))
@@ -632,8 +688,14 @@ Build it on {branch}.
     (should (equal (+test-awf--said problems)
                    '((warning 4 "Edit both allowed (tools) and denied (deny): denied")
                      (warning 5 "unknown key labels: ignored")
-                     (warning 6 "model gpt: not inherit, one of opus, sonnet, haiku, nor a model's id (claude-...)")
+                     (warning 6 "model gpt: not inherit, one of fable, opus, sonnet, haiku, nor a model's id (claude-...)")
                      (warning 7 "no instructions after its front matter")))))
+  ;; An effort: default is none; one not one there is, warned.
+  (should-not (plist-get (car (+test-awf--definition "---\ndescription: x\neffort: default\n---\nx\n")) :effort))
+  (pcase-let ((`(,definition . ,problems) (+test-awf--definition "---\ndescription: x\neffort: hard\n---\nx\n")))
+    (should (equal (plist-get definition :effort) "hard"))
+    (should (equal (+test-awf--said problems)
+                   '((warning 3 "effort hard: not default, nor one of low, medium, high, xhigh, max")))))
   (should (cdr (agent-workflow-definition-read
                 (+test-awf--file (+test-awf--dir "bad-name") "Build.md" +test-awf--definition-text)))))
 

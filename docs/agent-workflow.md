@@ -108,7 +108,7 @@ A step does one thing:
 
 | Key | What |
 |---|---|
-| `agent` | An LLM in agent-shell, with that agent; `prompt`: what it's told |
+| `agent` | An LLM in agent-shell, with that agent; `prompt`: what it's told; `model`, `effort`: over its agent's |
 | `run` | A program, or a script (`run: \|`); `shell`: its interpreter (bash by default, `python`, `node`...) |
 | `elisp` | Lisp in your Emacs (quick: it blocks it). Lisp with `: ` in it goes under `elisp: \|` |
 | `uses` | A built-in: `merge`, with `with: {suite: make test}` |
@@ -166,6 +166,7 @@ description: builds an issue with its tests
 tools: Read, Edit, Bash(git commit:*)
 deny: Bash(git push:*)
 model: opus
+effort: high
 mode: acceptEdits
 icon: md-hammer ⚙
 verb: building
@@ -179,7 +180,8 @@ Build it with its tests, commit on {branch}.
 | `description` | What it's for (needed) |
 | `tools` | Allowed without asking |
 | `deny` | Never available |
-| `model` | `opus`, `sonnet`, `haiku`, a model's id; none: your default |
+| `model` | `fable`, `opus`, `sonnet`, `haiku`, a model's id; none: your default |
+| `effort` | How hard it thinks: `low`, `medium`, `high`, `xhigh`, `max`; none: its model's default |
 | `mode` | Claude Code's permission mode; none: auto |
 | `icon`, `verb`, `colour` | How its steps are shown |
 
@@ -246,8 +248,12 @@ Agents run in agent-shell, as many at once as `agent-workflow-pool` says (3), in
 no name: it does one job of an issue's run, and is known by them, `doom-a1b · review`, its session's buffer named so.
 Its permissions, its questions and its usage are agent-shell's, as in any session.
 
-- **Its agent** is its step's: its tools, deny, model and mode (none: `agent-workflow-mode`, auto). Variables in its
-  tools are filled in as its session starts: `Bash(git -C {worktree} commit:*)`.
+- **Its agent** is its step's: its tools, deny, model, effort and mode (none: `agent-workflow-mode`, auto). Variables
+  in its tools are filled in as its session starts: `Bash(git -C {worktree} commit:*)`.
+- **Its model and effort** are its agent's, or its step's (`model: sonnet`, `effort: low`) over them: the same agent
+  runs on a different model in another workflow. They're set as its session starts, its effort once its model is: an
+  effort its model doesn't offer is skipped, its session saying so. A job keeps its agent from its first agent step to
+  its end: a later agent step goes on in that session, as it started (a `model` or `effort` on it: a warning).
 - **It's told** the job it does and where, that it never switches branches, pushes, or changes the issue, and how it
   ends its job: `cmd/agent-workflow done OUTCOME "notes"`. Then its agent's instructions.
 - **Its `bd` commands** run as `ISSUE/JOB` (`doom-a1b/review`): Beads' history says which job did what.

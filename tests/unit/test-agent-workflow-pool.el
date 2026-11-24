@@ -220,6 +220,32 @@ agent's instructions; its first message sent."
         (should (string-suffix-p "Build demo-1 on feat/demo-1-pool, in agent." told)))
       (should-not (agent-workflow-agent-context)))))
 
+(ert-deftest agent-workflow-pool/a-step-s-model-and-effort ()
+  "Its model and effort: its agent's, or its step's over them; its effort
+set once its model is, as a config option (claude-agent-acp's effort)."
+  (+test-awp--with-project "effort"
+    ;; Its agent's: sonnet, no effort.
+    (let ((agent (+test-awp--start project "demo-1" "build")))
+      (should-not (alist-get :default-config-options (agent-workflow--config agent))))
+    ;; Its step's, over them.
+    (let* ((agent (+test-awp--start project "demo-2" "build" :model "opus" :effort "high"))
+           (config (agent-workflow--config agent)))
+      (should (equal (funcall (alist-get :default-model-id config)) "opus"))
+      (should (equal (funcall (alist-get :default-config-options config)) '(("effort" . "high"))))
+      (should (equal (plist-get (agent-workflow-definition-filled agent) :effort) "high"))
+      ;; Its session: its model set, then its effort.
+      (let* ((set (car (+test-awp--wait
+                        (lambda () (+test-awp--logged
+                                    (lambda (e) (equal (plist-get e :method) "session/set_config_option")))))))
+             (entries (+test-awp--log-entries))
+             (model (seq-find (lambda (e) (and (equal (plist-get e :method) "session/set_model")
+                                               (equal (plist-get (plist-get e :params) :modelId) "opus")))
+                              entries)))
+        (should (equal (plist-get (plist-get set :params) :configId) "effort"))
+        (should (equal (plist-get (plist-get set :params) :value) "high"))
+        (should model)
+        (should (< (seq-position entries model) (seq-position entries set)))))))
+
 (ert-deftest agent-workflow-pool/the-pool-is-full ()
   "As many agents at once as the pool says, in every project; one stopped
 makes room."

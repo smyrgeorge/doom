@@ -11,6 +11,7 @@ description: builds an issue with its tests
 tools: Read, Grep, Glob, Edit, Write, Bash(git add:*), Bash(git commit:*), Bash(git -C {worktree} status:*)
 deny: Bash(git push:*)
 model: opus
+effort: high
 mode: acceptEdits
 icon: md-hammer ⚙
 verb: building
@@ -25,7 +26,8 @@ Build what the issue asks for, with its tests. Commit as you go. Never push.
 | `description` | what it's for | none: an error |
 | `tools` | allowed without asking (Claude Code's `allowedTools`), a list | `Tool` or `Tool(pattern)` |
 | `deny` | never offered (`disallowedTools`) | the same |
-| `model` | `opus`, `sonnet`, `haiku`, a model's id; none: the user's default | another: a warning |
+| `model` | `fable`, `opus`, `sonnet`, `haiku`, a model's id; none: the user's default | another: a warning |
+| `effort` | how hard it thinks: `low`, `medium`, `high`, `xhigh`, `max`; none: its model's default | another: a warning |
 | `mode` | Claude Code's permission mode: `default`, `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions`; none: auto | another: an error |
 | `icon`, `verb`, `colour` | how its steps are shown | |
 

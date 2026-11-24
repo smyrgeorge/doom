@@ -208,6 +208,35 @@ agent freed: the waiting run gets it, nothing else happening."
       (should (+test-awr--agent b "build"))
       (agent-workflow--cancel b))))
 
+(ert-deftest agent-workflow-runs/a-step-s-model-and-effort ()
+  "An agent step's model and effort reach the agent it starts, over its
+agent's: its session's model set, then its effort."
+  (+test-awr "effort"
+    (write-region (replace-regexp-in-string "    prompt: 'Build {issue}: {issue.title}'\n"
+                                            "\\&    model: haiku\n    effort: low\n" +test-awr--feature)
+                  nil (expand-file-name ".agent-workflow/workflows/feature.yml" project))
+    (let* ((run (agent-workflow-start-run project (+test-awr--issue project "Effort")))
+           (build (+test-awr--agent run "build"))
+           (log (expand-file-name "awr/effort.log" +test-tmp))
+           (sets (lambda ()
+                   ;; What its session was set to, in order: (METHOD VALUE)...
+                   (when (file-exists-p log)
+                     (with-temp-buffer
+                       (insert-file-contents log)
+                       (cl-loop for line in (split-string (buffer-string) "\n" t)
+                                for entry = (json-parse-string line :object-type 'plist :null-object nil
+                                                               :false-object nil :array-type 'list)
+                                for params = (plist-get entry :params)
+                                when (member (plist-get entry :method) '("session/set_model" "session/set_config_option"))
+                                collect (list (plist-get entry :method)
+                                              (or (plist-get params :modelId)
+                                                  (format "%s=%s" (plist-get params :configId) (plist-get params :value))))))))))
+      (should (equal (agent-workflow-agent-model build) "haiku"))
+      (should (equal (agent-workflow-agent-effort build) "low"))
+      (should (equal (+test-awr--wait (lambda () (and (= (length (funcall sets)) 2) (funcall sets))))
+                     '(("session/set_model" "haiku") ("session/set_config_option" "effort=low"))))
+      (agent-workflow--cancel run))))
+
 ;; ====== PARALLEL JOBS ======
 
 (ert-deftest agent-workflow-runs/parallel-jobs ()

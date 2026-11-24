@@ -53,6 +53,8 @@
   issue                  ; the issue whose run it works for: "doom-a1b"
   job                    ; its job: "review"
   definition                ; its step's agent, a name
+  model                  ; its step's model, over its agent's: "opus"
+  effort                 ; its step's effort, over its agent's: "high"
   worktree               ; the issue's worktree, where it works
   branch                 ; the issue's branch
   commit                 ; a reading job's: the commit its snapshot is at
@@ -133,13 +135,18 @@ run with no ticket gives its {issue}: its name)."
 (defun agent-workflow-definition-filled (agent)
   "AGENT's definition (a copy), its tools and deny with their variables
 filled in shell-quoted (a rule names an exact command: Bash(git -C {main}
-commit:*)), its instructions with them as they are."
+commit:*)), its instructions with them as they are; its step's model and
+effort over its own."
   (let* ((definition (copy-sequence (alist-get (agent-workflow-agent-definition agent)
                                             (agent-workflow-agent-definitions (agent-workflow-agent-project agent))
                                             nil nil #'equal)))
          (values (agent-workflow--agent-values agent))
          (quoted (mapcar (lambda (value) (cons (car value) (and (cdr value) (shell-quote-argument (cdr value)))))
                          values)))
+    (when (agent-workflow-agent-model agent)
+      (setq definition (plist-put definition :model (agent-workflow-agent-model agent))))
+    (when (agent-workflow-agent-effort agent)
+      (setq definition (plist-put definition :effort (agent-workflow-agent-effort agent))))
     (dolist (key '(:tools :deny))
       (when (plist-get definition key)
         (setq definition (plist-put definition key (mapcar (lambda (rule) (agent-workflow-fill rule quoted))
@@ -248,6 +255,7 @@ never (`agent-workflow--protected-rules', PROJECT's)."
                    (error "No such kind of agent: %s" agent-workflow-kind)))
          (definition (agent-workflow-definition-filled agent))
          (model (plist-get definition :model))
+         (effort (plist-get definition :effort))
          (mode (or (plist-get definition :mode) agent-workflow-mode))
          (config (copy-tree (let ((agent-workflow--starting agent)) (funcall (plist-get kind :config)))))
          (maker (alist-get :client-maker config))
@@ -257,6 +265,15 @@ never (`agent-workflow--protected-rules', PROJECT's)."
       (setf (alist-get :default-model-id config) (lambda () model)))
     (when mode
       (setf (alist-get :default-session-mode-id config) (lambda () mode)))
+    ;; Its effort, set once its model is (the levels are its model's): one
+    ;; it doesn't offer skipped, its session saying so.
+    (when effort
+      (let ((options (alist-get :default-config-options config)))
+        (setf (alist-get :default-config-options config)
+              (lambda ()
+                (append (seq-remove (lambda (option) (equal (car-safe option) "effort"))
+                                    (and options (funcall options)))
+                        (list (cons "effort" effort)))))))
     (when (plist-get kind :claude-code)
       (setf (alist-get :session-meta config)
             (agent-workflow--claude-options (alist-get :session-meta config) definition
@@ -271,19 +288,20 @@ never (`agent-workflow--protected-rules', PROJECT's)."
                 client))))
     config))
 
-(cl-defun agent-workflow-start-agent (&key project issue job definition type title branch values outcomes prompt
-                                           snapshot resume place)
+(cl-defun agent-workflow-start-agent (&key project issue job definition model effort type title branch values
+                                           outcomes prompt snapshot resume place)
   "Start an agent of the pool for the JOB of ISSUE's run in PROJECT, with
-the DEFINITION (a name): its session, fresh, in ISSUE's worktree (made on its
-branch from TYPE and TITLE, or BRANCH, if it isn't there); PLACE, (DIR .
-BRANCH): there instead (your checkout, for a run there). VALUES: its variables'
-values (an alist); OUTCOMES: those it may give besides done; PROMPT: its
-first message, its variables filled in, sent once it's ready. SNAPSHOT:
-\(DIR BRANCH COMMIT), a reading job's snapshot it works in instead of the
-issue's worktree (`agent-workflow-snapshot'). RESUME: a session's id, its
-session resumed (agent-shell's; a fresh one if its agent can't). Return the
-agent. A user error, nothing started, if PROJECT's crew runs, the pool is
-full or DEFINITION isn't one."
+the DEFINITION (a name), MODEL and EFFORT over its own (a step's): its
+session, fresh, in ISSUE's worktree (made on its branch from TYPE and
+TITLE, or BRANCH, if it isn't there); PLACE, (DIR . BRANCH): there instead
+\(your checkout, for a run there). VALUES: its variables' values (an alist);
+OUTCOMES: those it may give besides done; PROMPT: its first message, its
+variables filled in, sent once it's ready. SNAPSHOT: (DIR BRANCH COMMIT), a
+reading job's snapshot it works in instead of the issue's worktree
+\(`agent-workflow-snapshot'). RESUME: a session's id, its session resumed
+\(agent-shell's; a fresh one if its agent can't). Return the agent. A user
+error, nothing started, if PROJECT's crew runs, the pool is full or
+DEFINITION isn't one."
   (require 'agent-shell)
   (let ((project (file-name-as-directory project)))
     (when (agent-workflow-crew-running-p project)
@@ -300,6 +318,7 @@ full or DEFINITION isn't one."
                                           (t (agent-workflow-worktree project issue :type type :title title
                                                                       :branch branch))))
                  (agent (agent-workflow-agent--make :project project :issue issue :job job :definition definition
+                                                    :model model :effort effort
                                                     :worktree dir :branch branch :commit (nth 2 snapshot)
                                                     :values values :outcomes outcomes :resumed resume
                                                     :pending prompt))

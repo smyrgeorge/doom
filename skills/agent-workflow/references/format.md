@@ -37,7 +37,7 @@ One of these, and only one:
 
 | Key | Does | With |
 |---|---|---|
-| `agent` | an LLM in agent-shell, with that agent | `prompt`: its first message (its variables filled in); none: its job on the issue |
+| `agent` | an LLM in agent-shell, with that agent | `prompt`: its first message (its variables filled in); none: its job on the issue. `model`, `effort`: over its agent's, for this step's session (a job keeps its first agent step's session to its end) |
 | `run` | a script, by its shell | `shell`: bash by default, `python3`, `node`, any interpreter |
 | `elisp` | Lisp in the user's Emacs | (quick: it blocks Emacs) |
 | `uses` | a built-in: `merge` | `with`: `{suite: make test}` |
@@ -50,12 +50,14 @@ agent if it couldn't: scripts.md), `approve`.
 
 ## What the check refuses
 
-An error leaves the workflow out: YAML that doesn't parse; no jobs; a job's name that isn't one; `needs` naming no
-job, or its own; needs going round (`a → b → a`); a step with no kind, or two; `agent` or `on-fail` naming no agent
-of the project's; `uses` naming no built-in; `shell` without `run`; a step's `name` that isn't one, or another's of its job;
-`retry-from` naming no step of its job, or one after it; `prompt` on a step that isn't an agent's; an `if`
-that isn't one Lisp form; `elisp` that isn't Lisp; a variable that isn't one; `jobs.X.notes` of no job; an outcome's
-`rerun` naming no job; a number, duration or `true`/`false` that isn't one.
+An error leaves the workflow out: YAML that doesn't parse; no jobs; a job's name that isn't one; `needs` naming no job,
+or its own; needs going round (`a → b → a`); a step with no kind, or two; `agent` or `on-fail` naming no agent of the
+project's; `uses` naming no built-in; `shell` without `run`; a step's `name` that isn't one, or another's of its job;
+`retry-from` naming no step of its job, or one after it; `prompt`, `model` or `effort` on a step that isn't an agent's;
+an `if` that isn't one Lisp form; `elisp` that isn't Lisp; a variable that isn't one; `jobs.X.notes` of no job; an
+outcome's `rerun` naming no job; a number, duration or `true`/`false` that isn't one.
 
 A warning keeps it: an unknown key; a `for` type Beads doesn't have; `{jobs.X.notes}` of a job not before it (empty
-then); `retries`, `retry-from` or `on-fail` on an agent step; no description; a `run:` of a file outside `.agent-workflow/`.
+then); `retries`, `retry-from` or `on-fail` on an agent step; a `model` or `effort` not one there is, or on an agent
+step after its job's first (its session goes on, as it started); no description; a `run:` of a file outside
+`.agent-workflow/`.
