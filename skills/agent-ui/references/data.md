@@ -126,3 +126,24 @@ agent-ui show <<'EOF'
  "source": {"file": "app.log", "from": "end", "into": "lines"}}
 EOF
 ```
+
+**A line in columns**, for events you make yourself (a run's steps, a deploy's stages): its `time` (muted, shown when
+it changes), a `mark` coloured by `mark-face` (`plain`, `muted`, `accent`, `success`, `warning`, `error`, `bold`), its
+`source` (a job, a service: each its colour, by its place in the log's `sources`, else by its name, their column as
+wide as the widest), its `text` (text, or pieces: text or `{"text", "face"}`), `indent` (0 to 4: a step under its
+job), `right` (muted at its end: how long it took) and `level`. `{"gap": "17m"}` is a pause between two lines, not
+counted. The log's `unit` says what it counts (`12 events`), its `right` goes at the counts line's end (its span), and
+`append` replaces it with the lines.
+
+```sh
+agent-ui show <<'EOF'
+{"id": "deploy", "type": "log", "unit": "event", "sources": ["build", "ship"], "right": "16:22 – 16:41 · 19m",
+ "lines": [{"time": "16:22", "mark": "▸", "mark-face": "accent", "source": "build", "text": "started"},
+           {"time": "16:22", "mark": "✓", "mark-face": "success", "source": "build", "indent": 1,
+            "text": ["tests", {"text": " passed", "face": "muted"}], "right": "48s"},
+           {"gap": "17m"},
+           {"time": "16:41", "mark": "✗", "mark-face": "error", "source": "ship", "level": "error",
+            "text": "upload refused: 403", "right": "2s"}]}
+EOF
+agent-ui append deploy '{"lines": [{"time": "16:42", "mark": "↻", "mark-face": "warning", "source": "ship", "text": "retrying"}], "right": "16:22 – 16:42 · 20m"}'
+```

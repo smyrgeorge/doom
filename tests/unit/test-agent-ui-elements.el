@@ -3872,6 +3872,114 @@ whole, the same as drawn whole."
   (should (string-match-p "keep is 1 to 5000" (+test-aue-error '(:type "log" :keep 0))))
   (should (string-match-p "lines is text or a list" (+test-aue-error '(:type "log" :lines 3)))))
 
+(defconst +test-aue--columns
+  '(:type "log" :unit "event" :right "16:22 – 16:41 · 19m" :sources ("green" "docs")
+    :lines ((:time "16:22" :mark "▸" :mark-face "accent" :text ("started" (:text " with " :face "muted") "github"))
+            (:time "16:22" :mark "▸" :mark-face "accent" :source "green" :text "started")
+            (:time "16:22" :mark "›" :mark-face "muted" :source "green" :indent 1
+             :text ("watch" (:text " started" :face "muted")))
+            (:gap "17m")
+            (:time "16:39" :mark "✗" :mark-face "error" :source "green" :indent 1 :level "error"
+             :text ("watch" (:text " exited 1" :face "error")) :right "16m 32s")
+            (:time "16:39" :mark "↻" :mark-face "warning" :source "docs" :level "warning" :text "fixes it")))
+  "A log in columns: its parts, a pause, a step's line under its job's.")
+
+(ert-deftest agent-ui-elements/log-in-columns ()
+  "A log's lines in columns: each one's time (muted, shown when it changes),
+its mark in its face, its source in its own colour (by its place in
+SOURCES) padded to the widest, its text's pieces in theirs (alone, in its
+level's), indented, RIGHT at its end; a pause, ┊ and how long, not counted.
+Its counts marked as its lines (✗, ◆), what it counts (UNIT), its RIGHT at
+their end."
+  (let ((element +test-aue--columns))
+    (should (equal (+test-aue-draw element)
+                   (concat "✗ 1 error · ◆ 1 warning · 5 events       16:22 – 16:41 · 19m\n"
+                           "16:22  ▸         started with github\n"
+                           "       ▸  green  started\n"
+                           "       ›  green    watch started\n"
+                           "       ┊  17m\n"
+                           "16:39  ✗  green    watch exited 1                    16m 32s\n"
+                           "       ↻  docs   fixes it")))
+    (should (eq (+test-aue-face-at element "16:22") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at element "▸") 'agent-ui-accent))
+    (should (eq (+test-aue-face-at element "green") (nth 0 agent-ui-log-source-faces)))
+    (should (eq (+test-aue-face-at element "docs") (nth 1 agent-ui-log-source-faces)))
+    (should (eq (+test-aue-face-at element " with ") 'agent-ui-muted))
+    (should-not (+test-aue-face-at element "github"))
+    (should-not (+test-aue-face-at element "watch exited"))
+    (should (eq (+test-aue-face-at element " exited 1") 'agent-ui-error))
+    (should (eq (+test-aue-face-at element "16m 32s") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at element "┊") 'agent-ui-muted))
+    ;; Its text alone: its level's colour.
+    (should (eq (+test-aue-face-at element "fixes it") 'agent-ui-warning))
+    (should (eq (+test-aue-face-at element "16:22 – 16:41") 'agent-ui-muted))
+    ;; Narrow (its text under 12 columns with it): its right left out; its
+    ;; text wrapped under its own start.
+    (should (equal (+test-aue-draw (list :type "log" :lines '((:time "09:00" :mark "✓" :source "a" :right "2s"
+                                                               :text "one two three four five six")))
+                                   :width 26)
+                   (concat "1 line\n"
+                           "09:00  ✓  a  one two three\n"
+                           "             four five six")))
+    ;; A source not in SOURCES: its colour by its name, the same each time.
+    (let ((log '(:type "log" :lines ((:source "web" :text "up")))))
+      (should (eq (+test-aue-face-at log "web") (+test-aue-face-at log "web")))
+      (should (memq (+test-aue-face-at log "web") agent-ui-log-source-faces)))))
+
+(ert-deftest agent-ui-elements/log-in-columns-appended ()
+  "Lines in columns appended (its extend): the same as drawn whole, its
+counts and their right again, a line's time shown once the one before it
+that had it is no longer shown, a wrapped one counted as drawn."
+  (let* ((line (lambda (time text) (list :time time :mark "·" :source "a" :text text)))
+         (long (mapconcat #'identity (make-list 12 "word") " "))
+         (cases (list
+                 ;; Its first line shown dropped: the next one's time shown.
+                 (list (list (funcall line "09:00" "a") (funcall line "09:00" "b") (funcall line "09:00" "c"))
+                       (list (funcall line "09:00" "d")))
+                 ;; A pause, then a wrapped line.
+                 (list (list (funcall line "09:00" "a") (funcall line "09:00" "b"))
+                       (list '(:gap "17m") (funcall line "09:17" long)))
+                 ;; The same time as the last: not shown again.
+                 (list (list (funcall line "09:00" "a"))
+                       (list (funcall line "09:00" "b")))
+                 ;; A wider source: its column wider, each line again.
+                 (list (list (funcall line "09:00" "a") (funcall line "09:01" "b"))
+                       (list (list :time "09:02" :source "a longer one" :text "c"))))))
+    (pcase-dolist (`(,before ,added) cases)
+      (let* ((old (list :type "log" :show 3 :right "a" :lines before))
+             (new (list :type "log" :show 3 :right "b" :lines (append before added)))
+             (ctx (agent-ui-context :width 40))
+             (edits (funcall (agent-ui-type-extend (agent-ui-type 'log))
+                             (agent-ui-check 'log (copy-sequence old)) (agent-ui-check 'log (copy-sequence new)) ctx)))
+        (should edits)
+        (with-temp-buffer
+          (insert (agent-ui-render old ctx))
+          (dolist (edit edits)
+            (pcase edit
+              (`(replace ,line ,text) (goto-char (point-min)) (forward-line line)
+               (delete-region (point) (line-end-position)) (insert text))
+              (`(delete ,line ,count) (goto-char (point-min)) (forward-line line)
+               (delete-region (point) (progn (forward-line count) (point))))
+              (`(insert ,_ ,text) (goto-char (point-max)) (insert "\n" text))))
+          (should (equal-including-properties (buffer-string) (agent-ui-render new ctx))))))))
+
+(ert-deftest agent-ui-elements/log-in-columns-wrong ()
+  "A line in columns: its mark's face, its indent and its text's pieces
+checked; a pause given alone."
+  (should (string-match-p "line 1's mark-face \"pink\" is none of plain, muted"
+                          (+test-aue-error '(:type "log" :lines ((:mark "x" :mark-face "pink" :text "a"))))))
+  (should (string-match-p "line 1's indent is 0 to 4, not 9"
+                          (+test-aue-error '(:type "log" :lines ((:indent 9 :text "a"))))))
+  (should (string-match-p "line 1's piece's face \"loud\""
+                          (+test-aue-error '(:type "log" :lines ((:text ("a" (:text "b" :face "loud"))))))))
+  (should (string-match-p "line 1's text is text, or a list of pieces"
+                          (+test-aue-error '(:type "log" :lines ((:text ("a" (:face "muted"))))))))
+  (should (agent-ui-check 'log '(:type "log" :lines ((:gap "5m")))))
+  ;; Its right replaced as lines are appended; nothing else.
+  (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a") :right "x") '(:lines ("b") :right "y")) :right) "y"))
+  (should (string-match-p "only lines" (agent-ui-error-message
+                                        (should-error (agent-ui-append-to '(:type "log") '(:unit "x")) :type 'agent-ui-error)))))
+
 ;; ====== TIMELINE ======
 
 (ert-deftest agent-ui-elements/timeline-a-late-running-task ()
