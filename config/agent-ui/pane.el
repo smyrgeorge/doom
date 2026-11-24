@@ -63,6 +63,10 @@ pane: in a pane too short for both, a view opens in a pane of its own."
   "The keys said on the bar under Agent UI's views, at its right (nil: none)."
   :type '(choice (const nil) string) :group 'agent-ui)
 
+(defvar agent-ui-pane-search-limit 200000
+  "The most steps the search for the best layout takes (see THE LAYOUT): the
+best found by then taken.")
+
 (defvar agent-ui-pane-skip-functions nil
   "Functions of a window showing a session: non-nil, Agent UI isn't shown in
 its pane (the agent workspace's stage shows its crew's).")
@@ -86,6 +90,13 @@ not shown again until something new is (see above).")
 (defvar-local agent-ui--pane-plan nil
   "In a session: its Agent UI's columns as last planned, each a list of its
 views (canvases), top to bottom (see THE LAYOUT).")
+
+(defvar-local agent-ui--pane-settled nil
+  "In a session: non-nil once its Agent UI was planned again after its views
+were drawn at their widths (see THE LAYOUT).")
+
+(defvar agent-ui--pane-settling nil
+  "Non-nil while Agent UI is laid out again once settled (see THE LAYOUT).")
 
 (defvar-local agent-ui--pane-height nil
   "In a session: the height its Agent UI was last given, in pixels, and its
@@ -187,7 +198,14 @@ another visible frame's; nil if it's in none."
 ;; in their order. Dealt so, and also with the views showing a wide type
 ;; going only into the columns allowed to be wide, every set of columns tried
 ;; (two wide views in two columns took 80 + 80 and left no room for four
-;; columns, both in one did). Of those layouts, each view at least its width
+;; columns, both in one did). Each count's best deal then improved: a view
+;; moved to another column (its own gone if left empty), or two swapped,
+;; while that lowers the score. That's a good layout, not always the best
+;; (10 lines off, now and then): the best is then searched for, every way to
+;; group the views into columns, the tallest placed first, a grouping given
+;; up as soon as its tallest column so far, its width or a column's views
+;; rule it out against the best found (the good layout the first), at most
+;; `agent-ui-pane-search-limit' steps (the best found by then). Of those layouts, each view at least its width
 ;; (`agent-ui-grid-min-width'; showing a wide type, `agent-ui-grid-wide-width')
 ;; and no column holding more views than it has room for (3 lines each), the
 ;; one with the least height and room left empty together (its tallest
@@ -197,7 +215,10 @@ another visible frame's; nil if it's in none."
 ;; room left across is shared out between the columns. Planned when the views
 ;; change (opened, closed), not when their content does: their heights only
 ;; fitted then (see ITS HEIGHT), nothing moving around while the agent works.
-;; At most 10 views.
+;; Once, though, after they're laid out: a new view is measured as drawn at
+;; the default width, its size changes once drawn at its column's; measured
+;; again then, a layout better by more than half a line made (a ninth view
+;; left it 5 lines off the best). At most 10 views.
 
 (defun agent-ui--pane-view-width (view)
   "The fewest columns VIEW needs (see above)."
@@ -242,7 +263,9 @@ any); nil if a view has no column it may go in."
               (throw 'none nil))
             (aset columns target (cons index (aref columns target)))
             (aset sums target (+ (aref sums target) (nth index lines)))))
-        (mapcar (lambda (column) (sort column #'<)) (append columns nil))))))
+        ;; A column left empty (the wide views kept out of it): none, as
+        ;; with fewer columns.
+        (delq nil (mapcar (lambda (column) (sort column #'<)) (append columns nil)))))))
 
 (defun agent-ui--pane-subsets (count)
   "Every set of the numbers 0 to COUNT - 1 but the empty one: lists."
@@ -266,30 +289,163 @@ type, those allowed only in each set of columns."
                                (or (not (memq index wide)) (memq column wide-columns)))))
                           (agent-ui--pane-subsets count)))))))
 
+(defun agent-ui--pane-score (columns lines widths width most)
+  "COLUMNS' score (see above), views needing LINES and WIDTHS in WIDTH
+columns and MOST lines: (KEY NEEDS HEIGHT), KEY lower is better, NEEDS each
+column's width, HEIGHT the tallest column's lines; nil if they don't fit."
+  (let* ((pick (lambda (list column) (mapcar (lambda (index) (nth index list)) column)))
+         (needs (mapcar (lambda (column) (apply #'max (funcall pick widths column))) columns))
+         (heights (mapcar (lambda (column) (apply #'+ (funcall pick lines column))) columns))
+         (height (apply #'max heights))
+         (count (length columns)))
+    (when (and (<= (apply #'+ needs) width)
+               (<= (* 3 (apply #'max (mapcar #'length columns))) most))
+      ;; The least height and room left empty together (see above), then
+      ;; the least room left empty, then the fewest columns.
+      (let ((empty (- (* height count) (apply #'+ heights))))
+        (list (list (+ height (/ (float empty) count)) empty count) needs height)))))
+
+(defun agent-ui--pane-moved (columns view from to)
+  "COLUMNS with VIEW moved from column FROM to column TO, FROM gone if left
+empty; each column's views in their order. New lists: COLUMNS' are shared
+by the other candidates (`sort' changes the list it's given)."
+  (delq nil (cl-loop for column in columns
+                     for index from 0
+                     collect (cond ((= index from) (remq view column))
+                                   ((= index to) (sort (cons view (copy-sequence column)) #'<))
+                                   (t (copy-sequence column))))))
+
+(defun agent-ui--pane-swapped (columns view from other to)
+  "COLUMNS with VIEW (of column FROM) and OTHER (of column TO) swapped; new
+lists (see `agent-ui--pane-moved')."
+  (cl-loop for column in columns
+           for index from 0
+           collect (cond ((= index from) (sort (cons other (copy-sequence (remq view column))) #'<))
+                         ((= index to) (sort (cons view (copy-sequence (remq other column))) #'<))
+                         (t (copy-sequence column)))))
+
+(defun agent-ui--pane-neighbours (columns)
+  "COLUMNS with a view moved to another column, or two of different columns
+swapped (see above); the session's own (0) staying in the first."
+  (let ((count (length columns))
+        result)
+    (dotimes (from count)
+      (dolist (view (nth from columns))
+        (unless (= view 0)
+          (dotimes (to count)
+            (unless (= to from)
+              (push (agent-ui--pane-moved columns view from to) result)))
+          (cl-loop for to from (1+ from) below count
+                   do (dolist (other (nth to columns))
+                        (unless (= other 0)
+                          (push (agent-ui--pane-swapped columns view from other to) result)))))))
+    (nreverse result)))
+
+(defun agent-ui--pane-improve (columns lines widths width most)
+  "COLUMNS improved (see above): their neighbours tried while one lowers the
+score, the first such taken; (COLUMNS . SCORE)."
+  (let ((score (agent-ui--pane-score columns lines widths width most))
+        (better t)
+        (passes 0))
+    (while (and better score (< passes 50))
+      (setq better nil
+            passes (1+ passes))
+      (catch 'taken
+        (dolist (neighbour (agent-ui--pane-neighbours columns))
+          (let ((its (agent-ui--pane-score neighbour lines widths width most)))
+            (when (and its (agent-ui--pane-key< (car its) (car score)))
+              (setq columns neighbour
+                    score its
+                    better t)
+              (throw 'taken nil))))))
+    (cons columns score)))
+
+(defun agent-ui--pane-search (lines widths width most bound)
+  "The best columns for views needing LINES and WIDTHS in WIDTH columns and
+MOST lines (see above), better than BOUND, a score's key (nil: none);
+every grouping searched, the tallest views placed first, groupings given up
+once they can't beat the best found. (COLUMNS . SCORE), or nil if none
+beats BOUND."
+  (let* ((count (length lines))
+         (heights (vconcat lines))
+         (needs (vconcat widths))
+         (most-columns (min count (max 1 (/ width (max 1 agent-ui-grid-min-width)))))
+         (room (max 1 (/ most 3)))
+         (order (cons 0 (sort (number-sequence 1 (1- count))
+                              (lambda (a b) (> (aref heights a) (aref heights b))))))
+         (columns (make-vector most-columns nil))
+         (sums (make-vector most-columns 0))
+         (widest (make-vector most-columns 0))
+         (sizes (make-vector most-columns 0))
+         (total (apply #'+ lines))
+         (best-key bound)
+         (best nil)
+         (steps 0))
+    (catch 'enough
+      (named-let place ((rest order) (used 0) (tallest 0) (across 0))
+        (cl-incf steps)
+        (when (> steps agent-ui-pane-search-limit)
+          (throw 'enough nil))
+        (if (null rest)
+            (let* ((empty (- (* tallest used) total))
+                   (key (list (+ tallest (/ (float empty) used)) empty used)))
+              (when (or (null best-key) (agent-ui--pane-key< key best-key))
+                (setq best-key key
+                      best (cl-loop for column below used
+                                    collect (sort (copy-sequence (aref columns column)) #'<)))))
+          (let ((view (car rest)))
+            ;; Into each column used so far, or one more (one: the new ones
+            ;; are all alike).
+            (dotimes (column (min (1+ used) most-columns))
+              (let* ((new (= column used))
+                     (sum (+ (aref sums column) (aref heights view)))
+                     (wide (max (aref widest column) (aref needs view)))
+                     (across* (+ (- across (aref widest column)) wide))
+                     (tallest* (max tallest sum)))
+                (when (and (<= across* width)
+                           (< (aref sizes column) room)
+                           ;; The tallest column only grows: can't beat the best.
+                           (or (null best-key) (< tallest* (car best-key)))
+                           (or (not new) (> view 0) (= column 0)))
+                  (let ((saved (list (aref columns column) (aref sums column)
+                                     (aref widest column) (aref sizes column))))
+                    (aset columns column (cons view (aref columns column)))
+                    (aset sums column sum)
+                    (aset widest column wide)
+                    (aset sizes column (1+ (aref sizes column)))
+                    (place (cdr rest) (if new (1+ used) used) tallest* across*)
+                    (aset columns column (nth 0 saved))
+                    (aset sums column (nth 1 saved))
+                    (aset widest column (nth 2 saved))
+                    (aset sizes column (nth 3 saved))))))))))
+    (when best
+      (cons best (agent-ui--pane-score best lines widths width most)))))
+
 (defun agent-ui--pane-plan (lines widths width most)
   "The layout (see above) of views needing LINES (lines each, their bars)
 and WIDTHS (columns each) in WIDTH columns and MOST lines: (COLUMNS WIDTHS
 HEIGHT), each column a list of its views' indices, top to bottom, each
 column's width (WIDTH shared out), the tallest column's lines; nil if none
 fits."
-  (let (best best-key)
+  (let (best)
     (cl-loop
      for count from 1 to (min (length lines) (max 1 (/ width (max 1 agent-ui-grid-min-width))))
-     do (dolist (columns (agent-ui--pane-deals lines widths count))
-          (let* ((pick (lambda (list column) (mapcar (lambda (index) (nth index list)) column)))
-                 (needs (mapcar (lambda (column) (apply #'max (funcall pick widths column))) columns))
-                 (heights (mapcar (lambda (column) (apply #'+ (funcall pick lines column))) columns))
-                 (height (apply #'max heights)))
-            (when (and (<= (apply #'+ needs) width)
-                       (<= (* 3 (apply #'max (mapcar #'length columns))) most))
-              ;; The least height and room left empty together (see above),
-              ;; then the least room left empty, then the fewest columns.
-              (let* ((empty (- (* height count) (apply #'+ heights)))
-                     (key (list (+ height (/ (float empty) count)) empty count)))
-                (when (or (null best-key) (agent-ui--pane-key< key best-key))
-                  (setq best (list columns needs height) best-key key)))))))
+     do (let (dealt)
+          ;; This count's best deal...
+          (dolist (columns (agent-ui--pane-deals lines widths count))
+            (let ((score (agent-ui--pane-score columns lines widths width most)))
+              (when (and score (or (null dealt) (agent-ui--pane-key< (car score) (car (cdr dealt)))))
+                (setq dealt (cons columns score)))))
+          ;; ... improved.
+          (when dealt
+            (let ((improved (agent-ui--pane-improve (car dealt) lines widths width most)))
+              (when (or (null best) (agent-ui--pane-key< (car (cdr improved)) (car (cdr best))))
+                (setq best improved))))))
+    ;; The best, if the good one isn't.
+    (when-let* ((found (agent-ui--pane-search lines widths width most (car (cdr best)))))
+      (setq best found))
     (when best
-      (pcase-let* ((`(,columns ,needs ,height) best)
+      (pcase-let* ((`(,columns (,_ ,needs ,height)) (list (car best) (cdr best)))
                    (count (length columns))
                    (left (- width (apply #'+ needs))))
         (list columns
@@ -447,7 +603,8 @@ windows; nil without room (WINDOW as it was)."
               (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
               (with-current-buffer session
                 (setq agent-ui--pane-plan columns
-                      agent-ui--pane-height nil))
+                      agent-ui--pane-height nil
+                      agent-ui--pane-settled agent-ui--pane-settling))
               ;; As high as each needs now; again once drawn at their widths.
               (agent-ui--pane-fit window session)
               (agent-ui--pane-tops cells)
@@ -532,8 +689,35 @@ since it was last given its height."
 (defvar agent-ui--pane-to-fit nil
   "The sessions whose Agent UI is fitted to what it shows, soon.")
 
+(defun agent-ui--pane-settle (window session)
+  "SESSION's Agent UI, in WINDOW's pane, planned again once its views are
+drawn at their widths (see THE LAYOUT): laid out again if that's better by
+more than half a line; once."
+  (unless (buffer-local-value 'agent-ui--pane-settled session)
+    (with-current-buffer session
+      (setq agent-ui--pane-settled t))
+    (let* ((views (agent-ui--pane-views session))
+           (shown (buffer-local-value 'agent-ui--pane-plan session))
+           (index (lambda (view) (seq-position views view)))
+           (now (mapcar (lambda (column) (mapcar index column)) shown)))
+      (unless (seq-some (lambda (column) (memq nil column)) now)
+        (let* ((lines (mapcar (lambda (view) (agent-ui--pane-view-lines view window)) views))
+               (widths (mapcar #'agent-ui--pane-view-width views))
+               (area (window-next-sibling window))
+               (width (window-total-width window))
+               (most (agent-ui--pane-most (+ (window-total-height window)
+                                             (if area (window-total-height area) 0))))
+               (current (agent-ui--pane-score now lines widths width most))
+               (plan (agent-ui--pane-plan lines widths width most))
+               (better (and plan (agent-ui--pane-score (car plan) lines widths width most))))
+          (when (and current better (< (car (car better)) (- (car (car current)) 0.5)))
+            (let ((agent-ui--pane-settling t))
+              (agent-ui--pane-detach (window-frame window) session)
+              (agent-ui--pane-attach window views))))))))
+
 (defun agent-ui--pane-fit-now ()
-  "The sessions waiting, their Agent UI fitted (`agent-ui--pane-fit')."
+  "The sessions waiting, their Agent UI fitted (`agent-ui--pane-fit'),
+planned again once settled (`agent-ui--pane-settle')."
   (setq agent-ui--pane-fit-timer nil)
   (let ((sessions agent-ui--pane-to-fit))
     (setq agent-ui--pane-to-fit nil)
@@ -541,7 +725,9 @@ since it was last given its height."
       (when-let* (((buffer-live-p session))
                   (window (agent-ui--pane-session-window session)))
         (with-demoted-errors "Agent UI, its height: %S"
-          (agent-ui--pane-fit window session))))))
+          (agent-ui--pane-settle window session)
+          (when (window-live-p window)
+            (agent-ui--pane-fit window session)))))))
 
 (defun agent-ui--pane-fit-soon (session)
   "SESSION's Agent UI fitted to what it shows once its views are drawn

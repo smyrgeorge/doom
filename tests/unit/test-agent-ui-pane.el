@@ -536,3 +536,47 @@ more: 18 windows of the session); its view in a pane of its own then."
       ;; Its view in a pane of its own then, not one of Agent UI's.
       (should (get-buffer-window (+test-aup-canvas name)))
       (ignore height))))
+
+(ert-deftest agent-ui-pane/the-best-layout-searched ()
+  "Dealing and moving or swapping one view at a time can stop short of the
+best layout (here 10.4 lines off: the two wide views had to go together,
+three views moving at once); the search finds it."
+  (let* ((lines '(6.5 13.0 10.7 11.7 8.4 9.8))
+         (widths '(40 40 40 40 80 80))
+         (plan (agent-ui--pane-plan lines widths 120 40)))
+    (should (equal (car plan) '((0 1 2) (3 4 5))))
+    (should (< (abs (- (nth 2 plan) 30.2)) 0.01)))
+  ;; Better than a bound only; none: nil.
+  (should-not (agent-ui--pane-search '(4 4) '(40 40) 80 32 '(4.0 0 2)))
+  (should (equal (car (agent-ui--pane-search '(4 4) '(40 40) 80 32 nil)) '((0) (1))))
+  ;; Its steps limited: the best found by then.
+  (let ((agent-ui-pane-search-limit 3))
+    (should-not (agent-ui--pane-search '(4 4 4 4) '(40 40 40 40) 205 32 nil))))
+
+(ert-deftest agent-ui-pane/planned-again-once-settled ()
+  "Laid out on a new view's size as drawn at the default width, the layout
+planned again once the views are drawn at theirs (the fit after the
+redraw): a better one made, once; not again until the views change."
+  (+test-aup
+    (let ((rebuilt 0))
+      ;; Two views laid out badly: one above the other (a planner that knew
+      ;; no better), side by side the best in 80 columns.
+      (cl-letf (((symbol-function 'agent-ui--pane-plan)
+                 (lambda (lines _widths width _most)
+                   (list (list (number-sequence 0 (1- (length lines)))) (list width) (apply #'+ lines)))))
+        (+test-aup-show name)
+        (+test-aup-show (agent-ui-sub-canvas name "tests")))
+      (pcase-let ((`(,a ,b) (agent-ui--pane-cells (selected-frame))))
+        (should (= (window-left-column a) (window-left-column b))))
+      (advice-add 'agent-ui--pane-attach :after (lambda (&rest _) (cl-incf rebuilt)) '((name . test-rebuilt)))
+      (unwind-protect
+          (progn
+            (agent-ui--pane-settle (selected-window) session)
+            (should (= rebuilt 1))
+            (pcase-let ((`(,a ,b) (agent-ui--pane-cells (selected-frame))))
+              (should (= (window-top-line a) (window-top-line b))))
+            (should (buffer-local-value 'agent-ui--pane-settled session))
+            ;; Once: not again.
+            (agent-ui--pane-settle (selected-window) session)
+            (should (= rebuilt 1)))
+        (advice-remove 'agent-ui--pane-attach 'test-rebuilt)))))
