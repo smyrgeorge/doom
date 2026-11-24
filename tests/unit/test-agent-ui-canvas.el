@@ -752,9 +752,11 @@ showed another buffer goes back to it; a frame's last window stays."
   (+test-auc
     (+test-auc-with-panels)
     (agent-ui-show +test-auc-panel)
-    ;; Listed after their panel.
+    ;; Listed after their panel; one without an id given its place's
+    ;; (doom-ht6.51).
     (should (equal (agent-ui-elements)
-                   '((:id "dash" :type "panel") (:id "a" :type "meter" :panel "dash") (:id "b" :type "meter" :panel "dash"))))
+                   '((:id "dash" :type "panel") (:id "a" :type "meter" :panel "dash")
+                     (:id "dash.2" :type "panel" :panel "dash") (:id "b" :type "meter" :panel "dash"))))
     (should (equal (agent-ui-get "b") '(:id "b" :type "meter" :value 2)))
     ;; Updated by its own id: its panel redrawn.
     (agent-ui-update "b" '(:value 7))

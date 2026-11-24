@@ -5277,6 +5277,28 @@ chart): one SVG still."
     (should-not (agent-ui-panel--inline-p (propertize "pic" 'display (list '(slice 0 0 20 16) '(image :type svg :data "<svg/>")))
                                           10 ctx))))
 
+(ert-deftest agent-ui-elements/panel-a-child-without-an-id ()
+  "A panel's child without an id: given one by its place (PANEL.N, its own
+children the same, not one taken), so its buttons and keys change it, not
+its panel; kept as the panel changes (doom-ht6.51)."
+  (+test-aue-canvas
+    (agent-ui-show '(:id "p" :type "panel"
+                     :children ((:type "table" :columns ("A") :rows (("x") ("y")))
+                                (:id "p.2" :type "text" :text "taken")
+                                (:type "text" :text "third")
+                                (:type "panel" :children ((:type "text" :text "deep"))))))
+    (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements))
+                   '("first" "p" "p.1" "p.2" "p.3" "p.4" "p.4.1")))
+    ;; Its table sorted: the child changed, the panel accepting it.
+    (agent-ui-update "p.1" '(:sort "A" :descending t))
+    (should (eq (plist-get (agent-ui-get "p.1") :descending) t))
+    ;; The panel changed: its children's ids as they were.
+    (agent-ui-update "p" '(:title "P"))
+    (should (equal (plist-get (agent-ui-get "p.3") :text) "third"))
+    ;; Shown with no id at all: its children named after the id made.
+    (let ((id (agent-ui-show '(:type "panel" :children ((:type "text" :text "x"))))))
+      (should (equal (plist-get (car (plist-get (agent-ui-get id) :children)) :id) (concat id ".1"))))))
+
 (ert-deftest agent-ui-elements/panel-borderless-keeps-its-images ()
   "Without a border, in the GUI: a row drawn as one SVG, and an image line in
 a column, kept (trimming the lines' spaces deleted them: an image is a

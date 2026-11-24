@@ -124,7 +124,7 @@ text, clickable; in a terminal, as text. Keep a dashboard's related elements in 
 **Each child is an element of its own**: give it an `id`, and `update`, `append`, `remove`, `show` (replacing it),
 `snapshot` and links work on it as on any element, its panel redrawn in place. Its `source` runs with it: a live
 dashboard is a panel whose children follow commands and files ([sources.md](sources.md)). Ids are unique in the
-canvas, children's too.
+canvas, children's too. One without an `id` is given its place's: `PANEL.1`, `PANEL.2`... (`get` shows them).
 
 ```sh
 agent-ui show '{"id":"release","type":"panel","title":"Release","layout":"row","children":[{"id":"release-build","type":"progress","title":"Build","value":8,"max":12},{"id":"release-tests","type":"table","title":"Tests","columns":["Test","Result"],"rows":[["lexer","passed"],["parser","failed"]]}]}'

@@ -737,6 +737,28 @@ ID; an error naming the others if none."
            when (agent-ui--plist-p child)
            append (cons child (agent-ui--descendants child))))
 
+(defun agent-ui--children-named (element &optional id)
+  "ELEMENT with each child of its (a panel's) without an id given one, by
+its place: ID.N (ID ELEMENT's id, N from 1), its own children the same.
+Their buttons, keys and updates are then theirs, not their panel's."
+  (let ((id (or id (plist-get element :id)))
+        (children (and (listp element) (plist-get element :children))))
+    (if (not (and (stringp id) (consp children) (proper-list-p children)))
+        element
+      (let ((taken (delq nil (mapcar (lambda (c) (plist-get c :id)) (agent-ui--descendants element)))))
+        (plist-put (copy-sequence element) :children
+                   (cl-loop for child in children
+                            for i from 1
+                            collect (if (not (agent-ui--plist-p child))
+                                        child
+                                      (agent-ui--children-named
+                                       (if (plist-get child :id)
+                                           child
+                                         (let ((new (format "%s.%d" id i)))
+                                           (while (member new taken) (setq new (concat new "_")))
+                                           (push new taken)
+                                           (plist-put (copy-sequence child) :id new)))))))))))
+
 (defun agent-ui--find-child (element id)
   (seq-find (lambda (child) (equal (plist-get child :id) id)) (agent-ui--descendants element)))
 
@@ -903,10 +925,12 @@ window (`agent-ui-display-function'). Without an id, one is made. Returns
 the id. Signals `agent-ui-error' if ELEMENT is wrong."
   (agent-ui--within (canvas section t)
     (let* ((section agent-ui--in-section)
-           (given element)
-           (element (agent-ui--checked element))
            (id (or (plist-get element :id)
                    (agent-ui--new-id (plist-get element :type))))
+           ;; Its children without an id given theirs.
+           (element (agent-ui--children-named element id))
+           (given element)
+           (element (agent-ui--checked element))
            (element (plist-put element :id id))
            (given (plist-put (plist-put (copy-sequence given) :id id) :type (plist-get element :type)))
            (key (progn (agent-ui--check-id id) (agent-ui--key id section)))
@@ -971,7 +995,7 @@ started or stopped as they came or went, redrawn soon. Returns ID."
                (key (agent-ui--entry-id entry))
                (section (agent-ui--key-section key))
                (old (or child (agent-ui--entry-element entry)))
-               (new (agent-ui--checked (funcall change old))))
+               (new (agent-ui--checked (agent-ui--children-named (funcall change old) (plist-get old :id)))))
     (if child
         (let ((replaced (agent-ui--replace-child (agent-ui--entry-element entry) (plist-get child :id) new)))
           (agent-ui--ids-free replaced section key)
