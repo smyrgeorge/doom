@@ -138,7 +138,8 @@ emacs-plus Emacs.app (it replaces Homebrew's terminal-only `emacs`). On Linux it
 changes, Doom's packages are rebuilt for it.
 
 **`tools.sh`** installs Doom's own tools, the language servers, formatters and linters of the modules `init.el`
-enables, and the config's fonts. A table at its top lists every tool and why it's there. If `init.el` enables a module
+enables, the config's fonts, and your coding agent's adapter: the one `config.el` chooses (Claude Code), or those
+`AGENTS` names (`AGENTS="codex gemini-cli" scripts/tools.sh`). A table at its top lists every tool and why it's there. If `init.el` enables a module
 the table doesn't know, the script stops and names it, so a new language never goes without its tools.
 `tools.sh --check` only reports what's installed and what's missing. It needs Emacs, so run `emacs.sh` first.
 

@@ -41,7 +41,7 @@ esac\n"
     dir))
 
 (defconst +test-tools-script--unset
-  '("EMACS_VERSION" "XWIDGETS" "NO_DOOM" "DRY_RUN" "OS" "ARCH" "EMACS" "DOOM_INIT")
+  '("EMACS_VERSION" "XWIDGETS" "NO_DOOM" "DRY_RUN" "OS" "ARCH" "EMACS" "DOOM_INIT" "AGENTS" "CONFIG_EL")
   "What the scripts read from their environment, unset for each run (a bare
 name in `process-environment'): a test sets what it means to, not what
 the shell running the tests had (CI's).")
@@ -246,6 +246,42 @@ pipx, upgraded; packages-less servers named, to install by hand."
       (with-temp-buffer
         (insert output)
         (should (= (how-many "^  [✔✖] npm " (point-min) (point-max)) 1))))))
+
+(ert-deftest tools-script/your-agent-s-adapter ()
+  "Your agent's adapter, config.el's (claude-code: claude-agent-acp); AGENTS
+names others instead (codex, gemini-cli: each its own installer), none
+with nothing; one it has no row for, said."
+  (cl-flet ((installs (&rest env)
+              (let ((output (cdr (apply #'+test-tools-script--run "macos"
+                                        (+test-tools-script--init +test-tools-script--small)
+                                        "DRY_RUN=1" env))))
+                (list (string-match-p "claude-agent-acp@" output)
+                      (string-match-p "codex-acp@" output)
+                      (string-match-p "brew install .*gemini-cli\\|brew install gemini-cli" output)
+                      output))))
+    ;; This config's: Claude Code.
+    (pcase-let ((`(,claude ,codex ,_ ,_) (installs)))
+      (should claude)
+      (should-not codex))
+    ;; Another config.el's: Codex.
+    (let ((config (make-temp-file (+test-tmp-file "tools-script/config-") nil ".el")))
+      (with-temp-file config (insert "(setq agent-shell-preferred-agent-config 'codex)\n"))
+      (pcase-let ((`(,claude ,codex ,_ ,_) (installs (concat "CONFIG_EL=" config))))
+        (should-not claude)
+        (should codex))
+      (with-temp-file config (insert "(setq agent-shell-preferred-agent-config nil)\n"))
+      (pcase-let ((`(,claude ,codex ,_ ,_) (installs (concat "CONFIG_EL=" config))))
+        (should-not claude)
+        (should-not codex)))
+    ;; AGENTS: those.
+    (pcase-let ((`(,claude ,codex ,gemini ,output) (installs "AGENTS=codex gemini-cli kiro")))
+      (should-not claude)
+      (should codex)
+      (should gemini)
+      (should (string-match-p "agent kiro: no row in TOOLS" output)))
+    (pcase-let ((`(,claude ,codex ,_ ,_) (installs "AGENTS=")))
+      (should-not claude)
+      (should-not codex))))
 
 (ert-deftest tools-script/mathjax-for-agent-ui-s-formulas ()
   "MathJax (Agent UI's math): installed by npm, everywhere; checked as a

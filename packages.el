@@ -55,8 +55,9 @@
 ;; Use git-delta (syntax highlighting, word diffs) for diffs in magit.
 (package! magit-delta)
 
-;; agent-shell: Claude Code (and other ACP agents) in a native Emacs buffer.
-;; Needs: npm install -g @agentclientprotocol/claude-agent-acp (scripts/tools.sh)
+;; agent-shell: your coding agent (Claude Code, Codex, Gemini... over ACP) in a
+;; native Emacs buffer. Needs its adapter: scripts/tools.sh installs your
+;; agent's (config.el's), or those AGENTS names.
 ;; Pinned: the agent workspace advises agent-shell's internals (its queue, its
 ;; steering: config/agent-workspace/session.el), checked with these commits
 ;; (tests/unit/test-agent-workspace-*.el); the tests on GitHub build the same.

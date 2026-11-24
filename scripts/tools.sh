@@ -14,6 +14,11 @@
 # script fails, naming them, before installing anything (a language added to
 # init.el needs its tools added here).
 #
+# Your coding agent's adapter (or CLI) too: the agent config.el chooses
+# (agent-shell-preferred-agent-config, read from CONFIG_EL, default this
+# config's config.el), or those AGENTS names, agent-shell's identifiers
+# (AGENTS="claude-code codex gemini-cli"; AGENTS= none).
+#
 # macOS: Homebrew; Linux: apt (Debian, Ubuntu) or dnf (Fedora), see
 # scripts/os.sh. Emacs (31 or later) must be installed first: scripts/emacs.sh;
 # without it, it fails, saying so. DRY_RUN=1 prints the commands instead.
@@ -25,6 +30,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DOOM_INIT=${DOOM_INIT:-$ROOT/init.el}
+CONFIG_EL=${CONFIG_EL:-$ROOT/config.el}
 if [ -z "${EMACS:-}" ]; then
   EMACS=emacs
   if ! command -v emacs >/dev/null 2>&1 && [ -x /Applications/Emacs.app/Contents/MacOS/Emacs ]; then
@@ -42,9 +48,10 @@ esac
 
 # One row per tool: WHEN | PROGRAM | MACOS | APT | DNF | WHAT FOR
 #
-# WHEN: doom (Doom itself), config (this config), or a module of init.el,
+# WHEN: doom (Doom itself), config (this config), a module of init.el,
 #   ":CATEGORY MODULE" (when it's enabled) or ":CATEGORY MODULE +FLAG" (when
-#   it's enabled with FLAG).
+#   it's enabled with FLAG), or agent:ID, a coding agent agent-shell runs
+#   (claude-code, codex...: when it's yours, or AGENTS names it).
 # PROGRAM: what shows it's there, for the check: a command (a/b: either),
 #   font:NAME, or node:NAME (a global npm package without a command: a
 #   library node scripts use).
@@ -67,8 +74,7 @@ TOOLS=(
   "config            | font:Symbols Nerd Font | cask:font-symbols-only-nerd-font | manual:M-x_nerd-icons-install-fonts | manual:M-x_nerd-icons-install-fonts | icons (nerd-icons)"
   "config            | delta            | brew:git-delta        | apt:git-delta         | dnf:git-delta          | magit's diffs (config/magit.el)"
   "config            | magick/convert   | brew:imagemagick      | apt:imagemagick       | dnf:ImageMagick        | images: crop, the changed pixels; rotate, flip on Linux (config/image.el)"
-  "config            | npm              | brew:node             | apt:nodejs apt:npm    | dnf:nodejs dnf:nodejs-npm | Claude Code's bridge, npm's servers"
-  "config            | claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | Claude Code in Emacs (config/agent-shell.el)"
+  "config            | npm              | brew:node             | apt:nodejs apt:npm    | dnf:nodejs dnf:nodejs-npm | agents' adapters, npm's servers"
   "config            | bd               | brew:beads            | npm:@beads/bd         | npm:@beads/bd          | issues: Beads (config/beads.el)"
   "config            | node:mathjax-full | npm:mathjax-full     | npm:mathjax-full      | npm:mathjax-full       | formulas typeset: Agent UI's math (config/agent-ui/elements/math.el)"
   "config            | mmdc             | npm:@mermaid-js/mermaid-cli | apt:unzip npm:@mermaid-js/mermaid-cli | dnf:unzip npm:@mermaid-js/mermaid-cli | Mermaid diagrams drawn (config/mermaid.el)"
@@ -78,6 +84,18 @@ TOOLS=(
   "config            | wl-copy          | -                     | apt:wl-clipboard      | dnf:wl-clipboard       | copying images, Wayland (config/emacs/os.el)"
   "config            | xclip            | -                     | apt:xclip             | dnf:xclip              | copying images, X11 (config/emacs/os.el)"
   "config            | mutool           | -                     | apt:mupdf-tools       | dnf:mupdf              | PDFs without xwidgets: DocView"
+
+  # Your coding agent (config/agent-shell.el): its ACP adapter, or its CLI
+  # speaking ACP (agent-shell's *-acp-command). Claude Code logs in with its
+  # own CLI, installed by its own installer (claude.ai/install.sh).
+  "agent:claude-code | claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | npm:@agentclientprotocol/claude-agent-acp | Claude Code's adapter"
+  "agent:codex       | codex-acp        | npm:@zed-industries/codex-acp | npm:@zed-industries/codex-acp | npm:@zed-industries/codex-acp | Codex's adapter"
+  "agent:gemini-cli  | gemini           | brew:gemini-cli       | npm:@google/gemini-cli | npm:@google/gemini-cli | Gemini CLI"
+  "agent:opencode    | opencode         | brew:opencode         | npm:opencode-ai       | npm:opencode-ai        | OpenCode"
+  "agent:qwen-code   | qwen             | npm:@qwen-code/qwen-code | npm:@qwen-code/qwen-code | npm:@qwen-code/qwen-code | Qwen Code"
+  "agent:copilot     | copilot          | npm:@github/copilot   | npm:@github/copilot   | npm:@github/copilot    | GitHub Copilot's CLI"
+  "agent:goose       | goose            | brew:block-goose-cli  | manual:github.com/block/goose/releases | manual:github.com/block/goose/releases | Goose"
+  "agent:cursor      | agent            | manual:cursor.com/cli | manual:cursor.com/cli | manual:cursor.com/cli  | Cursor's agent"
 
   # :emacs, :checkers, :tools
   ":emacs dired      | gls              | brew:coreutils        | -                     | -                      | GNU ls for dired (macOS's lacks its options)"
@@ -201,9 +219,23 @@ while read -r category module flags; do
   done
 done <<<"$MODULES"
 
-# enabled WHEN: does WHEN (doom, config, ":CATEGORY MODULE [+FLAG]") apply?
+# Your agents: AGENTS, else config.el's (its `(setq
+# agent-shell-preferred-agent-config 'ID)'; nil, or none: no agent).
+if [ -z "${AGENTS+set}" ]; then
+  AGENTS=
+  if [ -r "$CONFIG_EL" ]; then
+    AGENTS=$(sed -n "s/^(setq agent-shell-preferred-agent-config '\([a-z0-9-]*\)).*/\1/p" "$CONFIG_EL" | tail -1)
+    [ "$AGENTS" = nil ] && AGENTS=
+  fi
+fi
+
+# enabled WHEN: does WHEN (doom, config, ":CATEGORY MODULE [+FLAG]",
+# agent:ID) apply?
 enabled() {
   case "$1" in doom|config) return 0 ;; esac
+  case "$1" in
+    agent:*) case " $AGENTS " in *" ${1#agent:} "*) return 0 ;; esac; return 1 ;;
+  esac
   case "$ENABLED" in *"|$1|"*) return 0 ;; esac
   return 1
 }
@@ -247,6 +279,14 @@ if [ ${#problems[@]} -gt 0 ]; then
   done
   exit 2
 fi
+
+# An agent named with no row: said; agent-shell says how to install it.
+for agent in $AGENTS; do
+  case "$LISTED" in
+    *"|agent:$agent|"*) ;;
+    *) ui_warn "agent $agent: no row in TOOLS: install it as agent-shell says (M-x agent-shell, then pick it)" ;;
+  esac
+done
 
 # ====== WHAT APPLIES HERE ======
 
