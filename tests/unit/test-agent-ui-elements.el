@@ -4264,6 +4264,16 @@ each line and curve; a box's own edge (2 px) not counted."
               (push (cons d box) crossings))))))
     crossings))
 
+(ert-deftest agent-ui-elements/graph-a-long-chain ()
+  "A chain of 500 nodes (as many as it takes): laid out, a layer each,
+drawn as text, past no nesting limit (doom-ht6.70)."
+  (let* ((n 500)
+         (edges (cl-loop for i below (1- n) collect (list :from (format "n%d" i) :to (format "n%d" (1+ i)))))
+         (element (list :type "graph" :edges edges))
+         (max-lisp-eval-depth 1600))
+    (should (= (length (agent-ui-graph-layout (plist-get (agent-ui-check "graph" element) :nodes) edges)) n))
+    (should-not (string-search "max-lisp-eval-depth" (+test-aue-draw element)))))
+
 (ert-deftest agent-ui-elements/graph-loops-and-cycles-shown ()
   "A self-loop drawn out into the corridor after its box; an edge going back
 (a cycle) routed round through the corridors and a lane, back to the first

@@ -84,17 +84,26 @@ each layer ordered by its nodes' parents' places."
          (state (make-hash-table :test #'equal))
          (dag nil))
     (dolist (e edges) (push (plist-get e :to) (gethash (plist-get e :from) out)))
-    ;; Edges back (to a node being visited) left out: what's left has no cycle.
-    (cl-labels ((visit (id)
-                  (puthash id 'visiting state)
-                  (dolist (to (reverse (gethash id out)))
-                    (pcase (gethash to state)
-                      ('visiting)
-                      ((or 'done (pred null))
-                       (push (cons id to) dag)
-                       (unless (gethash to state) (visit to)))))
-                  (puthash id 'done state)))
-      (dolist (id ids) (unless (gethash id state) (visit id))))
+    ;; Edges back (to a node being visited) left out: what's left has no
+    ;; cycle. Depth first, with a stack of its own (a long chain went past
+    ;; `max-lisp-eval-depth'): each frame a node and its edges still to go.
+    (dolist (root ids)
+      (unless (gethash root state)
+        (puthash root 'visiting state)
+        (let ((stack (list (cons root (reverse (gethash root out))))))
+          (while stack
+            (let ((frame (car stack)))
+              (if (null (cdr frame))
+                  (progn (puthash (car frame) 'done state)
+                         (pop stack))
+                (let ((to (pop (cdr frame))))
+                  (pcase (gethash to state)
+                    ('visiting)
+                    (_
+                     (push (cons (car frame) to) dag)
+                     (unless (gethash to state)
+                       (puthash to 'visiting state)
+                       (push (cons to (reverse (gethash to out))) stack)))))))))))
     (let ((layer (make-hash-table :test #'equal))
           (changed t))
       (dolist (id ids) (puthash id 0 layer))
