@@ -289,7 +289,8 @@ case "$op" in
           case "$2" in *=*) ;; *) fail 2 "$1 $2: JOB=A,B" ;; esac
           key=${2%%=*} values=${2#*=} list=""
           IFS=, read -r -a parts <<< "$values"
-          for v in "${parts[@]}"; do
+          # (Empty: bash 3.2's set -u calls "${parts[@]}" unbound.)
+          for v in ${parts[@]+"${parts[@]}"}; do
             if [ "$1" = --exit ]; then
               case "$v" in ''|*[!0-9]*) fail 2 "--exit $2: exit codes are numbers" ;; esac
               list="$list${list:+,}$v"

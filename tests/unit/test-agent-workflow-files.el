@@ -1198,6 +1198,13 @@ OUTPUT). Asynchronously: this Emacs, its server, answers it meanwhile."
                  (with-current-buffer output (string-trim (buffer-string))))
       (kill-buffer output))))
 
+(ert-deftest agent-workflow-files/the-script-on-bash-3 ()
+  "An empty outcome or exit list (review=) read under /bin/bash (macOS's
+3.2, which takes an empty array for unbound under set -u) (doom-38o.85)."
+  (with-temp-buffer
+    (call-process "/bin/bash" nil t nil +test-awf-script "dry-run" "feature" "--outcome" "review=" "--exit" "build.1=")
+    (should-not (string-search "unbound variable" (buffer-string)))))
+
 (ert-deftest agent-workflow-files/the-script ()
   "cmd/agent-workflow check through Emacs's server: 0 without errors, 1
 with; a file of its folder alone; wrong uses: 2, without Emacs."
