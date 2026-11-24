@@ -224,8 +224,16 @@ on none, nothing skipping it."
   "PROJECT's ready issues for a role (DATA, else as last fetched) offered in
 the room to its first free agent, once each; one handed back to an agent
 \(open, assigned to it), to that agent, once it's free."
-  (let ((key (agent-workspace--root project)))
-    (dolist (issue (plist-get (or data (agent-workspace--issues-data project)) :ready))
+  (let* ((key (agent-workspace--root project))
+         (data (or data (agent-workspace--issues-data project)))
+         (ready (mapcar (lambda (issue) (list (plist-get issue :id) (plist-get issue :role) (plist-get issue :assignee)))
+                        (plist-get data :ready))))
+    ;; One ready no more (taken, handed on): forgotten, offered again the
+    ;; next time it's ready so (a re-review after changes, a second return).
+    (when data
+      (puthash key (seq-filter (lambda (entry) (member (car entry) ready)) (gethash key agent-workspace--offered))
+               agent-workspace--offered))
+    (dolist (issue (plist-get data :ready))
       (let* ((id (plist-get issue :id))
              (role (plist-get issue :role))
              (assignee (plist-get issue :assignee))

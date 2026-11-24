@@ -334,7 +334,8 @@ back; a builder's does (doom-pbk.57)."
   "An issue ready for the builders, ken free: offered in the room once,
 [Give it to ken] giving it him (his worktree on its branch); no builder
 free, offered once one is: his issue closed, he's on none, his loop off
-\(doom-pbk.152: nothing cleared it, he was never offered one again)."
+\(doom-pbk.152: nothing cleared it, he was never offered one again); ready
+again once it wasn't, offered again (doom-pbk.170)."
   (+test-with-reset
     (let* ((project (+test-awo--project "offer"))
            (default-directory project)
@@ -395,7 +396,13 @@ free, offered once one is: his issue closed, he's on none, his loop off
               (setf (agent-workspace-agent-loop ken) t)
               (funcall fetched (list (list :id "demo-5" :title "Loop it" :role "builder" :status 'ready)))
               (should-not (string-search "demo-5 is ready" (funcall feed)))
-              (setf (agent-workspace-agent-loop ken) nil))
+              (setf (agent-workspace-agent-loop ken) nil)
+              ;; Ready for the builders again (back after a review's
+              ;; changes): offered again (doom-pbk.170).
+              (funcall fetched (list (list :id "demo-3" :title "Fix it" :role "builder" :status 'ready :type "bug")))
+              (should (= 2 (with-temp-buffer (insert (funcall feed))
+                                             (count-matches "demo-3 is ready for the builders: ken is free"
+                                                            (point-min) (point-max))))))
           (when (agent-workspace--app project) (agent-workspace--close-app project))
           (agent-workspace-close-all))))))
 
