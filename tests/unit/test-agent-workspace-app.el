@@ -1940,6 +1940,13 @@ nothing sent."
             (should (equal sent '(("ada" "Work on p-2: Build the lexer, a title long enough to need two rows in a column fifty wide" (:submit t)))))
             (should (equal (agent-workspace-agent-issue ada) "p-2"))
             (should (equal (agent-workspace-agent-branch ada) "task/p-2-build-lexer-title-long"))
+            ;; Given until fetched again: not offered to another meanwhile
+            ;; (doom-pbk.181).
+            (should (equal (plist-get (seq-find (lambda (ready) (equal (plist-get ready :id) "p-2"))
+                                                (plist-get agent-workspace--issues-data :ready))
+                                      :given)
+                           "ada"))
+            (should-not (agent-workspace--still-ready project "p-2"))
             ;; Changes there: refused, nothing sent, nothing given.
             (write-region "half\n" nil (expand-file-name "wip" (agent-workspace-agent-worktree ada)))
             (agent-workspace--issues-goto-id "p-3")

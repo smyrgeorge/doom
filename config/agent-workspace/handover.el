@@ -275,6 +275,16 @@ since, and nobody's (or the agent NAME's: handed back to it)."
                                  (member (plist-get issue :assignee) (list nil name))))
             (plist-get (agent-workspace--issues-data project) :ready)))
 
+(defun agent-workspace--ready-given (project id name)
+  "PROJECT's ready issue ID (as last fetched) marked given to the agent NAME
+until it's fetched again: not offered to another meanwhile, its offer's
+button gone, nor taken by a loop."
+  (when-let* ((ready (seq-find (lambda (ready) (equal (plist-get ready :id) id))
+                               (plist-get (agent-workspace--issues-data project) :ready))))
+    (plist-put ready :assignee name)
+    (plist-put ready :given name)
+    (agent-workspace--room-redraw-soon project)))
+
 (defun agent-workspace-offer-take (project id name)
   "PROJECT's ready issue ID given to the agent NAME: free, it takes it now;
 working, after its turn. Claimed for it in bd at once, its branch for it
@@ -283,10 +293,7 @@ its worktree has changes not committed."
   (let ((issue (or (agent-workspace--still-ready project id name) (user-error "%s is not ready any more" id)))
         (agent (or (agent-workspace-agent name project) (user-error "%s is not in the crew now" name))))
     (agent-workspace-give-issue agent id (plist-get issue :title) (plist-get issue :type))
-    ;; Its until it's fetched again: its offer's button gone.
-    (plist-put issue :assignee name)
-    (plist-put issue :given name)
-    (agent-workspace--room-redraw-soon project)
+    (agent-workspace--ready-given project id name)
     (agent-workspace-room-post project :kind 'issue :agent name :text (format "given %s (you)" id))))
 
 (defun agent-workspace--room-offer-line (project entry)

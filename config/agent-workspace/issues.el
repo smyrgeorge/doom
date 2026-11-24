@@ -810,6 +810,8 @@ committed: the claim given back)."
      (signal (car err) (cdr err))))
   (agent-workspace-send agent (agent-workspace-issue-prompt id title) :submit t))
 
+(declare-function agent-workspace--ready-given "agent-workspace/handover")
+
 (defun agent-workspace-issue-give ()
   "Give the issue at point to an agent (the selected one offered first, then
 its role's): free, it takes it now; working, after its turn. Claimed for it
@@ -836,6 +838,8 @@ committed."
            (agent (agent-workspace-agent name project))
            (how (agent-workspace-give-issue agent (plist-get issue :id) (plist-get issue :title)
                                             (plist-get issue :type))))
+      ;; Its until fetched again: offered to no other agent meanwhile.
+      (agent-workspace--ready-given project (plist-get issue :id) name)
       (message (if (eq how 'queued) "%s gets %s after its turn (busy)" "%s works on %s")
                name (plist-get issue :id))
       (agent-workspace-select agent))))

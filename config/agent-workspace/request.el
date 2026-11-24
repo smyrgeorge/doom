@@ -78,6 +78,7 @@
 (declare-function agent-workspace-room-post "agent-workspace/room")
 (declare-function agent-workspace--room-redraw-soon "agent-workspace/room")
 (defvar agent-workspace--offered)
+(declare-function agent-workspace--ready-given "agent-workspace/handover")
 (declare-function agent-workspace--session-process "agent-workspace/session")
 
 ;; ====== WHO ASKS ======
@@ -341,12 +342,7 @@ says, as t does: the reply, a plist."
       (user-error "%s not given to %s: %s is %s" id name name (agent-workspace-state-text agent)))
     (let* ((issue (agent-workspace--request-issue project actor id))
            (how (agent-workspace-give-issue agent id (plist-get issue :title) (plist-get issue :type))))
-      ;; Its until the issues are fetched again: its offer's button gone.
-      (when-let* ((ready (seq-find (lambda (ready) (equal (plist-get ready :id) id))
-                                   (plist-get (agent-workspace--issues-data project) :ready))))
-        (plist-put ready :assignee name)
-        (plist-put ready :given name)
-        (agent-workspace--room-redraw-soon project))
+      (agent-workspace--ready-given project id name)
       (agent-workspace--request-said project actor 'issue agent (format "gave %s to %s" id name))
       (append (list :ok t) (agent-workspace--request-agent agent)
               (list :issue id :prompt (if (eq how 'queued) "queued" "sent"))))))
