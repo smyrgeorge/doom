@@ -57,6 +57,13 @@ JOB hasn't run, or STEP isn't one."
     (when (and discard (agent-workflow-run-checkout-p run))
       (agent-workflow--refuse "%s works in your checkout: its work isn't discarded there (git reset it yourself)"
                               (agent-workflow-run-name run)))
+    ;; Checked before anything changes: refused, the run as it was.
+    (when discard
+      (unless (plist-get state :start-commit)
+        (agent-workflow--refuse "%s: the commit it started from isn't known" job))
+      (unless (file-directory-p (agent-workflow--work-directory run))
+        (agent-workflow--refuse "%s: its worktree is gone, its work not there to discard"
+                                (agent-workflow-run-name run))))
     (let ((session (or (plist-get state :session)
                        (when-let* ((agent (plist-get state :agent))) (agent-workflow-agent-session agent))))
           (lost (and discard (agent-workflow-back-lost run job))))
@@ -80,7 +87,6 @@ JOB hasn't run, or STEP isn't one."
       (when discard
         (let ((default-directory (agent-workflow--work-directory run))
               (commit (plist-get state :start-commit)))
-          (unless commit (agent-workflow--refuse "%s: the commit it started from isn't known" job))
           (agent-workflow--git "reset" "--hard" commit)
           (agent-workflow--git "clean" "-fd")
           ;; Commits lost as you chose: not missed later (watch.el).

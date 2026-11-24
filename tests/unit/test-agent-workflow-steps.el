@@ -313,6 +313,29 @@ jobs:
         (should (string-search "cut \uFFFD"
                                (plist-get (plist-get (aref (plist-get state :jobs) 1) :ask) :output)))))))
 
+(ert-deftest agent-workflow-steps/a-discard-refused-changes-nothing ()
+  "Sent back discarding its work, its worktree gone (a done run's): refused
+before anything changes, the run as it was; sent back after, without
+discarding, it runs again (doom-38o.81)."
+  (+test-awr "discard-refused"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    run: echo ok
+")
+    (let* ((issue (+test-awr--issue project "Discard refused"))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+      (when (file-directory-p (agent-workflow--work-directory run))
+        (agent-workflow-worktree-remove project issue t))
+      (should-error (agent-workflow--back run "check" :discard t) :type 'user-error)
+      (should (eq (agent-workflow-run-state run) 'done))
+      (should (eq (+test-awr--job run "check") 'done))
+      (should-not (plist-get (agent-workflow--job run "check") :back))
+      (should (equal (agent-workflow--back run "check") '("check")))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
+
 (ert-deftest agent-workflow-steps/an-on-fail-script ()
   "on-fail: {run: ...}: a failed step's script first, FAILED_STEP and
 FAILED_OUTPUT in its environment, its output a log of its own. Exit 0 it
