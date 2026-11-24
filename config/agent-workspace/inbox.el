@@ -196,7 +196,7 @@ crew (running or saved, as a name) has it, else it would wait for good."
                 (append (mapcar #'agent-workspace-agent-name (agent-workspace-agents project))
                         (and (fboundp 'agent-workspace-crew-read)
                              (mapcar (lambda (entry) (plist-get entry :name))
-                                     (plist-get (car (agent-workspace-crew-read project)) :agents))))))
+                                     (plist-get (car (agent-workspace-crew-read project t)) :agents))))))
         (roles (agent-workspace--inbox-crew-roles project)))
     (cond
      ((equal to "#all")

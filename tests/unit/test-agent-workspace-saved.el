@@ -407,6 +407,9 @@ written again as the crew changes (doom-pbk.61)."
         (let ((edited (replace-regexp-in-string "\"colour\": \"blue\"" "\"colour\": \"blue\", \"model\": \"haiku\""
                                                 (+test-aws2--file project))))
           (+test-aws2--write project edited)
+          ;; An event for an agent (it reads whom to: crew.json only
+          ;; looked at) doesn't make it read (doom-pbk.166).
+          (agent-workspace-inbox-add project "ada" "the build broke" :from "ci")
           (agent-workspace-recolour ada "cyan")
           (agent-workspace-recolour ada "red")
           (should (equal (+test-aws2--file project) edited))
