@@ -216,7 +216,9 @@ arrays filled through."
 (defun agent-ui-source--apply (state lines)
   "LINES through STATE's rules: (SET . APPEND), the patches they make (a
 later line's set over an earlier's; appends added up)."
-  (let ((set nil) (append nil))
+  (let ((set nil) (append nil)
+        ;; As grep -E matches: case counts.
+        (case-fold-search nil))
     (dolist (line lines)
       (dolist (rule (agent-ui-source--state-rules state))
         (when (string-match (plist-get rule :regexp) line)

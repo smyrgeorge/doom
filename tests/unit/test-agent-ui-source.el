@@ -107,6 +107,16 @@
       (should (equal (with-temp-buffer (insert-file-contents (plist-get status :log)) (buffer-string))
                      "[1/3] CC f1.c\n[2/3] CC f2.c\n[3/3] CC f3.c\nlinking\n")))))
 
+(ert-deftest agent-ui-source/its-rules-match-case ()
+  "Its rules match as grep -E does: case counts (doom-ht6.47)."
+  (+test-ausrc
+    (let ((case-fold-search t))
+      (agent-ui-show '(:id "t" :type "table" :columns ("Test" "Result") :key 0
+                       :source (:command "echo 'test a ... FAILED'; echo 'test b ... failed (a warning)'"
+                                :match "^test (\\S+) \\.\\.\\. (FAILED)" :append (:rows (("$1" "$2"))))))
+      (+test-ausrc-ended "t")
+      (should (equal (plist-get (agent-ui-get "t") :rows) '(("a" "FAILED")))))))
+
 (ert-deftest agent-ui-source/a-command-failing ()
   (+test-ausrc
     (agent-ui-show '(:id "b" :type "progress" :max 4 :source (:command "echo 1; exit 3" :match "^(\\d)$" :set (:value "$1"))))
