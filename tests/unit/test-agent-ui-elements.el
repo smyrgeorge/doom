@@ -2478,6 +2478,21 @@ the marks kept; a still picture: the marks, no button."
   ;; Without accept: as ever.
   (should-not (string-search "✓" (+test-aue-draw (list :type "diff" :diff +test-aue-two-hunks)))))
 
+(ert-deftest agent-ui-elements/diff-a-file-twice ()
+  "A file in two sections (git log -p, patches joined): its hunks counted on
+across them, so rejecting one rejects it alone (doom-ht6.50)."
+  (let* ((section (lambda (from) (format "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -%d,2 +%d,2 @@\n-a\n+b\n c\n" from from)))
+         (text (concat (funcall section 1) (funcall section 20)))
+         (diff (list :type "diff" :diff text :accept t :rejected '((:file "x" :hunk 2)))))
+    (should (equal (mapcar (lambda (h) (list (car h) (cadr h)))
+                           (agent-ui-diff--hunks (agent-ui-diff--parse text)))
+                   '(("x" 1) ("x" 2))))
+    (let ((drawn (+test-aue-draw diff)))
+      (should (string-match-p "✓ @@ -1,2 \\+1,2 @@" drawn))
+      (should (string-match-p "✗ @@ -20,2 \\+20,2 @@" drawn)))
+    (should (equal (agent-ui-diff--decided diff (agent-ui-diff--parse text))
+                   '(("x @@ -1,2 +1,2 @@") . ("x @@ -20,2 +20,2 @@"))))))
+
 (ert-deftest agent-ui-elements/diff-hunks-accepted-and-sent ()
   "x on any line of a hunk rejects it (the cursor staying), again: back; RET
 on its mark too; Reject all, Accept all; Send names them by file and header,

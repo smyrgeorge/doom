@@ -230,11 +230,14 @@ once."
                            (append rejected (list (list :file file :hunk n))))))))
 
 (defun agent-ui-diff--hunks (files)
-  "FILES' hunks: ((FILE N HUNK)...), N counted from 1 in FILE."
-  (cl-loop for file in files
-           append (cl-loop for hunk in (plist-get file :hunks)
-                           for n from 1
-                           collect (list (plist-get file :file) n hunk))))
+  "FILES' hunks: ((FILE N HUNK)...), N counted from 1 in FILE, on across its
+sections when it has several (git log -p, patches joined)."
+  (let ((counted (make-hash-table :test #'equal)))
+    (cl-loop for file in files
+             append (cl-loop for hunk in (plist-get file :hunks)
+                             collect (list (plist-get file :file)
+                                           (cl-incf (gethash (plist-get file :file) counted 0))
+                                           hunk)))))
 
 (defun agent-ui-diff--decided (props files)
   "FILES' hunks as PROPS has them: (ACCEPTED . REJECTED), each a list of
@@ -324,6 +327,8 @@ sent, saying so. Led by a newline."
          (accept (and (agent-ui-diff--accept-props props) t))
          ;; Its hunks to accept or reject here: not answered, not a picture.
          (deciding (and accept (not (agent-ui-ask-answered-p props)) (not (plist-get ctx :still))))
+         ;; Each file's hunks counted so far.
+         (counted (make-hash-table :test #'equal))
          (out nil))
     (if (null files)
         (propertize "no changes" 'face 'agent-ui-muted)
@@ -346,7 +351,8 @@ sent, saying so. Led by a newline."
                   out))
           (cl-loop
            for hunk in (plist-get file :hunks)
-           for n from 1
+           ;; Counted on across a file's sections (`agent-ui-diff--hunks').
+           for n = (cl-incf (gethash (plist-get file :file) counted 0))
            do
            ;; Its own (the loop's are one variable each, set again).
            (let* ((hunk hunk)
