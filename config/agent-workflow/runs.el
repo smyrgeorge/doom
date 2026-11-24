@@ -291,7 +291,7 @@ its name, nil null, t true; an alist of numbers ((0 . 2)) an object."
 
 (defconst agent-workflow--saved-job-keys
   '(:status :step :round :outcome :notes :session :start-commit :end-commit :commit :dir :snapshot :approved :ask
-    :why :tries :user-note :back :head :own)
+    :why :tries :user-note :back :head :own :agent-asks)
   "What of a job's state state.json keeps: all it needs to come back.")
 
 (defun agent-workflow--save-state (run)

@@ -127,8 +127,12 @@ that were running interrupted, waiting for you; the others looked at
                 (unless (memq (agent-workflow-run-state run) agent-workflow--ended)
                   (setf (agent-workflow-run-project run) (file-name-as-directory project))
                   (dolist (job (agent-workflow-run-jobs run))
-                    (when (eq (plist-get (cdr job) :status) 'running)
-                      (agent-workflow--job-set run (car job) :status 'waiting
+                    ;; Running, or waiting on its agent's question (that
+                    ;; agent gone with Emacs): interrupted.
+                    (when (or (eq (plist-get (cdr job) :status) 'running)
+                              (and (eq (plist-get (cdr job) :status) 'waiting)
+                                   (plist-get (cdr job) :agent-asks)))
+                      (agent-workflow--job-set run (car job) :status 'waiting :agent-asks nil
                                                :ask (list :kind 'interrupted :step (or (plist-get (cdr job) :step) 0))
                                                :why (format "%s: interrupted (Emacs stopped): continue it, skip its step, or stop?"
                                                             (car job)))))

@@ -582,6 +582,25 @@ again; its project noted; continued with the workflow as it is now."
                                         (+test-awr--prompts "restore"))))))
         (should (= (seq-count (lambda (ev) (equal ev "job-started")) (+test-awr--journal run)) 2))))))
 
+(ert-deftest agent-workflow-runs/back-after-emacs-stopped-its-agent-asking ()
+  "Emacs stops while a job's agent asks for your permission: read back, it's
+interrupted as a running one (its agent and question gone with Emacs),
+continued then (doom-38o.75)."
+  (+test-awr "restore-asking"
+    (let* ((issue (+test-awr--issue project "Restore asking"))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (agent-workflow-agent-session (+test-awr--agent run "build")))))
+      (agent-workflow--job-set run "build" :status 'waiting
+                               :agent-asks (list :kind 'permission :what "npm install" :why "build: its agent asks"))
+      (agent-workflow--quit-h)
+      (setq agent-workflow--runs nil)
+      (let ((back (car (agent-workflow-restore project))))
+        (should (equal (agent-workflow--interrupted back) '("build")))
+        (should-not (plist-get (agent-workflow--job back "build") :agent-asks))
+        (should (equal (agent-workflow-run-why back)
+                       "build: interrupted (Emacs stopped): continue it, skip its step, or stop?"))
+        (agent-workflow--cancel back)))))
+
 (ert-deftest agent-workflow-runs/back-after-emacs-stopped-not-interrupted ()
   "Emacs stops while a run is queued (nothing of it running): read back, it
 goes on by itself, to its end; one interrupted waits for you, nothing new
