@@ -6,9 +6,10 @@
 ;;
 ;; - Its height: a quarter of the pane (`agent-ui-pane-share'), more when what
 ;;   it shows needs it (its rows, each as high as its tallest view), up to
-;;   half (`agent-ui-pane-max-share'); back to a quarter when that's gone. Only
-;;   when what it needs changes: a bar moving every second leaves it as it is,
-;;   at a height you gave it too.
+;;   half (`agent-ui-pane-max-share'); back to a quarter when that's gone.
+;;   Fitted when an element changes and at each window change (views closed
+;;   or opened), but only when what it needs changes: a bar moving every
+;;   second leaves it as it is, at a height you gave it too.
 ;; - A view is a window of its own (scrolled, selected on its own), without a
 ;;   tab line or a mode line: a bar with its name. Under them, Agent UI's
 ;;   bar: what it is, its keys. The session's mode line stays under the
@@ -418,14 +419,17 @@ its views' windows deleted with it."
 
 (defun agent-ui--pane-in-place-p (window cells)
   "Non-nil if CELLS fill the part of WINDOW's pane below it, and nothing else
-does."
+does, in as many rows as a grid of them has (views closed: the others left
+in the rows they were in, laid out again)."
   (when-let* ((area (window-next-sibling window)))
     (and (window-combined-p window)
          (null (window-next-sibling area))
          (seq-every-p (lambda (cell) (agent-ui--pane-under-p cell area)) cells)
          (= (length cells)
             (seq-count (lambda (other) (agent-ui--pane-under-p other area))
-                       (agent-ui--pane-windows (window-frame window)))))))
+                       (agent-ui--pane-windows (window-frame window))))
+         (= (length (delete-dups (mapcar #'window-top-line cells)))
+            (cdr (agent-ui--pane-grid-shape (length cells) (window-total-width area)))))))
 
 (defun agent-ui--pane-sync-window (window session)
   "SESSION's Agent UI in WINDOW's pane as it should be: its views in a grid
@@ -438,6 +442,8 @@ below it (made again if they aren't), or none. Non-nil if they're shown."
         (progn
           (agent-ui--pane-decorate window cells)
           (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
+          ;; As high as what it shows needs now (views closed: less).
+          (agent-ui--pane-fit window session)
           t)
       (when cells
         (agent-ui--pane-detach (window-frame window) session))

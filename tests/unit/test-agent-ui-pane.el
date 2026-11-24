@@ -354,3 +354,31 @@ made again at startup, its buffers gone): a window like any again, kept."
       (should (window-live-p other))
       (should-not (agent-ui-pane-window-p other))
       (should-not (window-dedicated-p other)))))
+
+(ert-deftest agent-ui-pane/views-closed-less-room ()
+  "Views closed (q, SPC w d): the others laid out again as a grid of their
+count (two left in two rows: side by side), Agent UI as high as they need
+now, a quarter at least."
+  (+test-aup
+    (let* ((window (selected-window))
+           (pane (window-total-height window))
+           (area (lambda () (window-total-height (window-next-sibling window))))
+           (text "line 1\nline 2\nline 3"))
+      (dolist (canvas (list name (agent-ui-sub-canvas name "b") (agent-ui-sub-canvas name "c")
+                            (agent-ui-sub-canvas name "d")))
+        (agent-ui-show `(:id "x" :type "text" :text ,text) :canvas canvas))
+      (agent-ui--pane-fit-now)
+      (let ((four (funcall area)))
+        (should (= (length (agent-ui--pane-cells (selected-frame))) 4))
+        (should (> four (agent-ui--pane-least pane)))
+        ;; The top two closed: q on one, SPC w d on the other.
+        (select-window (get-buffer-window (+test-aup-canvas name)))
+        (agent-ui-quit)
+        (agent-ui--pane-sync)
+        (delete-window (get-buffer-window (+test-aup-canvas name "b")))
+        (agent-ui--pane-sync)
+        (let ((cells (agent-ui--pane-cells (selected-frame))))
+          (should (= (length cells) 2))
+          (should (= (window-top-line (car cells)) (window-top-line (cadr cells)))))
+        (should (< (funcall area) four))
+        (should (= (funcall area) (agent-ui--pane-least pane)))))))
