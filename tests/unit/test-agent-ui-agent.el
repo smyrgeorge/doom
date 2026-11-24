@@ -6,6 +6,8 @@
 
 (+test-load "config/agent-ui")
 (require 'agent-shell)
+;; Whose session's context is worked out (config/agent-shell/context.el's): special.
+(defvar +my/agent-shell-context-config)
 ;; agent-shell-elicitation.el's (loaded with agent-shell, or not): special.
 (defvar agent-shell-elicitation--experimental-feature-enabled)
 
@@ -235,13 +237,20 @@ killed after."
 
 (ert-deftest agent-ui-agent/small-questions-in-the-conversation ()
   "AskUserQuestion named only while agent-shell shows its forms (else the
-agent hasn't the tool), for a quick question only: the rest on the canvas."
+agent hasn't the tool), and to Claude Code only (another agent: its own
+tool), for a quick question only: the rest on the canvas."
   (cl-letf (((symbol-function 'server-running-p) (lambda (&rest _) t)))
     (let ((agent-shell-elicitation--experimental-feature-enabled t))
       (should (string-search "Only a quick question (2 to 4 short options, nothing to show or compare) goes in the conversation instead, with AskUserQuestion"
                              (agent-ui-agent-context))))
     (let ((agent-shell-elicitation--experimental-feature-enabled nil))
-      (should-not (string-search "AskUserQuestion" (agent-ui-agent-context))))))
+      (should-not (string-search "AskUserQuestion" (agent-ui-agent-context))))
+    ;; Another agent than Claude Code: its own tool, if it has one.
+    (let ((agent-shell-elicitation--experimental-feature-enabled t)
+          (+my/agent-shell-context-config '((:identifier . codex))))
+      (should-not (string-search "AskUserQuestion" (agent-ui-agent-context)))
+      (should (string-search "with your own tool for asking the user, if you have one"
+                             (agent-ui-agent-context))))))
 
 (defun +test-aua-skill ()
   "The skill's text, all of it: SKILL.md and its references."

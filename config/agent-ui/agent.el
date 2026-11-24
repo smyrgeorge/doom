@@ -276,12 +276,18 @@ an error, a property it lacks), ask the user, then file it: %s bug \
 showing it}}' goes into Agent UI's own issues, never this project's (not filed: \
 its reply's report, to show the user); then carry on with a workaround.%s"
               ;; Quick questions in the conversation, while agent-shell shows
-              ;; them (its form); else the agent hasn't the tool.
-              (if (bound-and-true-p agent-shell-elicitation--experimental-feature-enabled)
-                  " Only a quick question (2 to 4 short options, nothing to \
+              ;; them (its form); else the agent hasn't the tool. Claude
+              ;; Code's is AskUserQuestion; another agent's, its own, if any.
+              (cond ((not (bound-and-true-p agent-shell-elicitation--experimental-feature-enabled)) "")
+                    ((memq (map-elt (bound-and-true-p +my/agent-shell-context-config) :identifier)
+                           '(nil claude-code))
+                     " Only a quick question (2 to 4 short options, nothing to \
 show or compare) goes in the conversation instead, with AskUserQuestion \
-(agent-shell shows it as a form): wait for its answer."
-                "")
+(agent-shell shows it as a form): wait for its answer.")
+                    (t " Only a quick question (2 to 4 short options, nothing to \
+show or compare) goes in the conversation instead, with your own tool for \
+asking the user, if you have one (agent-shell shows it as a form): wait for \
+its answer."))
               command command skill command
               (if agent-ui-agent-mcp
                   " The same operations are MCP tools too (the agent-ui server: show, \

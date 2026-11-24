@@ -1,12 +1,12 @@
 # Agent UI
 
-> **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
+> **Status:** working, in agent-shell's sessions, whatever their agent (epic `doom-nwj`): the canvas, the command line and MCP
 > tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `activity`, `timeline`, `graph`, `code`, `heatmap` and `panel` types, sources (an element
 > following a command, a file, a poll), actions (buttons into the prompt), types the agent makes (kept or discarded by
 > you), elements in the conversation, canvases kept with their sessions, and what the agent is told. `M-x
 > +my/example-agent-ui` shows it ([Examples](examples.md)).
 
-A coding agent (Claude Code in [agent-shell](agent-shell.md)) shows you things in Emacs beyond its replies: a progress
+A coding agent (yours, in [agent-shell](agent-shell.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
 beside its session, through a small command line. Everything works in a terminal (`emacs -nw`); the GUI draws some
 elements better (charts as SVG) and has elements of its own (images, drawings, web pages).
@@ -48,7 +48,7 @@ A table with a `key` column replaces a row with the same key instead of adding o
 
 ## The command line
 
-`cmd/agent-ui` (the system prompt gives its full path). JSON comes on stdin or as the last argument; the reply is JSON
+`cmd/agent-ui` (what the session is told gives its full path). JSON comes on stdin or as the last argument; the reply is JSON
 on stdout.
 
 ```sh
@@ -370,7 +370,7 @@ Each agent-shell session also gets the operations as MCP tools, with their schem
 `remove`, `clear`, `list`, `types`, `render`, `snapshot`, `batch`, `define`, `bug` (`show`'s description lists the types,
 asked of Emacs). The server is `cmd/agent-ui-mcp.el`, run by a batch Emacs (this Emacs's binary) the agent starts,
 registered in `agent-shell-mcp-servers` with the session's name and directory; each call goes through
-`cmd/agent-ui`, so replies and errors are the command line's. The system prompt says the tools are there.
+`cmd/agent-ui`, so replies and errors are the command line's. What the session is told says the tools are there.
 `(setq +my/agent-ui-mcp nil)` in `config.el` turns them off.
 
 ## Actions
@@ -570,8 +570,8 @@ to have its tests and its section in the skill, which the filed issue is for.
 
 ## What the agent is told
 
-A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
-`+my/agent-shell-context-functions`), while Emacs runs a server, in three parts:
+A paragraph in what every session is told (its system prompt, or before its first message: `agent-ui-agent-context`,
+one of `+my/agent-shell-context-functions`), while Emacs runs a server, in three parts:
 
 - **What to show:** the canvas is where information goes. Whatever has a shape (figures, records, a comparison, a
   trend, a structure, steps, changes, output) goes there as the element that fits it, and the reply keeps the words
@@ -589,11 +589,12 @@ A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
   to pick from a `choice` (or `select` on a table, files), alternatives to see a `compare`, something risky a
   `confirm`, a plan to agree on `steps` with `approve`, proposed changes a `diff` with `accept`, several values a `form`,
   an order a `rank`, a number a `slider`; the turn ended, the answer its next prompt. Only a quick question (2 to 4
-  short options, nothing to show or compare) goes in the conversation, as AskUserQuestion, with agent-shell's forms on.
+  short options, nothing to show or compare) goes in the conversation, as AskUserQuestion (Claude Code's; another
+  agent: its own tool, if any), with agent-shell's forms on.
 - **The command:** its full path with an example, to read the skill before using it the first time, and, when Agent
   UI itself misbehaves, to ask you and file it with `agent-ui bug` ([Bugs in Agent UI](#bugs-in-agent-ui)).
 
-The MCP server's instructions, also in its system prompt, say the same: information there, questions there beyond a
+The MCP server's instructions, given to the agent too, say the same: information there, questions there beyond a
 quick one, and its `bug` tool. The skill, [skills/agent-ui/SKILL.md](../skills/agent-ui/SKILL.md), is read in parts, as
 the agent needs them: SKILL.md, read first, says when to use the canvas (information, plans, questions),
 the command, every type in a line by what it shows and the everyday ones

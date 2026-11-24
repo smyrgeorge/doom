@@ -9,7 +9,7 @@ on the ask canvas too). Shown elsewhere, an element goes with the question it's 
 user is brought to it (a notification if they're away), and the answer comes as your next prompt, "Answer to TYPE ID
 (QUESTION): ...": sent to you the moment they answer, always (no `submit` on a question). Ask one question at a time,
 and wait for the answer. Pick the element by the question: below, each says when it fits. Only a quick question (2
-to 4 short options, nothing to show or compare): AskUserQuestion, in the conversation, if you have it.
+to 4 short options, nothing to show or compare): AskUserQuestion or your own, in the conversation, if any.
 
 ### `choice`
 

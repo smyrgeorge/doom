@@ -32,7 +32,7 @@ This file is the core. The rest is in `references/`, each read only when your ta
   own list. A few tickets to talk through or pick from: a `table` (`key` the id).
 - **Questions:** asked here, as the interactive element that fits ([asking.md](references/asking.md)), on a canvas
   of its own (`--canvas ask`), then end your turn: the answer comes as your next prompt. Only a quick question (2 to 4
-  short options, nothing to show or compare): AskUserQuestion, in the conversation, if you have it.
+  short options, nothing to show or compare): AskUserQuestion or your own, in the conversation, if any.
 - Keep it tidy: a handful of elements, each worth looking at. Update rather than add; remove what stopped helping.
 
 ## The command
