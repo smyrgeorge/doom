@@ -5949,6 +5949,10 @@ named, not downloaded: text never shows it (it was fetched, and said
                                   (apply #'+test-aue-draw element gui)))
           (apply #'+test-aue-draw element gui)
           (should (equal fetches '("https://example.com/chart?x=1")))
+          ;; Its download still going (its .part there): not the image
+          ;; (doom-ht6.55).
+          (with-temp-file (car done) (set-buffer-multibyte nil) (insert "\211PNG"))
+          (should-not (agent-ui-image--cached "https://example.com/chart?x=1"))
           ;; Done: kept by its hash, its extension its type's; shown as a file.
           ;; (A PNG's signature: its type known by it.)
           (with-temp-file (car done) (set-buffer-multibyte nil) (insert "\211PNG\r\n\032\n"))

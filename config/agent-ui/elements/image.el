@@ -58,10 +58,12 @@ nil, or what went wrong."
   (expand-file-name (sha1 url) agent-ui-image-cache-directory))
 
 (defun agent-ui-image--cached (url)
-  "URL's image, if it was downloaded: its file."
+  "URL's image, if it was downloaded: its file. Not its download still
+going, or cut short (its .part)."
   (when (file-directory-p agent-ui-image-cache-directory)
-    (car (directory-files agent-ui-image-cache-directory t
-                          (concat "\\`" (sha1 url) "\\.[a-z]+\\'")))))
+    (seq-find (lambda (file) (not (string-suffix-p ".part" file)))
+              (directory-files agent-ui-image-cache-directory t
+                               (concat "\\`" (sha1 url) "\\.[a-z]+\\'")))))
 
 (defun agent-ui-image--fetched (url part error)
   "URL's download into PART ended, ERROR what went wrong (nil: none): kept
