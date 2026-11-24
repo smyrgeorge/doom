@@ -244,6 +244,22 @@ so (it was ok false, the element half added)."
     (should (string-match-p "\"ünïcødé\""
                             (plist-get (+test-aur-request "show" nil "{\"type\":\"ünïcødé\"}") :error)))))
 
+;; Raw bytes in a string (a file or a command printing what isn't UTF-8):
+;; U+FFFD in its reply, never no reply (doom-ht6.45).
+(ert-deftest agent-ui-request/raw-bytes-replied ()
+  (+test-aur
+    (agent-ui-show (list :id "r" :type "text" :text (string-to-multibyte "a\377b")))
+    (agent-ui-show (list :id "u" :type "text" :text (unibyte-string #xce #xb1)))
+    (let ((reply (+test-aur-request "get")))
+      (should (eq (plist-get reply :ok) t))
+      (should (equal (mapcar (lambda (e) (plist-get e :text)) (plist-get reply :elements))
+                     '("a\uFFFDb" "α"))))
+    ;; One that can't be written anyway: an error said.
+    (cl-letf (((symbol-function 'agent-ui-do) (lambda (&rest _) (list :ok t :x (current-buffer)))))
+      (let ((reply (+test-aur-request "get")))
+        (should (eq (plist-get reply :ok) :false))
+        (should (string-match-p "couldn't be written as JSON" (plist-get reply :error)))))))
+
 ;; render, define: the agent sees what it draws; makes a type.
 (ert-deftest agent-ui-request/render ()
   (+test-aur

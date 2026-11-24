@@ -80,6 +80,17 @@ window shown, saves at once; what it makes, killed after."
     (should (equal (+test-aup-saved) nil))
     (should (file-exists-p (+test-aup-file)))))
 
+;; Raw bytes saved as U+FFFD; a save failing never keeps the canvas open
+;; (doom-ht6.45).
+(ert-deftest agent-ui-persist/raw-bytes-and-a-failing-save ()
+  (+test-aup
+    (agent-ui-show (list :id "r" :type "text" :text (string-to-multibyte "a\377b")) :canvas name)
+    (should (equal (+test-aup-saved) '((:id "r" :type "text" :text "a\uFFFDb"))))
+    (agent-ui-update "r" '(:text "later") :canvas name)
+    (cl-letf (((symbol-function 'agent-ui-persist-save) (lambda (&rest _) (error "Disk full"))))
+      (kill-buffer (agent-ui-canvas-buffer-name name)))
+    (should-not (get-buffer (agent-ui-canvas-buffer-name name)))))
+
 (ert-deftest agent-ui-persist/not-without-a-session-id ()
   (+test-aup
     (setq +test-aup-ids nil)

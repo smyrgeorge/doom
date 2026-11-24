@@ -105,9 +105,11 @@ id: its elements, as JSON. Returns the file, or nil."
                                 (agent-ui-persist-save canvas))))))))
 
 (defun agent-ui--persist-closing ()
-  "The canvas closes: what's waiting saved now (what's saved stays)."
+  "The canvas closes: what's waiting saved now (what's saved stays). A save
+failing is said, never stops it closing (nor its session)."
   (when (timerp agent-ui--persist-timer)
-    (agent-ui-persist-save (current-buffer))))
+    (with-demoted-errors "Agent UI: the canvas couldn't be saved: %S"
+      (agent-ui-persist-save (current-buffer)))))
 
 (add-hook 'agent-ui-changed-hook #'agent-ui--persist-later)
 (add-hook 'agent-ui-canvas-hook

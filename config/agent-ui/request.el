@@ -338,8 +338,18 @@ its reply written there, as JSON. Never signals: an error is the reply."
                       (agent-ui-file-directory (and agent-ui--request-cwd
                                                     (file-name-as-directory agent-ui--request-cwd))))
                  (agent-ui-do op (unless (equal id "") id) payload canvas)))
-           (error (list :ok :false :error (agent-ui-error-message err))))))
+           (error (list :ok :false :error (agent-ui-error-message err)))))
+        (json nil))
+    ;; Written as JSON here too: a reply that can't be is an error said,
+    ;; not none (cmd/agent-ui would take it for no Emacs).
+    (setq json (condition-case err
+                   (json-serialize (agent-ui-to-json reply))
+                 (error (json-serialize
+                         (agent-ui-to-json
+                          (list :ok :false
+                                :error (format "its reply couldn't be written as JSON: %s"
+                                               (error-message-string err))))))))
     (with-temp-file (expand-file-name "reply" folder)
       (setq-local coding-system-for-write 'utf-8)
-      (insert (json-serialize (agent-ui-to-json reply)) "\n"))
+      (insert json "\n"))
     t))

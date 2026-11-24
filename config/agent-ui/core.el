@@ -1168,19 +1168,33 @@ lists, null as nil, false as :false (see `agent-ui-check')."
        (cl-evenp (length value))
        (cl-loop for (k _) on value by #'cddr always (keywordp k))))
 
+(defun agent-ui--json-string (string)
+  "STRING as `json-serialize' takes it: what isn't a character of Unicode
+(raw bytes, from a file or a command printing what isn't UTF-8, a
+surrogate) as U+FFFD; a unibyte one read as UTF-8 (it refuses them)."
+  (if (not (string-match-p "[^\0-\177]" string))
+      string
+    (let ((string (if (multibyte-string-p string) string (decode-coding-string string 'utf-8))))
+      (if (ignore-errors (json-serialize string) t)
+          string
+        (apply #'string (mapcar (lambda (c) (if (or (> c #x10FFFF) (<= #xD800 c #xDFFF)) #xFFFD c))
+                                string))))))
+
 (defun agent-ui-to-json (value)
   "VALUE as `json-serialize' takes it: plists as objects, other lists as
-arrays, symbols as strings, nil as null."
+arrays, symbols as strings, nil as null; a string's raw bytes as U+FFFD
+\(see `agent-ui--json-string')."
   (cond
    ((eq value t) t)
    ((memq value '(nil :null)) :null)
    ((eq value :false) :false)
+   ((stringp value) (agent-ui--json-string value))
    ((agent-ui--plist-p value)
     (cl-loop for (k v) on value by #'cddr nconc (list k (agent-ui-to-json v))))
    ((consp value) (vconcat (mapcar #'agent-ui-to-json value)))
    ((vectorp value) (vconcat (mapcar #'agent-ui-to-json value)))
    ((keywordp value) (substring (symbol-name value) 1))
-   ((symbolp value) (symbol-name value))
+   ((symbolp value) (agent-ui--json-string (symbol-name value)))
    (t value)))
 
 ;; ====== THE CATALOG ======
