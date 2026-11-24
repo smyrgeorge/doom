@@ -160,6 +160,15 @@ come minutes apart (then see `agent-ui-progress--timing')."
                 (when (>= left 1)
                   (list (concat (agent-ui-format-duration left) " left")))))))))
 
+(defun agent-ui-progress--pacing-p (props)
+  "Whether its rate and time left may be said now, or were a moment ago:
+its values seconds apart, the latest within `agent-ui-progress-window' (and
+a second)."
+  (let ((samples (agent-ui-progress--samples props)))
+    (and (cdr samples)
+         (not (agent-ui-progress--items-p samples))
+         (<= (- (funcall agent-ui-clock) (caar samples)) (1+ agent-ui-progress-window)))))
+
 ;; ====== ITS ITEMS: VALUES MINUTES APART ======
 
 (defun agent-ui-progress--quantile (sorted q)
@@ -515,12 +524,15 @@ it should end."
           (times any "Noted by the canvas from your updates, kept with it (don't give it)")
           (pie boolean "Drawn small: a pie, its counts and label on one line (a panel's corner; a long label wrapped under it)" :default :false))
   :example (:title "Build" :value 7 :max 12 :label "linking")
-  ;; Moving: a block to and fro (no max), or its time elapsed ticking.
+  ;; Moving: a block to and fro (no max), its time elapsed ticking, or
+  ;; its rate and time left said (and a moment after, drawn once more
+  ;; without them when its updates stopped).
   :animated (lambda (props)
               (and (eq (plist-get props :status) 'running)
                    (or (null (plist-get props :max))
                        (and (agent-ui-progress--timing props)
-                            (not (agent-ui-progress--stopped-p props))))))
+                            (not (agent-ui-progress--stopped-p props)))
+                       (agent-ui-progress--pacing-p props))))
   :check (lambda (props)
            (let ((max (plist-get props :max))
                  (started (plist-get props :started)))

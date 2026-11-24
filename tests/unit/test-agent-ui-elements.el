@@ -5483,7 +5483,19 @@ rate either (it kept 4 MB/s and \"1s left\" forever)."
         (should-not (string-match-p "left" text)))
       ;; 98 s on: stalled.
       (should-not (string-match-p "/s\\|left" (at 200.0 18)))
-      (should-not (string-match-p "/s\\|left" (at 1000.0 18))))))
+      (should-not (string-match-p "/s\\|left" (at 1000.0 18)))))
+  ;; Animated while its rate is said, and a moment after, so the canvas
+  ;; draws it once more without (it kept them, nothing else drawing it:
+  ;; doom-ht6.52).
+  (+test-aue-clocked
+    (cl-flet ((at (time value) (+test-aue-bar time "dl" (list :value value :max 100 :unit "MB"))))
+      (at 100.0 10) (at 101.0 14) (at 102.0 18)
+      (should (agent-ui-animated-p (agent-ui-get "dl")))
+      (setq +test-aue-now (+ +test-aue-t0 132.5))
+      (should (agent-ui-animated-p (agent-ui-get "dl")))
+      (should-not (string-match-p "/s\\|left" (+test-aue-bar-draw "dl")))
+      (setq +test-aue-now (+ +test-aue-t0 140.0))
+      (should-not (agent-ui-animated-p (agent-ui-get "dl"))))))
 
 (ert-deftest agent-ui-elements/progress-its-rate-and-time-left ()
   "Values seconds apart (a download): its rate and time left on its line,
