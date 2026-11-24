@@ -112,13 +112,29 @@ every file's time, most of a tick's time).")
 ;; ====== A ROLE FILE ======
 
 (defun agent-workspace--role-list (value)
-  "VALUE, a role file's list: \"a, b\" or \"[a, b]\" as (\"a\" \"b\")."
+  "VALUE, a role file's list: \"a, b\" or \"[a, b]\" as (\"a\" \"b\"). Split
+on its commas outside parentheses and quotes: Bash(echo a,b) one item."
   (let ((value (string-trim value)))
     (when (string-match "\\`\\[\\(.*\\)\\]\\'" value)
       (setq value (match-string 1 value)))
     (seq-remove #'string-empty-p
                 (mapcar (lambda (item) (agent-workspace--role-unquote (string-trim item)))
-                        (split-string value ",")))))
+                        (agent-workspace--role-split value)))))
+
+(defun agent-workspace--role-split (value)
+  "VALUE's items: split on its commas outside parentheses and quotes."
+  (let ((items nil) (start 0) (depth 0) (quote-char nil))
+    (dotimes (i (length value))
+      (let ((c (aref value i)))
+        (cond
+         (quote-char (when (eq c quote-char) (setq quote-char nil)))
+         ((memq c '(?\" ?')) (setq quote-char c))
+         ((eq c ?\() (cl-incf depth))
+         ((eq c ?\)) (setq depth (max 0 (1- depth))))
+         ((and (eq c ?,) (= depth 0))
+          (push (substring value start i) items)
+          (setq start (1+ i))))))
+    (nreverse (cons (substring value start) items))))
 
 (defun agent-workspace--role-unquote (value)
   "VALUE without the quotes around it, if any."
@@ -209,8 +225,9 @@ after it, trimmed."
                   (when key (store key (nreverse list) (1- line)))
                   (setq closed line key nil))
                  ((string-match-p "\\`[ \t]*\\(#.*\\)?\\'" text))
-                 ;; An item of a YAML list, under its key.
-                 ((string-match "\\`[ \t]+-[ \t]+\\(.*\\)\\'" text)
+                 ;; An item of a YAML list, under its key (indented, or
+                 ;; not: YAML takes both).
+                 ((string-match "\\`[ \t]*-[ \t]+\\(.*\\)\\'" text)
                   (if key
                       (push (cons (agent-workspace--role-unquote (string-trim (match-string 1 text))) line) list)
                     (funcall problem 'error line "a list item with no key before it")))
@@ -293,11 +310,14 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
                     (setq role (plist-put role :description value))))
                  ("verb" (setq role (plist-put role :verb value)))
                  ("kind"
-                  (if (assq (intern value) (bound-and-true-p agent-workspace-kinds))
-                      (setq role (plist-put role :kind (intern value)))
-                    (problem 'error n "kind %s: not one of %s" value
-                             (mapconcat (lambda (kind) (symbol-name (car kind)))
-                                        (bound-and-true-p agent-workspace-kinds) ", "))))
+                  (cond
+                   ;; Empty: none (the default kind), as an empty model.
+                   ((string-empty-p value))
+                   ((assq (intern value) (bound-and-true-p agent-workspace-kinds))
+                    (setq role (plist-put role :kind (intern value))))
+                   (t (problem 'error n "kind %s: not one of %s" value
+                               (mapconcat (lambda (kind) (symbol-name (car kind)))
+                                          (bound-and-true-p agent-workspace-kinds) ", ")))))
                  ;; Its model and mode checked once its kind is known
                  ;; (below): Claude Code's names, another agent's own.
                  ("model"

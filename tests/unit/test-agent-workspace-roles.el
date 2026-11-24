@@ -103,6 +103,21 @@ inherit, Claude Code's color spelling; no instructions, warned about."
     (should-not (plist-get role :leads))
     (should-not (plist-get role :instructions))))
 
+(ert-deftest agent-workspace-roles/lists-as-yaml-writes-them ()
+  "A list's items not indented under its key (YAML takes both); an inline
+list split on its commas outside parentheses and quotes; an empty kind:
+none, as an empty model (doom-pbk.169)."
+  (pcase-let ((`(,role . ,problems)
+               (+test-awr--read "---\ndescription: builds\nkind:\ntools:\n- Read\n- Edit\ndeny: Bash(echo a,b), \"Bash(x, y)\", Write\n---\nBuild.\n")))
+    (should-not problems)
+    (should (equal (plist-get role :tools) '("Read" "Edit")))
+    (should (equal (plist-get role :deny) '("Bash(echo a,b)" "Bash(x, y)" "Write")))
+    (should-not (plist-get role :kind)))
+  (pcase-let ((`(,role . ,problems)
+               (+test-awr--read "---\ndescription: builds\ntools: [\"Bash(echo a,b)\", Read]\n---\nBuild.\n")))
+    (should-not problems)
+    (should (equal (plist-get role :tools) '("Bash(echo a,b)" "Read")))))
+
 (ert-deftest agent-workspace-roles/kind ()
   "kind: names its agent, one of `agent-workspace-kinds' (agent-shell's
 identifier); none: none said (`agent-workspace-kind' then); another: an
