@@ -187,8 +187,10 @@ another visible frame's; nil if it's in none."
 ;; in their order. Of those layouts, each view at least its width
 ;; (`agent-ui-grid-min-width'; showing a wide type, `agent-ui-grid-wide-width')
 ;; and no column holding more views than it has room for (3 lines each), the
-;; one needing the least height (its tallest column's); then the least room
-;; left empty under its columns; then the fewest columns (wider views). The
+;; one with the least height and room left empty together (its tallest
+;; column's lines, and the lines left empty under the others, on average: a
+;; line more beats half of two columns empty); then the least room left
+;; empty; then the fewest columns (wider views). The
 ;; room left across is shared out between the columns. Planned when the views
 ;; change (opened, closed), not when their content does: their heights only
 ;; fitted then (see ITS HEIGHT), nothing moving around while the agent works.
@@ -204,11 +206,14 @@ another visible frame's; nil if it's in none."
       agent-ui-grid-wide-width
     agent-ui-grid-min-width))
 
-(defun agent-ui--pane-view-lines (view)
-  "The lines VIEW needs: its text (its dirty elements drawn first), its bar."
+(defun agent-ui--pane-view-lines (view window)
+  "The lines VIEW needs as WINDOW shows text (its frame's font): its text,
+charts and images as high as they're drawn (an image is one line of text,
+many on the screen), its dirty elements drawn first; and its bar."
   (with-current-buffer view
-    (agent-ui--flush)
-    (1+ (count-lines (point-min) (point-max)))))
+    (agent-ui--flush))
+  (1+ (/ (float (cdr (buffer-text-pixel-size view window)))
+         (frame-char-height (window-frame window)))))
 
 (defun agent-ui--pane-deal (lines count)
   "The views (indices into LINES, their lines) dealt into COUNT columns (see
@@ -244,9 +249,10 @@ fits."
                (height (apply #'max heights)))
           (when (and (<= (apply #'+ needs) width)
                      (<= (* 3 (apply #'max (mapcar #'length columns))) most))
-            ;; The least height, then the least room left empty, then the
-            ;; fewest columns.
-            (let ((key (list height (- (* height count) (apply #'+ heights)) count)))
+            ;; The least height and room left empty together (see above),
+            ;; then the least room left empty, then the fewest columns.
+            (let* ((empty (- (* height count) (apply #'+ heights)))
+                   (key (list (+ height (/ (float empty) count)) empty count)))
               (when (or (null best-key) (agent-ui--pane-key< key best-key))
                 (setq best (list columns needs height) best-key key))))))
     (when best
@@ -373,11 +379,12 @@ windows; nil without room (WINDOW as it was)."
          plan)
     ;; More views than room: the last ones not shown.
     (while (and views
-                (not (setq plan (agent-ui--pane-plan (mapcar #'agent-ui--pane-view-lines views)
+                (not (setq plan (agent-ui--pane-plan (mapcar (lambda (view) (agent-ui--pane-view-lines view window))
+                                                             views)
                                                      (mapcar #'agent-ui--pane-view-width views)
                                                      width most))))
       (setq views (butlast views)))
-    (let ((lines (and plan (min most (max agent-ui-pane-min-lines (1+ (nth 2 plan)))))))
+    (let ((lines (and plan (min most (max agent-ui-pane-min-lines (1+ (ceiling (nth 2 plan))))))))
       (when (and plan (>= (- height lines) agent-ui-pane-min-lines))
         (when-let* ((area (condition-case nil
                               (let ((window-combination-limit t))

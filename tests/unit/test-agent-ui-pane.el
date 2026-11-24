@@ -129,6 +129,10 @@ column holding more views than its lines have room for."
                  '(((0 2) (1)) (85 45) 10)))
   ;; None fits across.
   (should-not (agent-ui--pane-plan '(4) '(80) 60 32))
+  ;; Height and room left empty together: three full columns a line taller
+  ;; than four with two half empty (a diff wide, 80, among them).
+  (should (equal (car (agent-ui--pane-plan '(10 14 12 12 11 10) '(40 40 40 40 40 80) 205 32))
+                 '((0 3) (1 5) (2 4))))
   ;; 6 lines: two views a column at most (3 lines each).
   (should (equal (car (agent-ui--pane-plan '(3 3 3) '(40 40 40) 80 6)) '((0 2) (1))))
   (should-not (agent-ui--pane-plan '(3 3 3) '(40 40 40) 40 6)))
