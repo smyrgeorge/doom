@@ -134,6 +134,17 @@ run with no ticket gives its {issue}: its name)."
                   (cons "main-branch" (agent-workflow-main-branch (file-name-as-directory project)))
                   (cons "project" (file-name-nondirectory project))))))
 
+(defun agent-workflow-agent-kind-of (agent)
+  "The kind AGENT runs on: its step's, else its agent file's, else
+`agent-workflow-kind' (its definition not filled in)."
+  (or (agent-workflow-agent-kind agent)
+      (plist-get (alist-get (agent-workflow-agent-definition agent)
+                            (and (agent-workflow-agent-project agent)
+                                 (ignore-errors (agent-workflow-agent-definitions (agent-workflow-agent-project agent))))
+                            nil nil #'equal)
+                 :kind)
+      agent-workflow-kind))
+
 (defun agent-workflow-definition-filled (agent)
   "AGENT's definition (a copy), its tools and deny with their variables
 filled in shell-quoted (a rule names an exact command: Bash(git -C {main}

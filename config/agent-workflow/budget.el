@@ -47,8 +47,7 @@ counted 0)."
 
 (defun agent-workflow--agent-claude-code-p (agent)
   "Non-nil if AGENT runs Claude Code (its kind's :claude-code)."
-  (plist-get (alist-get (plist-get (agent-workflow-definition-filled agent) :kind) agent-workflow-kinds)
-             :claude-code))
+  (plist-get (alist-get (agent-workflow-agent-kind-of agent) agent-workflow-kinds) :claude-code))
 
 (defun agent-workflow--turn-tokens (&rest args)
   "A turn of an agent of a run over, its usage saved (agent-shell's
