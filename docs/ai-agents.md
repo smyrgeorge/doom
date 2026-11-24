@@ -14,7 +14,9 @@ asks which ones to install it for. `-g` installs it for all your projects, as Em
 npx skills add smyrgeorge/doom -g
 ```
 
-Or link the folder into your agent's skills directory, so it changes with this config, e.g. for Claude Code:
+Or link the folder into your agent's skills directory, so it changes with this config: Claude Code's is
+`~/.claude/skills/`, another agent's where it reads them (Codex's `~/.codex/skills/`; one with none: name the folder in
+its `AGENTS.md`):
 
 ```sh
 ln -s ~/.config/doom/skills/emacs-profiling ~/.claude/skills/emacs-profiling
@@ -28,22 +30,22 @@ The [agent-ui skill](../skills/agent-ui/SKILL.md) teaches an agent running in Em
 session's canvas: progress bars, checklists, tables, text, Markdown, updated as it works ([Agent UI](agent-ui.md)).
 As `emacs-profiling`, it has reference files the agent reads only when it needs them: its `SKILL.md`, under a third
 of it, is what every session reads.
-Claude Code in agent-shell is told where it is, and reads it from there: no need to install it. Install it as above
-(`agent-ui` for `emacs-profiling`) for other agents, or to have it in Claude Code's list of skills.
+Any agent in agent-shell is told where it is, and reads it from there: no need to install it. Install it as above
+(`agent-ui` for `emacs-profiling`) for an agent outside Emacs, or to have it in Claude Code's list of skills.
 
 ## agent-workflow
 
 The [agent-workflow skill](../skills/agent-workflow/SKILL.md) teaches an agent to write, check and run
 [agent workflows](agent-workflow.md): a project's `.agent-workflow/` workflows and profiles, and `cmd/agent-workflow`.
-As `agent-ui`'s, its `SKILL.md` is what it reads first, its references only when it needs them. Claude Code in
-agent-shell is told where it is: no need to install it. Install it as above (`agent-workflow` for `emacs-profiling`) for
-other agents. The [agent-workflow-step skill](../skills/agent-workflow-step/SKILL.md) is for the agent doing a job of a
-run, which its system prompt points to.
+As `agent-ui`'s, its `SKILL.md` is what it reads first, its references only when it needs them. Any agent in
+agent-shell is told where it is: no need to install it. Install it as above (`agent-workflow` for `emacs-profiling`)
+for an agent outside Emacs. The [agent-workflow-step skill](../skills/agent-workflow-step/SKILL.md) is for the agent
+doing a job of a run, which it's told of.
 
 ## A crew of agents
 
-Several agents on one project at once, each with a role (its instructions, tools and permission mode, in a Markdown
-file as Claude Code's own agents are) and its own worktree: the [agent workspace](agent-workspace.md#roles).
+Several agents on one project at once, each with a role (its agent, instructions, tools and permission mode, in a
+Markdown file as Claude Code's own agents are) and its own worktree: the [agent workspace](agent-workspace.md#roles).
 
 ## Without installing
 
