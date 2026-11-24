@@ -212,6 +212,28 @@ still running, its exit and patch not there; once run, done."
       (+test-ausrc-wait (lambda () (equal (plist-get (agent-ui-get "f") :values) '(3 5 8 1))))
       (should (eq (plist-get (agent-ui-source-status "f") :running) t)))))
 
+;; A character written in two goes: read whole, not as raw bytes
+;; (doom-ht6.44).
+(ert-deftest agent-ui-source/a-character-written-in-two-goes ()
+  (should (= (agent-ui-source--utf-8-whole "") 0))
+  (should (= (agent-ui-source--utf-8-whole "ok") 2))
+  (should (= (agent-ui-source--utf-8-whole (unibyte-string ?o ?k #xe2)) 2))
+  (should (= (agent-ui-source--utf-8-whole (unibyte-string ?o ?k #xe2 #x9c)) 2))
+  (should (= (agent-ui-source--utf-8-whole (unibyte-string ?o ?k #xe2 #x9c #x93)) 5))
+  (should (= (agent-ui-source--utf-8-whole (unibyte-string #xf0 #x9f #x98)) 0))
+  ;; Not UTF-8 at all: read as it is.
+  (should (= (agent-ui-source--utf-8-whole (unibyte-string ?a #x9c #x9c #x9c #x9c)) 5))
+  (+test-ausrc
+    (let ((file (+test-tmp-file (format "split-%d.log" (random 100000))))
+          (coding-system-for-write 'no-conversion))
+      (write-region "" nil file nil 'silent)
+      (agent-ui-show (list :id "f" :type "text" :text "" :source (list :file file :tail 1)))
+      (accept-process-output nil 0.1)
+      (write-region (unibyte-string ?o ?k ?\s #xe2) nil file t 'silent)
+      (accept-process-output nil 0.2)
+      (write-region (unibyte-string #x9c #x93 ?\s ?d ?o ?n ?e ?\n) nil file t 'silent)
+      (+test-ausrc-wait (lambda () (equal (plist-get (agent-ui-get "f") :text) "ok ✓ done"))))))
+
 (ert-deftest agent-ui-source/a-file-not-there-yet ()
   (+test-ausrc
     (let ((file (+test-tmp-file (format "later-%d.log" (random 100000)))))

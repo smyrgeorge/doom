@@ -370,13 +370,37 @@ said, looked at again next time."
      (t
       ;; Truncated (written again): from its start.
       (when (< size offset) (setq offset 0))
-      (setf (agent-ui-source--state-offset state) size)
+      (setf (agent-ui-source--state-offset state) offset)
       (when (> size offset)
-        (agent-ui-source--feed canvas id
-                               (with-temp-buffer
-                                 (let ((coding-system-for-read 'utf-8))
-                                   (insert-file-contents file nil offset size))
-                                 (buffer-string))))))))
+        ;; Its bytes, decoded up to its last whole character: one written
+        ;; in two goes is read whole next time, not as raw bytes.
+        (let* ((bytes (with-temp-buffer
+                        (set-buffer-multibyte nil)
+                        (insert-file-contents-literally file nil offset size)
+                        (buffer-string)))
+               (whole (agent-ui-source--utf-8-whole bytes)))
+          (setf (agent-ui-source--state-offset state) (+ offset whole))
+          (when (> whole 0)
+            (agent-ui-source--feed canvas id
+                                   (decode-coding-string (substring bytes 0 whole) 'utf-8)))))))))
+
+(defun agent-ui-source--utf-8-whole (bytes)
+  "How many of BYTES (UTF-8) end on a whole character: all but the start of
+a character still being written."
+  (let* ((n (length bytes))
+         (i (1- n)))
+    ;; Back over its continuation bytes (at most 3) to the one starting it.
+    (while (and (>= i 0) (> i (- n 4)) (= (logand (aref bytes i) #xC0) #x80))
+      (setq i (1- i)))
+    (if (< i 0)
+        n
+      (let* ((lead (aref bytes i))
+             (length (cond ((< lead #x80) 1)
+                           ((= (logand lead #xE0) #xC0) 2)
+                           ((= (logand lead #xF0) #xE0) 3)
+                           ((= (logand lead #xF8) #xF0) 4)
+                           (t 1))))
+        (if (< (- n i) length) i n)))))
 
 (defun agent-ui-source-stop (id)
   "Stop element ID's source, in the current canvas: its log deleted (they
