@@ -109,7 +109,27 @@ each field there (yes / no as true / false, an empty one null)."
         (when (plist-member field :options)
           (bad "has options: only a select has them")))
       (unless (memq (plist-get field :required) '(nil t :false))
-        (bad "has required that isn't true or false")))))
+        (bad "has required that isn't true or false"))
+      ;; Its value one its type takes (Send failed, or sent it as it was).
+      (when-let* ((value (plist-get field :value)))
+        (unless (pcase type
+                  ((or "text" "file" "directory") (stringp value))
+                  ("integer" (integerp value))
+                  ("number" (numberp value))
+                  ("boolean" (memq value '(t :false)))
+                  ("select" (member value (plist-get field :options)))
+                  (_ t))
+          (bad "has value %s: %s" (agent-ui--show-value value)
+               (pcase type
+                 ("select" "not one of its options")
+                 ("integer" "not an integer")
+                 ((or "text" "file" "directory") "not text")
+                 (_ (format "not a %s" type)))))
+        (when (numberp value)
+          (when (and (numberp (plist-get field :min)) (< value (plist-get field :min)))
+            (bad "has value %s, under its min %s" (agent-ui--show-value value) (plist-get field :min)))
+          (when (and (numberp (plist-get field :max)) (> value (plist-get field :max)))
+            (bad "has value %s, over its max %s" (agent-ui--show-value value) (plist-get field :max))))))))
 
 (defun agent-ui-form--check (props)
   (let ((fields (plist-get props :fields)))
