@@ -613,7 +613,8 @@ Write the tests first, then run them.
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the
   starters have none: their agents run in auto mode). Claude Code enforces all three. Another agent takes no such
   rules: its permission requests are answered by them instead (a `deny` one matching, refused; a `tools` one,
-  allowed; neither, it asks you), matched by their kind and what they act on. Weaker: nothing is hidden from it,
+  allowed; neither, it asks you), matched by their kind and what they act on; a command line by its commands
+  (`a && b`: each allowed, or none refused; one with a command inside, `$(...)`, asked). Weaker: nothing is hidden from it,
   and in a mode that asks nothing, nothing is refused (a role naming another `kind` with `deny`: a warning).
 - `tools`, `deny` and the instructions can name the agent's own paths, filled in as its session starts: `{main}` (the
   project's main checkout), `{main-branch}` (its branch), `{name}` (the agent's name) and `{project}` (the main

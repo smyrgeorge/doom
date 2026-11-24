@@ -257,7 +257,8 @@ Its permissions, its questions and its usage are agent-shell's, as in any sessio
   its end: a later agent step goes on in that session, as it started (a `model` or `effort` on it: a warning).
 - **Another agent than Claude Code** (`kind:`): its tools, `deny`, ending its step and what runs it
   (`.agent-workflow/`) answer its permission requests instead of Claude Code's options: a `deny` rule matching,
-  refused; a `tools` one, allowed; neither, it asks you. Weaker: nothing is hidden from it, and in a mode that asks
+  refused; a `tools` one, allowed; neither, it asks you; a command line by its commands (`a && b`: each allowed, or
+  none refused; one with a command inside, `$(...)`, asked). Weaker: nothing is hidden from it, and in a mode that asks
   nothing, nothing is refused. A branch changing `.agent-workflow/` still merges only once you say so; a workflow that
   runs in your checkout (`runs-in: checkout`) runs Claude Code only, another agent an error.
 - **It's told** the job it does and where, that it never switches branches, pushes, or changes the issue, and how it

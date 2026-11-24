@@ -53,7 +53,8 @@ BUFFER, as RET on it does. Nil if there's none of that label."
 ;; a deny rule matching, refused; else a tools rule matching, allowed; else
 ;; asked, as any. A rule is a tool, or a tool and its pattern, matched against
 ;; the request's kind (ACP's) and what it acts on: Bash(git push:*) a command
-;; starting with git push, Bash(git -C * push) one with * anything, Edit
+;; starting with git push, Bash(git -C * push) one with * anything (a command
+;; line by its simple commands: each allowed, or any refused), Edit
 ;; (docs/**) a path under docs/ (relative to the session's folder; /x from
 ;; there, //x absolute), Read, Grep, Glob, WebFetch, WebSearch by kind alone.
 ;; Weaker than Claude Code's: a tool can't be hidden, and an agent in a mode
@@ -103,19 +104,110 @@ list), else its title: a string, or nil."
                        parts ".*")
             "\\'")))
 
+(defun +my/agent-shell--command-parts (command)
+  "COMMAND's simple commands, split where the shell would run another (;
+&& || | & and a new line, outside quotes), each trimmed, its blanks outside
+quotes one space; nil if it can't be split so: it runs a command of its own
+inside (`$(...)', backquotes, `<(...)'), a subshell or a group ({ ...; }),
+or a quote isn't closed."
+  (let ((parts nil) (part nil) (quoting nil) (i 0) (n (length command)) (ok t))
+    (cl-flet ((end () (let ((text (string-trim (apply #'string (nreverse part)))))
+                        (unless (string-empty-p text) (push text parts))
+                        (setq part nil))))
+      (while (and ok (< i n))
+        (let ((c (aref command i))
+              (next (and (< (1+ i) n) (aref command (1+ i)))))
+          (cond
+           ;; Inside '...': all as it is.
+           ((eq quoting ?')
+            (push c part)
+            (when (eq c ?') (setq quoting nil)))
+           ((and (eq c ?\\) next)
+            (push c part) (push next part) (cl-incf i))
+           ((or (eq c ?`) (and (eq c ?$) (eq next ?\()))
+            (setq ok nil))
+           ((eq quoting ?\")
+            (push c part)
+            (when (eq c ?\") (setq quoting nil)))
+           ((memq c '(?' ?\"))
+            (push c part) (setq quoting c))
+           ((and (memq c '(?< ?>)) (eq next ?\())
+            (setq ok nil))
+           ;; A subshell, a group: a { starting a word (not ${VAR}, {}).
+           ((or (memq c '(?\( ?\)))
+                (and (eq c ?{) (memq (car part) '(nil ?\s)) (memq next '(?\s ?\t ?\n))))
+            (setq ok nil))
+           ;; A redirection's & (2>&1, &>file): not an operator.
+           ((and (eq c ?&) (or (memq (car part) '(?> ?<)) (eq next ?>)))
+            (push c part))
+           ((memq c '(?\; ?& ?| ?\n))
+            (end)
+            (when (and next (memq next '(?& ?| ?\;)) (not (eq c ?\n)))
+              (cl-incf i)))
+           ((memq c '(?\s ?\t))
+            (unless (eq (car part) ?\s) (push ?\s part)))
+           (t (push c part))))
+        (cl-incf i))
+      (when (and ok (not quoting))
+        (end)
+        (nreverse parts)))))
+
+(defun +my/agent-shell--command-forms (part)
+  "PART (a simple command) and the forms a deny rule matches too: its
+variables' assignments before it left out, its program's folder (/usr/bin/git
+as git)."
+  (let* ((words (split-string part " "))
+         (words (seq-drop-while (lambda (word) (string-match-p "\\`[A-Za-z_][A-Za-z0-9_]*=" word)) words))
+         (words (if (and words (string-match-p "/" (car words)))
+                    (cons (file-name-nondirectory (car words)) (cdr words))
+                  words)))
+    (delete-dups (list part (string-join words " ")))))
+
+(defun +my/agent-shell--command-matches-p (pattern command)
+  "Non-nil if Bash's PATTERN matches COMMAND (one simple command):
+prefix:* it, or it then a space; else a glob, * anything, the whole."
+  (if (string-suffix-p ":*" pattern)
+      (let ((prefix (string-remove-suffix ":*" pattern)))
+        (or (equal command prefix) (string-prefix-p (concat prefix " ") command)))
+    (string-match-p (+my/agent-shell--glob-regexp pattern) command)))
+
+(defun +my/agent-shell--bash-verdict (rules tool-call)
+  "What RULES (:tools :deny) say of TOOL-CALL, a command run: reject if a
+deny rule matches any of its simple commands (or, one that can't be split,
+it whole), allow if each of them matches a tools rule, else nil (asked)."
+  (let* ((command (+my/agent-shell--tool-call-command tool-call))
+         (parts (and command (+my/agent-shell--command-parts command)))
+         (applies (lambda (rule text)
+                    (pcase-let ((`(,tool . ,pattern) (+my/agent-shell--rule-parse rule)))
+                      (and (member "execute" (cdr (assoc tool +my/agent-shell-rule-kinds)))
+                           (or (null pattern)
+                               (and text (+my/agent-shell--command-matches-p pattern text))))))))
+    (cond
+     ((seq-some (lambda (rule)
+                  (seq-some (lambda (text) (funcall applies rule text))
+                            (or (seq-mapcat #'+my/agent-shell--command-forms parts) (list command))))
+                (plist-get rules :deny))
+      'reject)
+     ((if parts
+          (seq-every-p (lambda (part) (seq-some (lambda (rule) (funcall applies rule part)) (plist-get rules :tools)))
+                       parts)
+        ;; Not split (or none known): only a rule for every command.
+        (seq-some (lambda (rule) (funcall applies rule nil)) (plist-get rules :tools)))
+      'allow))))
+
 (defun +my/agent-shell-rule-matches-p (rule tool-call &optional dir)
   "Non-nil if RULE (Claude Code's syntax) matches TOOL-CALL (agent-shell's:
-its :kind, :title, :raw-input, :locations), DIR its session's folder."
+its :kind, :title, :raw-input, :locations), DIR its session's folder. A
+command: each of its simple commands matching (see
+`+my/agent-shell--command-parts'), none if it can't be split."
   (pcase-let* ((`(,tool . ,pattern) (+my/agent-shell--rule-parse rule))
                (kinds (cdr (assoc tool +my/agent-shell-rule-kinds))))
     (and (member (map-elt tool-call :kind) kinds)
          (or (null pattern)
              (if (equal tool "Bash")
-                 (when-let* ((command (+my/agent-shell--tool-call-command tool-call)))
-                   (if (string-suffix-p ":*" pattern)
-                       (let ((prefix (string-remove-suffix ":*" pattern)))
-                         (or (equal command prefix) (string-prefix-p (concat prefix " ") command)))
-                     (string-match-p (+my/agent-shell--glob-regexp pattern) command)))
+                 (when-let* ((command (+my/agent-shell--tool-call-command tool-call))
+                             (parts (+my/agent-shell--command-parts command)))
+                   (seq-every-p (lambda (part) (+my/agent-shell--command-matches-p pattern part)) parts))
                (let ((dir (and dir (file-name-as-directory (expand-file-name dir)))))
                  (seq-some
                   (lambda (path)
@@ -132,11 +224,14 @@ its :kind, :title, :raw-input, :locations), DIR its session's folder."
 
 (defun +my/agent-shell-permission-by-rules (rules tool-call &optional dir)
   "What RULES ((:tools RULES :deny RULES)) say of TOOL-CALL: reject (a deny
-rule matches), allow (a tools rule does), or nil (ask)."
-  (cond ((seq-some (lambda (rule) (+my/agent-shell-rule-matches-p rule tool-call dir)) (plist-get rules :deny))
-         'reject)
-        ((seq-some (lambda (rule) (+my/agent-shell-rule-matches-p rule tool-call dir)) (plist-get rules :tools))
-         'allow)))
+rule matches), allow (a tools rule does), or nil (ask). A command, by its
+simple commands (`+my/agent-shell--bash-verdict')."
+  (if (equal (map-elt tool-call :kind) "execute")
+      (+my/agent-shell--bash-verdict rules tool-call)
+    (cond ((seq-some (lambda (rule) (+my/agent-shell-rule-matches-p rule tool-call dir)) (plist-get rules :deny))
+           'reject)
+          ((seq-some (lambda (rule) (+my/agent-shell-rule-matches-p rule tool-call dir)) (plist-get rules :tools))
+           'allow))))
 
 (defvar +my/agent-shell--requesting nil
   "agent-shell's state while a request of its agent is handled: whose it is.")
