@@ -17,6 +17,7 @@ Linux's notifications. Only while Emacs isn't in front; in Emacs, you see it the
 | `agent-workspace-napping` | A [looping](agent-workspace.md#loops) agent found no ready issue left: "ada (builder) is napping: nothing to build" |
 | `agent-workspace-message` | An agent's own message: "ada (builder): the tests pass" |
 | `agent-workflow-needs-you` | A [workflow](agent-workflow.md)'s run waits for you, a click opening its pane |
+| `agent-workflow-message` | A run's agent's own message: "doom-a1b · feature, build: the tests pass", a click opening its pane |
 
 A session's notifications are titled by its agent (`Claude`, `Codex`...), whichever it is. A crew's come once per
 change, and a click opens its crew with that agent selected; a session's own aren't sent for a crew's sessions, nor for

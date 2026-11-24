@@ -26,3 +26,19 @@ click opening its pane."
        (buffer-local-value 'agent-workflow--agent buffer)))
 
 (add-hook '+my/notify-agent-shell-own-functions #'+my/notify-agent-workflow--own-p)
+
+;; ITS OWN MESSAGES (+my/notify-agent-shell, as every session is told: a
+;; run's agent's, named by its run and job)
+(+my/notify-define 'agent-workflow-message "Agent workflow" "A run's agent's own message")
+
+(defun +my/notify-agent-workflow--message (buffer text)
+  "A run's agent's message TEXT, from its session BUFFER: named by its run
+and job, a click opening its pane. In
+`+my/notify-agent-shell-message-functions'."
+  (when-let* ((agent (and (boundp 'agent-workflow--agent) (buffer-local-value 'agent-workflow--agent buffer)))
+              (found (agent-workflow--agent-run agent)))
+    (+my/notify 'agent-workflow-message
+                (format "%s, %s: %s" (agent-workflow-run-name (car found)) (cdr found) text)
+                :action (lambda () (agent-workflow-pane (car found) 'select)))))
+
+(add-hook '+my/notify-agent-shell-message-functions #'+my/notify-agent-workflow--message)

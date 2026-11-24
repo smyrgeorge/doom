@@ -43,7 +43,7 @@ none off, what's shown recorded in `+test-notify--shown'."
   (should-not (default-value '+my/notify-off))
   ;; agent-shell's, Agent UI's, an agent crew's, agent workflows', so far.
   (should (equal (mapcar #'car +my/notify-kinds)
-                 '(agent-workflow-needs-you agent-workspace-napping agent-workspace-message
+                 '(agent-workflow-message agent-workflow-needs-you agent-workspace-napping agent-workspace-message
                    agent-workspace-stuck agent-workspace-done agent-workspace-hand
                    agent-ui-question agent-ui-bug agent-shell-question agent-shell-permission
                    agent-shell-turn-done agent-shell-message))))
@@ -268,7 +268,17 @@ while Emacs is away, its name and why; a click opening its pane."
   (with-temp-buffer
     (should-not (+my/notify-agent-shell--own-p (current-buffer)))
     (setq-local agent-workflow--agent 'an-agent)
-    (should (+my/notify-agent-shell--own-p (current-buffer)))))
+    (should (+my/notify-agent-shell--own-p (current-buffer)))
+    ;; Its own message (it's told it can send you one): shown, named by its
+    ;; run and job, not dropped (doom-38o.82).
+    (let ((opened nil))
+      (cl-letf (((symbol-function 'agent-workflow--agent-run) (lambda (_agent) (cons "doom-a1b" "build")))
+                ((symbol-function 'agent-workflow-run-name) (lambda (run) (format "%s · feature" run)))
+                ((symbol-function 'agent-workflow-pane) (lambda (run show) (push (list run show) opened))))
+        (+test-notify nil
+          (should (+my/notify-agent-shell "the tests pass" nil (current-buffer)))
+          (should (equal (butlast (car +test-notify--shown))
+                         '("Agent workflow" "doom-a1b · feature, build: the tests pass"))))))))
 
 (ert-deftest notify/claude-finished-its-turn ()
   "A session's turn complete: named by its project, why it stopped; a click
