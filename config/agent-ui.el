@@ -31,8 +31,9 @@
 ;; Its views (the session's canvas, and its others: ask, tests...) are laid
 ;; out there in a grid: as many columns as fit, `agent-ui-grid-min-width'
 ;; each, up to the square root of their count, rows filled in turn. Each view
-;; is a window of its own, with a bar naming it; the session's mode line stays
-;; under the conversation. q closes a view (killed); a view's window closed
+;; is a window of its own, with a bar naming it; a bar under them says what
+;; Agent UI is and its keys; the session's mode line stays under the
+;; conversation. q closes a view (killed); a view's window closed
 ;; (SPC w d) hides it until something new is shown in it; SPC m u, in the
 ;; session or a view, hides Agent UI for the session or shows it again (a
 ;; question shows it anyway). A session in no window (another workspace,
@@ -42,7 +43,7 @@
 ;; (`agent-ui-pane-min-lines' each): the view in a pane of its own. A canvas
 ;; without a session (from a shell), a project panel: a tiled pane of its own
 ;; (one of tiling's applications).
-(setq agent-ui-pane-keys "q close · SPC m u hide")
+(setq agent-ui-pane-keys "q close a view · SPC m u hide Agent UI")
 
 ;; SOURCES
 ;; An element can follow what changes by itself (config/agent-ui/source.el):

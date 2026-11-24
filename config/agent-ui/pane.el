@@ -10,8 +10,9 @@
 ;;   when what it needs changes: a bar moving every second leaves it as it is,
 ;;   at a height you gave it too.
 ;; - A view is a window of its own (scrolled, selected on its own), without a
-;;   tab line or a mode line: a bar with its name. The session's mode line
-;;   stays under the conversation, its window's own.
+;;   tab line or a mode line: a bar with its name. Under them, Agent UI's
+;;   bar: what it is, its keys. The session's mode line stays under the
+;;   conversation, its window's own.
 ;; - The conversation and its views are a window group of their own: closing
 ;;   the conversation's window closes them; a window manager laying panes out
 ;;   takes them out first and puts them back after (tiling:
@@ -50,7 +51,7 @@ pane: in a pane too short for both, a view opens in a pane of its own."
   :type 'natnum :group 'agent-ui)
 
 (defcustom agent-ui-pane-keys "q close"
-  "The keys said on the first view's bar, at its right (nil: none)."
+  "The keys said on the bar under Agent UI's views, at its right (nil: none)."
   :type '(choice (const nil) string) :group 'agent-ui)
 
 (defvar agent-ui-pane-skip-functions nil
@@ -205,38 +206,61 @@ combination of its own; the windows, row by row, left to right."
 
 ;; ====== ITS WINDOWS ======
 
-(defun agent-ui--pane-bar (view first)
-  "VIEW's bar, a header line: its name (the session's own canvas: Agent UI);
-FIRST, the keys too at its right (`agent-ui-pane-keys')."
-  (let ((name (string-replace "%" "%%" (or (buffer-local-value 'agent-ui--canvas-part view) "Agent UI")))
-        (keys (and first agent-ui-pane-keys (string-replace "%" "%%" agent-ui-pane-keys))))
-    `(,(propertize (concat " " name) 'face 'agent-ui-pane-bar-name)
-      ,@(when keys
-          (list (propertize " " 'display `(space :align-to (- right ,(1+ (string-width keys))))
-                            'face 'agent-ui-pane-bar)
-                (propertize keys 'face 'agent-ui-pane-bar-keys))))))
+(defun agent-ui--pane-bar (view)
+  "VIEW's bar, a header line: its name (the session's own canvas: Agent UI)."
+  (list (propertize (concat " " (string-replace "%" "%%" (or (buffer-local-value 'agent-ui--canvas-part view)
+                                                              "Agent UI")))
+                    'face 'agent-ui-pane-bar-name)))
 
-(defun agent-ui--pane-decorate (cell first)
-  "CELL, a view's window: no tab line nor mode line, its bar (FIRST: the
-grid's first), closing it dismisses its view (see above)."
-  (unless (eq (window-parameter cell 'mode-line-format) 'none)
-    (set-window-parameter cell 'mode-line-format 'none))
-  (unless (eq (window-parameter cell 'tab-line-format) 'none)
-    (set-window-parameter cell 'tab-line-format 'none))
-  (let ((bar (agent-ui--pane-bar (window-buffer cell) first)))
-    (unless (equal (window-parameter cell 'header-line-format) bar)
-      (set-window-parameter cell 'header-line-format bar)))
-  (set-window-parameter cell 'delete-window #'agent-ui--pane-delete-cell)
-  (set-window-dedicated-p cell t))
+;; THE BAR UNDER ITS VIEWS
+;; Agent UI's own, as the session's mode line is the conversation's: what it
+;; is (its views, how many) and its keys (`agent-ui-pane-keys'). No window
+;; spans the grid: the bottom row's views' mode lines are drawn as one line,
+;; the leftmost's saying what it is, the rightmost's ending with the keys (one
+;; view across: both), the others' the bar only; in its own face, the same
+;; whichever window is selected.
+(defun agent-ui--pane-footer (count left right)
+  "The mode line of a view in the grid's bottom row, COUNT views in all (see
+above): LEFT, the leftmost (what Agent UI is); RIGHT, the rightmost (the
+keys)."
+  (let ((keys (and right agent-ui-pane-keys (string-replace "%" "%%" agent-ui-pane-keys))))
+    (list (if left
+              (propertize (if (> count 1) (format " Agent UI · %d views" count) " Agent UI")
+                          'face 'agent-ui-pane-bar-name)
+            "")
+          (propertize " " 'display `(space :align-to (- right ,(if keys (1+ (string-width keys)) 0)))
+                      'face 'agent-ui-pane-bar)
+          (if keys (propertize keys 'face 'agent-ui-pane-bar-keys) ""))))
 
-(defun agent-ui--pane-show-in (cell view first)
-  "VIEW, a canvas, in CELL, a window of the grid (FIRST: its first)."
+(defun agent-ui--pane-set (window parameter value)
+  "WINDOW's PARAMETER set to VALUE, unless it is already."
+  (unless (equal (window-parameter window parameter) value)
+    (set-window-parameter window parameter value)))
+
+(defun agent-ui--pane-decorate (window cells)
+  "CELLS, the views' windows in WINDOW's pane (a session's): each its bar
+(its name), no tab line; the bottom row's mode lines Agent UI's bar (see
+above), the others none; closing one dismisses its view (see above)."
+  (let* ((bottom (nth 3 (window-edges (window-next-sibling window))))
+         (row (sort (seq-filter (lambda (cell) (= (nth 3 (window-edges cell)) bottom)) cells)
+                    (lambda (a b) (< (car (window-edges a)) (car (window-edges b)))))))
+    (dolist (cell cells)
+      (agent-ui--pane-set cell 'tab-line-format 'none)
+      (agent-ui--pane-set cell 'header-line-format (agent-ui--pane-bar (window-buffer cell)))
+      (agent-ui--pane-set cell 'mode-line-format
+                          (if (memq cell row)
+                              (agent-ui--pane-footer (length cells) (eq cell (car row)) (eq cell (car (last row))))
+                            'none))
+      (set-window-parameter cell 'delete-window #'agent-ui--pane-delete-cell)
+      (set-window-dedicated-p cell t))))
+
+(defun agent-ui--pane-show-in (cell view)
+  "VIEW, a canvas, in CELL, a window of the grid."
   (set-window-dedicated-p cell nil)
   (set-window-buffer cell view)
   (set-window-prev-buffers cell nil)
   (set-window-next-buffers cell nil)
-  (set-window-parameter cell 'agent-ui-pane t)
-  (agent-ui--pane-decorate cell first))
+  (set-window-parameter cell 'agent-ui-pane t))
 
 (defun agent-ui--pane-attach (window views)
   "VIEWS (canvases) in WINDOW's pane, a session's: WINDOW split, its bottom
@@ -252,10 +276,8 @@ windows; nil without room (WINDOW as it was)."
                               (split-window window (- lines) 'below))
                           (error nil))))
         (let ((cells (agent-ui--pane-grid area (length views))))
-          (cl-loop for cell in cells
-                   for view in views
-                   for first = t then nil
-                   do (agent-ui--pane-show-in cell view first))
+          (cl-mapc #'agent-ui--pane-show-in cells views)
+          (agent-ui--pane-decorate window cells)
           (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
           (with-current-buffer (window-buffer window)
             (setq agent-ui--pane-height lines))
@@ -277,13 +299,14 @@ conversation keeping its fewest."
 
 (defun agent-ui--pane-needs (views width)
   "The lines VIEWS need in a grid WIDTH columns wide: its rows, each as high
-as its tallest view, its bar too (their dirty elements drawn first)."
+as its tallest view, its bar too, and the bar under them (their dirty
+elements drawn first)."
   (let ((tallest 0))
     (dolist (view views)
       (with-current-buffer view
         (agent-ui--flush)
         (setq tallest (max tallest (1+ (count-lines (point-min) (point-max)))))))
-    (* (cdr (agent-ui--pane-grid-shape (length views) width)) tallest)))
+    (1+ (* (cdr (agent-ui--pane-grid-shape (length views) width)) tallest))))
 
 (defun agent-ui--pane-lines (pane views width)
   "The lines Agent UI takes in a session's pane PANE lines high, showing
@@ -413,9 +436,7 @@ below it (made again if they aren't), or none. Non-nil if they're shown."
              (equal (mapcar #'window-buffer cells) views)
              (agent-ui--pane-in-place-p window cells))
         (progn
-          (cl-loop for cell in cells
-                   for first = t then nil
-                   do (agent-ui--pane-decorate cell first))
+          (agent-ui--pane-decorate window cells)
           (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
           t)
       (when cells

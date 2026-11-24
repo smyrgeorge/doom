@@ -154,8 +154,8 @@ A session's Agent UI is shown in its session's pane: the conversation on top, Ag
 pane. It grows when what it shows needs more room (a tall table, a third view), up to half the pane, and goes back to a
 quarter when that's gone; a height you give it stays until what it shows needs another. The session's canvas and its other ones (`ask`, `tests`...) are **views**, laid out there as a grid: two side
 by side, three as two and one, four as two by two, as many columns as fit (40 columns each). Each view scrolls and is
-selected on its own, with a bar naming it (the session's own: `Agent UI`) instead of a mode line; the session's mode
-line stays under the conversation.
+selected on its own, with a bar naming it (the session's own: `Agent UI`) instead of a mode line. A bar under them all
+says how many views there are and their keys; the session's mode line stays under the conversation.
 
 | Key | Action |
 |---|---|

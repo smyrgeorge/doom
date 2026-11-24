@@ -36,10 +36,12 @@
   (mapcar (lambda (window) (buffer-name (window-buffer window)))
           (agent-ui--pane-cells (selected-frame))))
 
-(defun +test-aup-bar (window)
-  "WINDOW's bar (its header line), as text."
-  (mapconcat (lambda (part) (if (stringp part) part ""))
-             (window-parameter window 'header-line-format) ""))
+(defun +test-aup-bar (window &optional parameter)
+  "WINDOW's bar (its header line; PARAMETER: that one, its mode line), as
+text; nil without one."
+  (let ((format (window-parameter window (or parameter 'header-line-format))))
+    (and (consp format)
+         (mapconcat (lambda (part) (if (stringp part) part "")) format ""))))
 
 (defun +test-aup-canvas (name &optional part)
   (get-buffer (agent-ui-canvas-buffer-name (if part (agent-ui-sub-canvas name part) name))))
@@ -55,7 +57,7 @@
   (should (eq agent-ui-display-function #'agent-ui-pane-display))
   (should (eq agent-ui-reveal-function #'agent-ui-pane-reveal))
   ;; The config says its keys on the first view's bar.
-  (should (equal agent-ui-pane-keys "q close · SPC m u hide"))
+  (should (equal agent-ui-pane-keys "q close a view · SPC m u hide Agent UI"))
   (should (memq #'agent-ui--pane-sync-h (default-value 'window-state-change-functions)))
   (should (assq 'agent-ui-pane window-persistent-parameters)))
 
@@ -85,7 +87,7 @@ height you gave it stays while an element changes without needing more."
       (agent-ui--pane-fit-now)
       (let ((wanted (min (agent-ui--pane-most pane)
                          (max (agent-ui--pane-least pane)
-                              (1+ (with-current-buffer (+test-aup-canvas name)
+                              (+ 2 (with-current-buffer (+test-aup-canvas name)
                                     (count-lines (point-min) (point-max))))))))
         (should (> wanted (agent-ui--pane-least pane)))
         (should (= (funcall area) wanted)))
@@ -147,13 +149,15 @@ keeps its mode line, the view has a bar instead (its name, the keys)."
         (should (= (+ (window-total-height window) (window-total-height cell)) height))
         (should (agent-ui-pane-window-p cell))
         (should-not (agent-ui-pane-window-p window))
-        ;; Bars, not mode lines.
-        (should (eq (window-parameter cell 'mode-line-format) 'none))
+        ;; Its name on its bar; under it, Agent UI's bar: what it is, its
+        ;; keys. No tab line; the conversation's mode line its own.
         (should (eq (window-parameter cell 'tab-line-format) 'none))
         (should-not (window-parameter window 'mode-line-format))
-        (let ((bar (+test-aup-bar cell)))
-          (should (string-prefix-p " Agent UI" bar))
-          (should (string-search "q close" bar)))
+        (should (equal (+test-aup-bar cell) " Agent UI"))
+        (let ((under (+test-aup-bar cell 'mode-line-format)))
+          (should (string-prefix-p " Agent UI" under))
+          (should-not (string-search "views" under))
+          (should (string-search "q close a view" under)))
         (should (window-dedicated-p cell))
         ;; Synced again: as it is.
         (agent-ui--pane-sync)
@@ -161,8 +165,9 @@ keeps its mode line, the view has a bar instead (its name, the keys)."
 
 (ert-deftest agent-ui-pane/its-views-in-a-grid ()
   "The session's other canvases: views too, its own first, then by name; two
-side by side, a third under them across the width; each its name on its bar,
-the keys on the first's only."
+side by side, a third under them across the width; each its name on its bar.
+Agent UI's bar under the bottom row: what it is on its leftmost view's mode
+line, the keys on its rightmost's; the others' none."
   (+test-aup
     (+test-aup-show name)
     (+test-aup-show (agent-ui-sub-canvas name "tests"))
@@ -171,7 +176,11 @@ the keys on the first's only."
                          (agent-ui-canvas-buffer-name (agent-ui-sub-canvas name "tests")))))
     (pcase-let ((`(,a ,b) (agent-ui--pane-cells (selected-frame))))
       (should (= (window-top-line a) (window-top-line b)))
-      (should (< (window-left-column a) (window-left-column b))))
+      (should (< (window-left-column a) (window-left-column b)))
+      (should (string-prefix-p " Agent UI · 2 views" (+test-aup-bar a 'mode-line-format)))
+      (should-not (string-search "q close" (+test-aup-bar a 'mode-line-format)))
+      (should (string-search "q close a view" (+test-aup-bar b 'mode-line-format)))
+      (should-not (string-search "Agent UI ·" (+test-aup-bar b 'mode-line-format))))
     (+test-aup-show (agent-ui-sub-canvas name "logs"))
     (should (equal (+test-aup-cells)
                    (mapcar #'agent-ui-canvas-buffer-name
@@ -181,8 +190,13 @@ the keys on the first's only."
       (should (> (window-top-line c) (window-top-line a)))
       (should (= (window-total-width c) (+ (window-total-width a) (window-total-width b))))
       (should (string-prefix-p " logs" (+test-aup-bar b)))
-      (should-not (string-search "q close" (+test-aup-bar b)))
-      (should (string-prefix-p " tests" (+test-aup-bar c))))
+      (should (string-prefix-p " tests" (+test-aup-bar c)))
+      ;; The top row: no mode lines; the bottom one across: both ends.
+      (should (eq (window-parameter a 'mode-line-format) 'none))
+      (should (eq (window-parameter b 'mode-line-format) 'none))
+      (let ((under (+test-aup-bar c 'mode-line-format)))
+        (should (string-prefix-p " Agent UI · 3 views" under))
+        (should (string-search "q close a view" under))))
     ;; The conversation's window: only it, above them.
     (should (= (length (window-list nil 'nomini)) 4))))
 
