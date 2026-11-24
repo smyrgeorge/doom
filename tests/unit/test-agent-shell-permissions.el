@@ -110,6 +110,30 @@ closed): asked, a deny rule matching it whole refusing it (doom-djc.26)."
     (should (eq (funcall verdict '(:tools ("Bash")) "echo $(id)") 'allow))
     (should (eq (funcall verdict '(:tools ("Read") :deny ("Bash")) "ls") 'reject))))
 
+(ert-deftest agent-shell-permissions/what-a-request-acts-on-read-whole ()
+  "Its paths from every key agents use (filepath, fileName), its diffs, its
+locations; its command from command_line too, an argv quoted, a shell's -c
+unwrapped. Nothing read, a deny rule naming its kind's: asked, not allowed
+by a rule for all (doom-djc.27)."
+  (let ((rules '(:tools ("Edit" "Bash") :deny ("Edit(.agent-workflow/**)" "Bash(git push:*)")))
+        (verdict (lambda (rules call) (+my/agent-shell-permission-by-rules rules call "/w/"))))
+    (dolist (call (list (+test-asp--call "edit" :raw-input '((filepath . "/w/.agent-workflow/a.yml")))
+                        (+test-asp--call "edit" :raw-input '((fileName . "/w/.agent-workflow/a.yml")))
+                        (+test-asp--call "edit" :diffs '(((:file . "/w/.agent-workflow/a.yml"))))
+                        (+test-asp--call "execute" :raw-input '((command_line . "git push")))
+                        (+test-asp--call "execute" :raw-input '((command . ["bash" "-lc" "git push"])))
+                        (+test-asp--call "execute" :raw-input '((command . ["/bin/zsh" "-c" "cd x && git push"])))))
+      (ert-info ((format "%S" call)) (should (eq (funcall verdict rules call) 'reject))))
+    ;; An argv's words quoted: one argument isn't split.
+    (let ((commit (+test-asp--call "execute" :raw-input '((command . ["git" "commit" "-m" "a; b"])))))
+      (should (equal (+my/agent-shell--tool-call-command commit) "git commit -m \"a; b\""))
+      (should (eq (funcall verdict '(:tools ("Bash(git commit:*)")) commit) 'allow)))
+    ;; Nothing read: asked.
+    (should-not (funcall verdict rules (+test-asp--call "edit")))
+    (should-not (funcall verdict rules (+test-asp--call "execute")))
+    ;; Without such a deny rule, as before.
+    (should (eq (funcall verdict '(:tools ("Edit")) (+test-asp--call "edit")) 'allow))))
+
 (ert-deftest agent-shell-permissions/the-responder ()
   "The session's rules answer its request, as an option of their kind (once,
 else always); none for it, or none decides: the responder before ours, else

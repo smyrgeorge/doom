@@ -76,25 +76,45 @@ RULES), its permission requests answered by them (see above).")
       (cons (match-string 1 rule) (match-string 2 rule))
     (cons rule nil)))
 
+(defconst +my/agent-shell--shells '("sh" "bash" "zsh" "dash" "ksh")
+  "The shells an argv's command line is unwrapped from (bash -lc \"git push\").")
+
+(defun +my/agent-shell--argv-command (argv)
+  "ARGV (a list of strings) as the command line it runs: a shell's -c
+script (bash -lc \"git push\": git push), else its words quoted."
+  (let ((argv (mapcar (lambda (part) (format "%s" part)) argv)))
+    (or (and (member (file-name-nondirectory (car argv)) +my/agent-shell--shells)
+             (let ((rest (cdr argv)))
+               ;; Its options, up to the one with c (-c, -lc, -ic...).
+               (while (and rest (string-match-p "\\`-[a-z]*\\'" (car rest))
+                           (not (string-match-p "\\`-[a-z]*c[a-z]*\\'" (car rest))))
+                 (setq rest (cdr rest)))
+               (and rest (string-match-p "\\`-[a-z]*c[a-z]*\\'" (car rest)) (cadr rest))))
+        (combine-and-quote-strings argv))))
+
 (defun +my/agent-shell--tool-call-command (tool-call)
-  "The command TOOL-CALL runs (its raw input's command, a string or a
-list), else its title: a string, or nil."
+  "The command TOOL-CALL runs (its raw input's command, command_line or
+cmd: a string, or an argv, a shell's -c unwrapped), else its title: a
+string, or nil."
   (let* ((input (map-elt tool-call :raw-input))
-         (command (or (map-elt input 'command) (map-elt input 'cmd))))
+         (command (or (map-elt input 'command) (map-elt input 'command_line) (map-elt input 'cmd))))
     (cond ((stringp command) command)
           ((and (sequencep command) (> (length command) 0))
-           (mapconcat (lambda (part) (format "%s" part)) command " "))
+           (+my/agent-shell--argv-command (append command nil)))
           ((stringp (map-elt tool-call :title))
            (string-trim (map-elt tool-call :title) "[` ]+" "[` ]+")))))
 
 (defun +my/agent-shell--tool-call-paths (tool-call)
-  "The files TOOL-CALL acts on: its raw input's, its locations'."
+  "The files TOOL-CALL acts on: its raw input's (file_path, path, filePath,
+filepath, fileName, notebook_path), its diffs', its locations'."
   (let ((input (map-elt tool-call :raw-input)))
     (delete-dups
-     (delq nil (append (mapcar (lambda (key) (let ((value (map-elt input key))) (and (stringp value) value)))
-                               '(file_path path filePath notebook_path))
-                       (mapcar (lambda (location) (map-elt location 'path))
-                               (append (map-elt tool-call :locations) nil)))))))
+     (seq-filter (lambda (path) (and (stringp path) (not (string-empty-p path))))
+                 (append (mapcar (lambda (key) (map-elt input key))
+                                 '(file_path path filePath filepath fileName notebook_path))
+                         (mapcar (lambda (diff) (map-elt diff :file)) (append (map-elt tool-call :diffs) nil))
+                         (mapcar (lambda (location) (map-elt location 'path))
+                                 (append (map-elt tool-call :locations) nil)))))))
 
 (defun +my/agent-shell--glob-regexp (glob &optional paths)
   "GLOB as an anchored regexp: * anything (in PATHS: but /), ** anything;
@@ -196,6 +216,13 @@ it whole), allow if each of them matches a tools rule, else nil (asked)."
                             (or (seq-mapcat #'+my/agent-shell--command-forms parts) (list command))))
                 (plist-get rules :deny))
       'reject)
+     ;; Its command not known, a deny rule naming commands: asked, not
+     ;; allowed by a rule for every command.
+     ((and (null command)
+           (seq-some (lambda (rule) (pcase-let ((`(,tool . ,pattern) (+my/agent-shell--rule-parse rule)))
+                                      (and pattern (member "execute" (cdr (assoc tool +my/agent-shell-rule-kinds))))))
+                     (plist-get rules :deny)))
+      nil)
      ((if parts
           (seq-every-p (lambda (part) (seq-some (lambda (rule) (funcall applies rule part)) (plist-get rules :tools)))
                        parts)
@@ -243,6 +270,14 @@ simple commands (`+my/agent-shell--bash-verdict')."
       (+my/agent-shell--bash-verdict rules tool-call)
     (cond ((seq-some (lambda (rule) (+my/agent-shell-rule-matches-p rule tool-call dir)) (plist-get rules :deny))
            'reject)
+          ;; What it acts on not known, a deny rule naming paths of its
+          ;; kind: asked, not allowed by a rule for all of them.
+          ((and (null (+my/agent-shell--tool-call-paths tool-call))
+                (seq-some (lambda (rule)
+                            (pcase-let ((`(,tool . ,pattern) (+my/agent-shell--rule-parse rule)))
+                              (and pattern (member (map-elt tool-call :kind) (cdr (assoc tool +my/agent-shell-rule-kinds))))))
+                          (plist-get rules :deny)))
+           nil)
           ((seq-some (lambda (rule) (+my/agent-shell-rule-matches-p rule tool-call dir)) (plist-get rules :tools))
            'allow))))
 
