@@ -70,6 +70,10 @@ JOB hasn't run, or STEP isn't one."
       ;; Each job replaced: its agent stopped, its snapshot gone, pending again.
       (dolist (other replaced)
         (let ((other-state (agent-workflow--job run other)))
+          ;; Skipped: pending, its round kept, its if: read again (what
+          ;; it reads may say otherwise now), as the dry run has it.
+          (when (eq (plist-get other-state :status) 'skipped)
+            (agent-workflow--job-set run other :status 'pending :why nil))
           (unless (memq (plist-get other-state :status) '(pending skipped))
             (when-let* ((agent (plist-get other-state :agent)))
               (agent-workflow-stop-agent agent))

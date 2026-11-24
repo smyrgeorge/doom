@@ -386,6 +386,31 @@ jobs:
       (should (eq (+test-awr--job run "build") 'running))
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
+(ert-deftest agent-workflow-steps/a-skipped-job-read-again-when-sent-back ()
+  "A job its if: skipped, then the job it needs sent back: pending again, its
+if: read anew, its round kept; the dry run the same (doom-38o.84)."
+  (let ((marker (+test-tmp-file (format "skipped-marker-%d" (random 100000)))))
+    (+test-awr "skipped-back"
+      (+test-aws--workflow project (format "description: x
+for: [feature]
+jobs:
+  build:
+    run: echo build
+  docs:
+    needs: build
+    if: (file-exists-p %S)
+    run: echo docs
+" marker))
+      (let* ((issue (+test-awr--issue project "Skipped back"))
+             (run (agent-workflow-start-run project issue)))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (eq (+test-awr--job run "docs") 'skipped))
+        (write-region "" nil marker)
+        (should (equal (agent-workflow--back run "build") '("build" "docs")))
+        (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
+        (should (eq (+test-awr--job run "docs") 'done))
+        (should (eql (plist-get (agent-workflow--job run "docs") :round) 1))))))
+
 (ert-deftest agent-workflow-steps/an-on-fail-script ()
   "on-fail: {run: ...}: a failed step's script first, FAILED_STEP and
 FAILED_OUTPUT in its environment, its output a log of its own. Exit 0 it

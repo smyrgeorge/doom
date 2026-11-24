@@ -198,7 +198,9 @@ run), taken as true, said."
                              (setq stopped (format "%s: it sent %s back %d times: it asks you" job other (1- count)))
                            (push (format "%s: %s: %s and every job after it again" job said other) (car lines))
                            (dolist (replaced (cons other (dependents other)))
-                             (unless (eq (get replaced :status) 'pending)
+                             ;; Skipped: pending, its round kept, as the
+                             ;; engine has it (back.el).
+                             (unless (memq (get replaced :status) '(pending skipped))
                                (put replaced :round (1+ (get replaced :round))))
                              (put replaced :status 'pending)))))
                       (_
