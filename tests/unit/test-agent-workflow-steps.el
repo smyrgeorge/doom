@@ -334,6 +334,9 @@ jobs:
       (should (eq (+test-awr--job run "check") 'done))
       (should-not (plist-get (agent-workflow--job run "check") :back))
       (should (equal (agent-workflow--back run "check") '("check")))
+      ;; Running again, its time counted again, said (doom-38o.76).
+      (should (agent-workflow-run-active-since run))
+      (should (member "state" (seq-drop-while (lambda (e) (not (equal e "went-back"))) (+test-awr--journal run))))
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
 (ert-deftest agent-workflow-steps/its-variables-filled ()

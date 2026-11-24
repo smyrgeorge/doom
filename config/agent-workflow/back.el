@@ -100,7 +100,10 @@ JOB hasn't run, or STEP isn't one."
                                         (if (and note (not (string-empty-p note))) (concat ": " note) "")
                                         (if discard ", the work since discarded" "")))
       (when (memq (agent-workflow-run-state run) agent-workflow--ended)
-        (setf (agent-workflow-run-state run) 'running))
+        ;; Over no more (--set-state keeps one over so): running, through
+        ;; it, its time counting again, journaled.
+        (setf (agent-workflow-run-state run) 'waiting)
+        (agent-workflow--set-state run 'running))
       (agent-workflow--refresh run)
       (agent-workflow--changed run)
       (agent-workflow--tick-soon)
