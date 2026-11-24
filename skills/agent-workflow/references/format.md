@@ -37,7 +37,7 @@ One of these, and only one:
 
 | Key | Does | With |
 |---|---|---|
-| `agent` | an LLM in agent-shell, with that agent | `prompt`: its first message (its variables filled in); none: its job on the issue. `model`, `effort`: over its agent's, for this step's session (a job keeps its first agent step's session to its end) |
+| `agent` | an LLM in agent-shell, with that agent | `prompt`: its first message (its variables filled in); none: its job on the issue. `kind`, `model`, `effort`: over its agent's, for this step's session (a job keeps its first agent step's session to its end) |
 | `run` | a script, by its shell | `shell`: bash by default, `python3`, `node`, any interpreter |
 | `elisp` | Lisp in the user's Emacs | (quick: it blocks Emacs) |
 | `uses` | a built-in: `merge` | `with`: `{suite: make test}` |

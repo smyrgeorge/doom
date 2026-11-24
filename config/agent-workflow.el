@@ -50,16 +50,25 @@ Code's own default."
   :group 'agent-workflow)
 
 (defcustom agent-workflow-kinds
-  '((claude-code :config agent-shell-anthropic-make-claude-code-config :claude-code t))
-  "The agents the pool can run: a kind (a symbol) and how its session
-starts. :config, a function returning agent-shell's config for it;
-:claude-code, non-nil if it's Claude Code (an agent's tools go to its
-options)."
+  '((claude-code :config agent-shell-anthropic-make-claude-code-config :claude-code t)
+    (codex :config agent-shell-openai-make-codex-config)
+    (gemini-cli :config agent-shell-google-make-gemini-config)
+    (opencode :config agent-shell-opencode-make-agent-config)
+    (qwen-code :config agent-shell-qwen-make-agent-config)
+    (copilot :config agent-shell-github-make-copilot-config)
+    (goose :config agent-shell-goose-make-agent-config)
+    (cursor :config agent-shell-cursor-make-agent-config))
+  "The agents the pool can run: a kind (a symbol: agent-shell's identifier
+for it) and how its session starts. :config, a function returning
+agent-shell's config for it; :claude-code, non-nil if it's Claude Code (an
+agent's tools go to its options). An agent file says which (kind:), a
+step over it, else `agent-workflow-kind'."
   :type '(alist :key-type symbol :value-type plist)
   :group 'agent-workflow)
 
 (defcustom agent-workflow-kind 'claude-code
-  "The kind of agent the pool runs: a key of `agent-workflow-kinds'."
+  "The kind of agent a step runs when neither it nor its agent's file says
+\(kind:): a key of `agent-workflow-kinds'."
   :type 'symbol
   :group 'agent-workflow)
 

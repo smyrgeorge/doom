@@ -552,6 +552,7 @@ one started for it. The pool full: the run waits, queued, for an agent."
                    (agent (agent-workflow-start-agent
                            :project (agent-workflow-run-project run) :issue (agent-workflow-run-issue run)
                            :job job :definition (plist-get step :agent)
+                           :kind (plist-get step :agent-kind)
                            :model (plist-get step :model) :effort (plist-get step :effort)
                            :type (plist-get info :type) :title (plist-get info :title)
                            :branch (agent-workflow--run-branch run)

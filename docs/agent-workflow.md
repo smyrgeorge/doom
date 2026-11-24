@@ -108,7 +108,7 @@ A step does one thing:
 
 | Key | What |
 |---|---|
-| `agent` | An LLM in agent-shell, with that agent; `prompt`: what it's told; `model`, `effort`: over its agent's |
+| `agent` | An LLM in agent-shell, with that agent; `prompt`: what it's told; `kind`, `model`, `effort`: over its agent's |
 | `run` | A program, or a script (`run: \|`); `shell`: its interpreter (bash by default, `python`, `node`...) |
 | `elisp` | Lisp in your Emacs (quick: it blocks it). Lisp with `: ` in it goes under `elisp: \|` |
 | `uses` | A built-in: `merge`, with `with: {suite: make test}` |
@@ -178,6 +178,7 @@ Build it with its tests, commit on {branch}.
 | Key | What |
 |---|---|
 | `description` | What it's for (needed) |
+| `kind` | Its agent: `claude-code`, `codex`, `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor` (`agent-workflow-kinds`); none: `agent-workflow-kind` (`claude-code`) |
 | `tools` | Allowed without asking |
 | `deny` | Never available |
 | `model` | `fable`, `opus`, `sonnet`, `haiku`, a model's id; none: your default |

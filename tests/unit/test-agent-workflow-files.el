@@ -430,6 +430,51 @@ jobs:
                      (error 9 "model (\"opus\"): a model (fable, opus, sonnet, haiku, a model's id)")
                      (error 10 "effort 3: one of low, medium, high, xhigh, max"))))))
 
+(ert-deftest agent-workflow-files/a-kind ()
+  "kind: names an agent's agent, in its file or on an agent step (over it):
+one of `agent-workflow-kinds'; another, or on a step not an agent's, an
+error; on an agent step after its job's first, warned (its session goes
+on)."
+  (pcase-let ((`(,definition . ,problems) (+test-awf--definition "---\ndescription: x\nkind: codex\n---\nDo.\n")))
+    (should-not problems)
+    (should (eq (plist-get definition :kind) 'codex)))
+  (pcase-let ((`(,definition . ,problems) (+test-awf--definition "---\ndescription: x\nkind: chatgpt\n---\nDo.\n")))
+    (should-not definition)
+    (should (equal (+test-awf--said problems)
+                   (list (list 'error 3 (concat "kind chatgpt: not one of " (agent-workflow--kinds-said)))))))
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  build:
+    agent: build
+    kind: gemini-cli
+  docs:
+    steps:
+      - agent: docs
+      - agent: docs
+        kind: codex
+")))
+    (should workflow)
+    (let ((build (car (plist-get (cdr (assoc "build" (plist-get workflow :jobs))) :steps))))
+      (should (eq (plist-get build :kind) 'agent))
+      (should (eq (plist-get build :agent-kind) 'gemini-cli)))
+    (should (equal (+test-awf--said problems)
+                   '((warning 10 "kind: its job's agent goes on in the session its step 1 started, with its kind: ignored")))))
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  a:
+    run: x
+    kind: codex
+  b:
+    agent: build
+    kind: chatgpt
+")))
+    (should-not workflow)
+    (should (equal (+test-awf--said problems)
+                   (list '(error 5 "kind: only for an agent: step")
+                         (list 'error 8 (concat "kind chatgpt: not one of " (agent-workflow--kinds-said))))))))
+
 (ert-deftest agent-workflow-files/a-job-s-approve-beside-its-steps ()
   "A job's approve: true beside its steps: read, its last step's result
 waiting for your OK; one step's keys on the job, approve among them: the
@@ -1150,6 +1195,25 @@ run again, a review's changes sending build back, the merge; nothing run."
     (should (member "build: its agent (build) works, round 2" lines))
     (should (member "merge: merged, the issue closed" lines))
     (should (equal (cdr (assoc "merge" (plist-get result :end))) 'done))))
+
+(ert-deftest agent-workflow-files/a-dry-run-says-its-agent-s-kind ()
+  "A step's agent on another kind than `agent-workflow-kind' (its step's,
+else its agent file's): said."
+  (let* ((workflow (car (+test-awf--workflow "description: x
+jobs:
+  build:
+    agent: build
+  review:
+    needs: build
+    agent: build
+    kind: gemini-cli
+" '("build") "kinds.yml")))
+         (lines (+test-awf--dry-lines
+                 (agent-workflow--dry-run workflow :info (list :id "demo-1" :type "feature")
+                                          :definitions (list (cons "build" (list :name "build" :kind 'codex)))
+                                          :pool 3))))
+    (should (member "build: its agent (build, on codex) works" lines))
+    (should (member "review: its agent (build, on gemini-cli) works" lines))))
 
 (ert-deftest agent-workflow-files/its-branch ()
   "branch: delete or keep, read (none: delete, nil); another value an

@@ -24,6 +24,7 @@ Build what the issue asks for, with its tests. Commit as you go. Never push.
 |---|---|---|
 | `name` | its file's, if given | another: an error |
 | `description` | what it's for | none: an error |
+| `kind` | its agent: `claude-code`, `codex`, `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor`; none: the user's (`agent-workflow-kind`) | another: an error |
 | `tools` | allowed without asking (Claude Code's `allowedTools`), a list | `Tool` or `Tool(pattern)` |
 | `deny` | never offered (`disallowedTools`) | the same |
 | `model` | `fable`, `opus`, `sonnet`, `haiku`, a model's id; none: the user's default | another: a warning |

@@ -287,6 +287,24 @@ set once its model is, as a config option (claude-agent-acp's effort)."
         (should model)
         (should (< (seq-position entries model) (seq-position entries set)))))))
 
+(ert-deftest agent-workflow-pool/its-kind ()
+  "Its kind: its step's, else its agent file's, else `agent-workflow-kind';
+its session started with that kind's config, Claude Code's options only for
+Claude Code."
+  (+test-awp--with-project "kind"
+    (let ((agent-workflow-kinds (append agent-workflow-kinds
+                                        '((other :config agent-shell-mock-agent-make-agent-config)))))
+      ;; The default: Claude Code's (the stand-in as it).
+      (let ((agent (+test-awp--start project "demo-1" "build")))
+        (should (eq (plist-get (agent-workflow-definition-filled agent) :kind) 'mock))
+        (should (alist-get 'claudeCode (alist-get :session-meta (agent-workflow--config agent)))))
+      ;; Its step's, another kind: no Claude Code options.
+      (let ((agent (+test-awp--start project "demo-2" "build" :kind 'other)))
+        (should (eq (plist-get (agent-workflow-definition-filled agent) :kind) 'other))
+        (should-not (alist-get 'claudeCode (alist-get :session-meta (agent-workflow--config agent)))))
+      ;; One that isn't: an error, nothing started.
+      (should-error (+test-awp--start project "demo-3" "build" :kind 'nothing)))))
+
 (ert-deftest agent-workflow-pool/the-pool-is-full ()
   "As many agents at once as the pool says, in every project; one stopped
 makes room."

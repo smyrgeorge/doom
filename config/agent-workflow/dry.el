@@ -23,6 +23,7 @@
 
 (defvar agent-workflow-pool)
 (defvar agent-workflow-max-rounds)
+(defvar agent-workflow-kind)
 
 (cl-defun agent-workflow--dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) definitions)
   "WORKFLOW (a plist, as read) walked, nothing run: a plist (:waves :end
@@ -80,7 +81,11 @@ project's (to tell the jobs that edit; default: the current project's)."
            ;; run again from its retry-from step), or why it stops.
            (pcase (plist-get step :kind)
              ('agent
-              (push (format "%s: its agent (%s) works%s" job (plist-get step :agent)
+              (push (format "%s: its agent (%s%s) works%s" job (plist-get step :agent)
+                            ;; Its kind, said when it isn't the default.
+                            (let ((kind (or (plist-get step :agent-kind)
+                                            (plist-get (cdr (assoc (plist-get step :agent) definitions)) :kind))))
+                              (if (and kind (not (eq kind agent-workflow-kind))) (format ", on %s" kind) ""))
                             (if (> (get job :round) 1) (format ", round %d" (get job :round)) ""))
                     (car lines))
               :pass)

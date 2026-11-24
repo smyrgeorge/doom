@@ -12,6 +12,8 @@
 ;;   tools: Read, Edit, Bash(git commit:*)   allowed without asking (Claude
 ;;                                 Code's allowedTools); a YAML list too
 ;;   deny: Bash(git push:*)        never available (disallowedTools)
+;;   kind: codex                   its agent (agent-workflow-kinds: claude-code,
+;;                                 codex, gemini-cli...); none: agent-workflow-kind
 ;;   model: opus                   inherit (or none): your default
 ;;   effort: high                  low, medium, high, xhigh, max; default
 ;;                                 (or none): the model's
@@ -60,7 +62,7 @@ Code's, a model offering some only: those it doesn't, skipped as its
 session starts, saying so).")
 
 (defconst agent-workflow--definition-keys
-  '("name" "description" "tools" "deny" "model" "effort" "mode" "icon" "verb" "colour")
+  '("name" "description" "kind" "tools" "deny" "model" "effort" "mode" "icon" "verb" "colour")
   "An agent's keys (color too, as Claude Code's agents spell it).")
 
 (defconst agent-workflow--definition-list-keys '("tools" "deny")
@@ -105,6 +107,12 @@ too)."
                (?\( (cl-incf depth))
                (?\) (when (< (cl-decf depth) 0) (throw 'open nil)))))
            (= depth 0)))))
+
+(defvar agent-workflow-kinds)
+
+(defun agent-workflow--kinds-said ()
+  "The kinds, as a problem lists them."
+  (mapconcat (lambda (kind) (symbol-name (car kind))) (bound-and-true-p agent-workflow-kinds) ", "))
 
 (defun agent-workflow--model-p (model)
   "Non-nil if MODEL is one Claude Code takes: one of
@@ -191,7 +199,7 @@ the last first), what's after it, trimmed."
 
 (defun agent-workflow-definition-read (file)
   "Read the agent FILE: (DEFINITION . PROBLEMS). DEFINITION is a plist (see the
-top of this file: :name :file :description :tools :deny :model :effort :mode :icon
+top of this file: :name :file :description :kind :tools :deny :model :effort :mode :icon
 :glyph :verb :colour :instructions), nil if FILE has errors; PROBLEMS, each
 \(error|warning \"FILE:LINE: what\" FILE LINE \"what\"), in the order
 of their lines."
@@ -231,6 +239,10 @@ of their lines."
                       (problem 'error n "description: empty: say what it's for")
                     (setq definition (plist-put definition :description value))))
                  ("verb" (setq definition (plist-put definition :verb value)))
+                 ("kind"
+                  (if (assq (intern value) (bound-and-true-p agent-workflow-kinds))
+                      (setq definition (plist-put definition :kind (intern value)))
+                    (problem 'error n "kind %s: not one of %s" value (agent-workflow--kinds-said))))
                  ("model"
                   (unless (member value '("" "inherit"))
                     (unless (agent-workflow--model-p value)

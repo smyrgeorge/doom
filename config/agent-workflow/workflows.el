@@ -35,7 +35,7 @@
 ;;       outcomes: {changes: rerun build, approved: continue}
 ;;       max-rounds: 10
 ;;       concurrency: 1
-;;   A step is agent: (with prompt:, and model: and effort:, over its
+;;   A step is agent: (with prompt:, and kind:, model: and effort:, over its
 ;;   agent's), run: (with shell:), elisp: (Lisp in
 ;;   your Emacs) or uses: (a built-in: merge, its with: {suite: make
 ;;   test}), with name:, timeout:, retries:, retry-from: (a step, its name
@@ -48,30 +48,32 @@
 ;; delete) :jobs ((NAME . JOB)...)), JOB (:name :needs
 ;; :if :concurrency :approve :outcomes ((OUTCOME . continue|(rerun JOB))...)
 ;; :max-rounds :steps (STEP...)), STEP (:kind agent|run|elisp|uses :agent
-;; :name :prompt :model :effort :run :shell :elisp :uses :with :timeout
+;; :name :prompt :agent-kind (its kind:) :model :effort :run :shell :elisp :uses
+;; :with :timeout
 ;; :retries :retry-from (an index of its job's steps) :on-fail (an agent)
 ;; :on-fail-run (a script) :approve),
 ;; durations in seconds. Nothing in it is run here: if: and elisp: are only
 ;; read, to check them.
 ;;
 ;; A problem names the file and line (yaml.el gives none: found again in the
-;; text, `agent-workflow--yaml-line'). Errors leave the workflow out: YAML
-;; that doesn't parse, no jobs, a name (its file's) not a lowercase letter
-;; then letters, digits or -, a name: not its file's, a needs, rerun or
-;; {jobs.X...} naming no job, needs going round, a step with no kind or two,
-;; an agent: or on-fail: naming no agent, a uses: no built-in, a shell:
-;; without run:, a step's name: not a name or another's of its job, a
-;; retry-from: naming no step of its job or one after it, a prompt:, model:
-;; or effort: on a step not an agent's, an if: not one Lisp form, an elisp:
-;; not Lisp, a variable not one there is, a number, duration or true/false
-;; that isn't one, a branch: neither delete nor keep, a ticket: neither true
-;; nor false, a runs-in: neither worktree nor checkout, uses: merge in one
-;; that runs in your checkout. Warnings: an unknown key, a for: type Beads
-;; doesn't have, a {jobs.X...} of a job not before it, retries:,
-;; retry-from: or on-fail: on an agent step, a model: or effort: not one
-;; there is, or on an agent step after its job's first (its agent's session
-;; goes on, as it started), no description, {issue.title}... in a prompt
-;; of a workflow with no ticket, branch: in one that runs in your checkout.
+;; text, `agent-workflow--yaml-line'). Errors leave the workflow out: YAML that
+;; doesn't parse, no jobs, a name (its file's) not a lowercase letter then
+;; letters, digits or -, a name: not its file's, a needs, rerun or {jobs.X...}
+;; naming no job, needs going round, a step with no kind or two, an agent: or
+;; on-fail: naming no agent, a uses: no built-in, a shell: without run:, a
+;; step's name: not a name or another's of its job, a retry-from: naming no
+;; step of its job or one after it, a prompt:, kind:, model: or effort: on a
+;; step not an agent's, a kind: not one there is, an if: not one Lisp form, an
+;; elisp: not Lisp, a variable not one there is, a number, duration or
+;; true/false that isn't one, a branch: neither delete nor keep, a ticket:
+;; neither true nor false, a runs-in: neither worktree nor checkout, uses:
+;; merge in one that runs in your checkout. Warnings: an unknown key, a for:
+;; type Beads doesn't have, a {jobs.X...} of a job not before it, retries:,
+;; retry-from: or on-fail: on an agent step, a model: or effort: not one there
+;; is, a kind:, model: or effort: on an agent step after its job's first (its
+;; agent's session goes on, as it started), no description, {issue.title}... in
+;; a prompt of a workflow with no ticket, branch: in one that runs in your
+;; checkout.
 
 (require 'cl-lib)
 (require 'seq)
@@ -81,6 +83,8 @@
 (declare-function agent-workflow--model-p "agent-workflow/agents")
 (defvar agent-workflow-models)
 (defvar agent-workflow-efforts)
+(defvar agent-workflow-kinds)
+(declare-function agent-workflow--kinds-said "agent-workflow/agents")
 
 ;; ====== VARIABLES ======
 
@@ -93,7 +97,7 @@
 is only warned about).")
 
 (defconst agent-workflow--step-keys
-  '("name" "agent" "prompt" "model" "effort" "run" "shell" "elisp" "uses" "with" "timeout" "retries"
+  '("name" "agent" "prompt" "kind" "model" "effort" "run" "shell" "elisp" "uses" "with" "timeout" "retries"
     "retry-from" "on-fail" "approve")
   "A step's keys.")
 
@@ -441,17 +445,17 @@ file). NEEDS: every job's needs (an alist), DEFINITIONS the agents' names
     read))
 
 (defun agent-workflow--steps-session (steps paths problem)
-  "Say with PROBLEM a model: or effort: on an agent step of a job's STEPS
-\(each at its path in PATHS) after its first: the job's agent goes on in
-the session that one started, its model and effort that one's."
+  "Say with PROBLEM a kind:, model: or effort: on an agent step of a job's
+STEPS (each at its path in PATHS) after its first: the job's agent goes on
+in the session that one started, its kind, model and effort that one's."
   (when-let* ((first (cl-position-if (lambda (step) (eq (plist-get step :kind) 'agent)) steps)))
     (cl-loop for step in (nthcdr (1+ first) steps) for at in (nthcdr (1+ first) paths)
              when (eq (plist-get step :kind) 'agent)
-             do (dolist (key '(:model :effort))
+             do (pcase-dolist (`(,key . ,said) '((:agent-kind . "kind") (:model . "model") (:effort . "effort")))
                   (when (plist-get step key)
-                    (funcall problem 'warning (append at (list (substring (symbol-name key) 1)))
+                    (funcall problem 'warning (append at (list said))
                              "%s: its job's agent goes on in the session its step %d started, with its %s: ignored"
-                             (substring (symbol-name key) 1) (1+ first) (substring (symbol-name key) 1)))))))
+                             said (1+ first) said))))))
 
 (defun agent-workflow--steps-named (steps paths problem)
   "A job's STEPS (each at its path in PATHS) with their names checked (one
@@ -523,6 +527,12 @@ this file). As `agent-workflow--job-read' for the rest."
                    (funcall problem 'warning at "prompt: {%s}: %s isn't before %s (its needs): empty when it starts"
                             variable other job)))))
              (setq step (plist-put step :prompt value))))
+          ("kind"
+           (cond ((not (equal kind "agent")) (funcall problem 'error at "kind: only for an agent: step"))
+                 ((not (and (stringp value) (assq (intern value) (bound-and-true-p agent-workflow-kinds))))
+                  (funcall problem 'error at "kind %s: not one of %s" (agent-workflow--shown value)
+                           (agent-workflow--kinds-said)))
+                 (t (setq step (plist-put step :agent-kind (intern value))))))
           ("model"
            (cond ((not (and (stringp value) (not (string-empty-p value))))
                   (funcall problem 'error at "model %s: a model (%s, a model's id)" (agent-workflow--shown value)

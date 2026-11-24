@@ -53,6 +53,7 @@
   issue                  ; the issue whose run it works for: "doom-a1b"
   job                    ; its job: "review"
   definition                ; its step's agent, a name
+  kind                   ; its step's kind, over its agent's: codex
   model                  ; its step's model, over its agent's: "opus"
   effort                 ; its step's effort, over its agent's: "high"
   worktree               ; the issue's worktree, where it works
@@ -135,14 +136,16 @@ run with no ticket gives its {issue}: its name)."
 (defun agent-workflow-definition-filled (agent)
   "AGENT's definition (a copy), its tools and deny with their variables
 filled in shell-quoted (a rule names an exact command: Bash(git -C {main}
-commit:*)), its instructions with them as they are; its step's model and
-effort over its own."
+commit:*)), its instructions with them as they are; its step's kind, model
+and effort over its own, its :kind as it runs (else `agent-workflow-kind')."
   (let* ((definition (copy-sequence (alist-get (agent-workflow-agent-definition agent)
                                             (agent-workflow-agent-definitions (agent-workflow-agent-project agent))
                                             nil nil #'equal)))
          (values (agent-workflow--agent-values agent))
          (quoted (mapcar (lambda (value) (cons (car value) (and (cdr value) (shell-quote-argument (cdr value)))))
                          values)))
+    (setq definition (plist-put definition :kind (or (agent-workflow-agent-kind agent) (plist-get definition :kind)
+                                                     agent-workflow-kind)))
     (when (agent-workflow-agent-model agent)
       (setq definition (plist-put definition :model (agent-workflow-agent-model agent))))
     (when (agent-workflow-agent-effort agent)
@@ -251,9 +254,9 @@ never (`agent-workflow--protected-rules', PROJECT's)."
 
 (defun agent-workflow--config (agent)
   "agent-shell's config for AGENT's session (see the top of this file)."
-  (let* ((kind (or (alist-get agent-workflow-kind agent-workflow-kinds)
-                   (error "No such kind of agent: %s" agent-workflow-kind)))
-         (definition (agent-workflow-definition-filled agent))
+  (let* ((definition (agent-workflow-definition-filled agent))
+         (kind (or (alist-get (plist-get definition :kind) agent-workflow-kinds)
+                   (error "No such kind of agent: %s" (plist-get definition :kind))))
          (model (plist-get definition :model))
          (effort (plist-get definition :effort))
          (mode (or (plist-get definition :mode) agent-workflow-mode))
@@ -288,10 +291,10 @@ never (`agent-workflow--protected-rules', PROJECT's)."
                 client))))
     config))
 
-(cl-defun agent-workflow-start-agent (&key project issue job definition model effort type title branch values
-                                           outcomes prompt snapshot resume place)
+(cl-defun agent-workflow-start-agent (&key project issue job definition kind model effort type title branch
+                                           values outcomes prompt snapshot resume place)
   "Start an agent of the pool for the JOB of ISSUE's run in PROJECT, with
-the DEFINITION (a name), MODEL and EFFORT over its own (a step's): its
+the DEFINITION (a name), KIND, MODEL and EFFORT over its own (a step's): its
 session, fresh, in ISSUE's worktree (made on its branch from TYPE and
 TITLE, or BRANCH, if it isn't there); PLACE, (DIR . BRANCH): there instead
 \(your checkout, for a run there). VALUES: its variables' values (an alist);
@@ -318,7 +321,7 @@ DEFINITION isn't one."
                                           (t (agent-workflow-worktree project issue :type type :title title
                                                                       :branch branch))))
                  (agent (agent-workflow-agent--make :project project :issue issue :job job :definition definition
-                                                    :model model :effort effort
+                                                    :kind kind :model model :effort effort
                                                     :worktree dir :branch branch :commit (nth 2 snapshot)
                                                     :values values :outcomes outcomes :resumed resume
                                                     :pending prompt))
