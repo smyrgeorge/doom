@@ -16,7 +16,8 @@
       (list (expand-file-name invocation-name invocation-directory)
             "--batch" "-Q" (concat "--init-directory=" (+test-tmp-file "mock-acp-home/"))
             "-l" (expand-file-name "examples/agent-workspace/stand-in.el" +test-root) "-f" "mock-acp-main"))
-(add-to-list 'agent-workspace-kinds '(mock :config agent-shell-mock-agent-make-agent-config))
+;; The stand-in's modes: Claude Code's, as it lists them; it starts in auto.
+(add-to-list 'agent-workspace-kinds `(mock :config agent-shell-mock-agent-make-agent-config :modes ,agent-workspace-modes :mode "auto"))
 
 ;; ====== HELPERS ======
 

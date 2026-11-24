@@ -41,9 +41,10 @@ worktree or branch there) is passed over. None left: its role and a number
   :type '(repeat string)
   :group 'agent-workspace)
 
-(defcustom agent-workspace-models '("opus" "sonnet" "haiku")
-  "The models offered when you choose one (C-u c); \"inherit\": your
-default."
+(defcustom agent-workspace-models '("fable" "opus" "sonnet" "haiku")
+  "Claude Code's models offered when you choose one (C-u c), and a role's
+checked against; \"inherit\": your default. Another agent's: its kind's
+\(`agent-workspace-kind-models')."
   :type '(repeat string)
   :group 'agent-workspace)
 
@@ -254,7 +255,9 @@ to add, :full."
                        ((> count 0) (format "%d" count))
                        (t ""))
           :model (propertize (or (plist-get spec :model) "your default") 'face 'shadow)
-          :mode (propertize (agent-workspace-mode-label (or (plist-get spec :mode) agent-workspace-mode "default"))
+          :mode (propertize (agent-workspace-mode-label (or (plist-get spec :mode)
+                                                            (agent-workspace-kind-mode (agent-workspace-role-kind spec))
+                                                            "default"))
                             'face 'shadow)
           :labels (concat (propertize (string-join labels ", ") 'face 'shadow)
                           (if (and labels ready (> ready 0)) (propertize (format " ·%d ready" ready) 'face 'success) ""))
@@ -479,14 +482,21 @@ made for it; one taken or not valid is refused, and asked again."
                           (sit-for 1.5)))))))))
 
 (defun agent-workspace--read-more (project role)
-  "Its model, permission mode and colour, read (its role's, else
-`agent-workspace-mode', and a free one by default): (:model :mode :colour)."
+  "Its model, permission mode and colour, read (its role's, else its
+kind's, and a free one by default), its kind's offered (Claude Code's,
+another's own if known): (:model :mode :colour)."
   (let* ((spec (agent-workspace--project-role project role))
+         (kind (agent-workspace-role-kind spec))
+         (modes (agent-workspace-kind-modes kind))
          (model (completing-read (format "Model (%s's: %s): " role (or (plist-get spec :model) "inherit"))
-                                 (cons "inherit" agent-workspace-models) nil nil nil nil
+                                 (cons "inherit" (agent-workspace-kind-models kind)) nil nil nil nil
                                  (or (plist-get spec :model) "inherit")))
-         (mode (completing-read "Permission mode: " agent-workspace-modes nil t nil nil
-                                (or (plist-get spec :mode) agent-workspace-mode "default")))
+         (mode (if modes
+                   (completing-read "Permission mode: " modes nil t nil nil
+                                    (or (plist-get spec :mode) (agent-workspace-kind-mode kind) "default"))
+                 (let ((mode (read-string "Permission mode (empty: its agent's own): " nil nil
+                                          (or (plist-get spec :mode) (agent-workspace-kind-mode kind)))))
+                   (unless (string-empty-p mode) mode))))
          (colour (completing-read "Colour: " agent-workspace-colours nil t nil nil
                                   (agent-workspace-free-colour project (plist-get spec :colour)))))
     (list :model (unless (member model '("" "inherit")) model)

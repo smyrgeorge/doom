@@ -600,6 +600,9 @@ Write the tests first, then run them.
 
 - `kind` is its agent: one of `agent-workspace-kinds`, agent-shell's names for them (`claude-code`, `codex`,
   `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor`); none, `agent-workspace-kind` (`claude-code`).
+  Its `model` and `mode` are its kind's: Claude Code's checked against its names (`fable`, `opus`, `sonnet`, `haiku`,
+  a `claude-...` id) and modes, its agents starting in `agent-workspace-mode` (auto); another agent's taken as they
+  are, its agents starting in its own default mode.
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the
   starters have none: their agents run in auto mode). Claude Code enforces all three. Another agent takes no such
   rules: its permission requests are answered by them instead (a `deny` one matching, refused; a `tools` one,

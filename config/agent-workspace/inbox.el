@@ -47,7 +47,8 @@
   :group 'agent-workspace)
 
 (defcustom agent-workspace-event-mode nil
-  "The permission mode a turn an event starts runs in (Claude Code's id),
+  "The permission mode a turn an event starts runs in (Claude Code's id: an
+agent of another kind not switched, unless its kind's modes have it),
 its agent's own mode back once it ends: \"plan\", it reads and investigates
 on its own, editing asks you. nil: its agent's own mode, nothing switched."
   :type '(choice (const :tag "The agent's own" nil) string)
@@ -350,8 +351,12 @@ if that names another (its mode switched first). AGENT stopped meanwhile
 meanwhile, or its prompt not sent: it stays as it is (queued, said). NOW
 \(you sent it): at once, after its turn if it's working, in its own mode."
   (let* ((mode (agent-workspace--agent-mode-id agent))
+         ;; Its kind's modes (Claude Code's; another's if known): one it
+         ;; hasn't, not switched to.
          (switch (and (not now) agent-workspace-event-mode
-                      (not (equal mode agent-workspace-event-mode))))
+                      (not (equal mode agent-workspace-event-mode))
+                      (member agent-workspace-event-mode
+                              (agent-workspace-kind-modes (agent-workspace-agent-kind agent)))))
          (turn (list :event event :mode mode :switched switch :sent nil :started nil))
          (name (agent-workspace-agent-name agent))
          (id (plist-get event :id))

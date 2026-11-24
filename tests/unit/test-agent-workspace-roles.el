@@ -129,6 +129,27 @@ error naming them."
                (+test-awr--read "---\ndescription: builds\nkind: claude-code\ndeny: Bash(git push:*)\n---\nBuild.\n")))
     (should-not problems)))
 
+(ert-deftest agent-workspace-roles/model-and-mode-by-kind ()
+  "A role's model and mode checked by its kind: Claude Code's against its
+names and modes (accept-edits as acceptEdits); another agent's its own,
+taken as they are."
+  (pcase-let ((`(,role . ,problems)
+               (+test-awr--read "---\ndescription: builds\nkind: codex\nmodel: gpt-5\nmode: full-auto\n---\nBuild.\n")))
+    (should-not problems)
+    (should (equal (list (plist-get role :model) (plist-get role :mode)) '("gpt-5" "full-auto"))))
+  (pcase-let ((`(,role . ,problems)
+               (+test-awr--read "---\ndescription: builds\nmode: accept-edits\nmodel: gpt-5\n---\nBuild.\n")))
+    (should (equal (plist-get role :mode) "acceptEdits"))
+    (should (equal (+test-awr--messages problems)
+                   '((warning "tester.md:4: model gpt-5: not inherit, one of fable, opus, sonnet, haiku, nor a model's id (claude-...)")))))
+  ;; The kind's modes, models and starting mode.
+  (should (equal (agent-workspace-kind-modes 'claude-code) agent-workspace-modes))
+  (should (equal (agent-workspace-kind-mode 'claude-code) "auto"))
+  (should-not (agent-workspace-kind-modes 'codex))
+  (should-not (agent-workspace-kind-mode 'codex))
+  (should (member "fable" (agent-workspace-kind-models 'claude-code)))
+  (should-not (agent-workspace-kind-models 'codex)))
+
 (ert-deftest agent-workspace-roles/leads ()
   "leads: true (or yes, any case), it runs the crew from its shell; false
 or no, it doesn't, as without it (doom-pbk.134)."
@@ -195,7 +216,7 @@ icon, a key given twice (the last used), a tool both allowed and denied
     (should (equal (plist-get role :glyph) "⚗"))
     (should (equal (+test-awr--messages problems)
                    (append
-                    '((warning "tester.md:3: model gpt-4: not inherit, one of opus, sonnet, haiku, nor a model's id (claude-...)"))
+                    '((warning "tester.md:3: model gpt-4: not inherit, one of fable, opus, sonnet, haiku, nor a model's id (claude-...)"))
                     (and (require 'nerd-icons nil t)
                          '((warning "tester.md:4: icon md-no_such_icon_here: not a nerd icon (md-NAME or cod-NAME): ⚗ is shown")))
                     '((warning "tester.md:6: verb given twice (line 5 too): the last is used")

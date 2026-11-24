@@ -95,7 +95,8 @@ running it)."
         (list (expand-file-name invocation-name invocation-directory) "--batch" "-Q"
               (concat "--init-directory=" (expand-file-name "agent-workspace-stand-in/" temporary-file-directory))
               "-l" +my/example-agent-workspace--stand-in "-f" "mock-acp-main"))
-  (setf (alist-get 'stand-in agent-workspace-kinds) (list :config #'agent-shell-mock-agent-make-agent-config)))
+  (setf (alist-get 'stand-in agent-workspace-kinds)
+        (list :config #'agent-shell-mock-agent-make-agent-config :modes agent-workspace-modes :mode "auto")))
 
 (defun +my/example-agent-workspace-ready ()
   "Non-nil once the example's agents are as it shows them (the screenshots

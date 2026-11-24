@@ -82,9 +82,6 @@ them too. They replace the project's and the starters of the same name."
   (expand-file-name "roles/" (file-name-directory (or load-file-name buffer-file-name)))
   "The starter roles, shipped with this module.")
 
-(defconst agent-workspace-modes '("default" "acceptEdits" "plan" "auto" "dontAsk" "bypassPermissions")
-  "Claude Code's permission modes (auto: Claude decides what needs your OK).")
-
 (defconst agent-workspace--role-keys
   '("name" "description" "kind" "tools" "deny" "model" "mode" "labels" "talks-to" "hands-to" "returns-to"
     "max" "leads" "icon" "verb" "colour" "color")
@@ -301,17 +298,12 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
                     (problem 'error n "kind %s: not one of %s" value
                              (mapconcat (lambda (kind) (symbol-name (car kind)))
                                         (bound-and-true-p agent-workspace-kinds) ", "))))
+                 ;; Its model and mode checked once its kind is known
+                 ;; (below): Claude Code's names, another agent's own.
                  ("model"
                   (unless (member value '("" "inherit"))
-                    (unless (agent-workspace--model-p value)
-                      (problem 'warning n "model %s: not inherit, one of %s, nor a model's id (claude-...)"
-                               value (string-join (bound-and-true-p agent-workspace-models) ", ")))
                     (setq role (plist-put role :model value))))
-                 ("mode"
-                  (if-let* ((id (agent-workspace--mode-id value)))
-                      (setq role (plist-put role :mode id))
-                    (problem 'error n "mode %s: not one of %s" value
-                             (string-join agent-workspace-modes ", "))))
+                 ("mode" (setq role (plist-put role :mode value)))
                  ("max"
                   (if (string-match-p "\\`[1-9][0-9]*\\'" value)
                       (setq role (plist-put role :max (string-to-number value)))
@@ -341,6 +333,19 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
             (when (member tool (plist-get role :deny))
               (problem 'warning (or (cdr (assoc "deny" seen)) 1)
                        "%s both allowed (tools) and denied (deny): denied" tool)))
+          ;; Its model and mode, by its kind: Claude Code's checked, its
+          ;; mode as Claude Code names it (accept-edits: acceptEdits).
+          (let ((claude (agent-workspace-kind-claude-code-p (agent-workspace-role-kind role)))
+                (model (plist-get role :model))
+                (mode (plist-get role :mode)))
+            (when (and model claude (not (agent-workspace--model-p model)))
+              (problem 'warning (cdr (assoc "model" seen)) "model %s: not inherit, one of %s, nor a model's id (claude-...)"
+                       model (string-join (bound-and-true-p agent-workspace-models) ", ")))
+            (when (and mode claude)
+              (if-let* ((id (agent-workspace--mode-id mode)))
+                  (setq role (plist-put role :mode id))
+                (problem 'error (cdr (assoc "mode" seen)) "mode %s: not one of %s" mode
+                         (string-join agent-workspace-modes ", ")))))
           ;; Another agent than Claude Code: its deny only refuses what it
           ;; asks (config/agent-shell/permissions.el).
           (when-let* ((kind (plist-get role :kind))
@@ -354,7 +359,8 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
             (setq role (plist-put role :instructions instructions))))))
     (when lines
       (setq role (plist-put role :lines (nreverse lines))))
-    (setq problems (nreverse problems))
+    ;; In the order of their lines (a model's checked once its kind is known).
+    (setq problems (sort (nreverse problems) (lambda (a b) (< (nth 3 a) (nth 3 b)))))
     (cons (unless (assq 'error problems) role) problems)))
 
 (defun agent-workspace--role-names-problems (roles)

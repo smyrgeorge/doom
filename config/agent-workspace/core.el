@@ -175,6 +175,43 @@ this Emacs's."
   "The name of AGENT's session buffer: \"ada · builder\"."
   (format "%s · %s" (agent-workspace-agent-name agent) (agent-workspace-agent-role agent)))
 
+(defvar agent-workspace-kinds)
+(defvar agent-workspace-models)
+(defvar agent-workspace-mode)
+(defconst agent-workspace-modes '("default" "acceptEdits" "plan" "auto" "dontAsk" "bypassPermissions")
+  "Claude Code's permission modes (auto: Claude decides what needs your OK).")
+
+(defun agent-workspace-kind-claude-code-p (kind)
+  "Non-nil if KIND (of `agent-workspace-kinds') is Claude Code."
+  (plist-get (alist-get kind agent-workspace-kinds) :claude-code))
+
+(defun agent-workspace-kind-models (kind)
+  "The models KIND's agents are offered (and a role's checked against):
+Claude Code's, `agent-workspace-models'; another's, its :models (none:
+none offered, none checked)."
+  (if (agent-workspace-kind-claude-code-p kind)
+      agent-workspace-models
+    (plist-get (alist-get kind agent-workspace-kinds) :models)))
+
+(defun agent-workspace-kind-modes (kind)
+  "KIND's permission modes, their ids: Claude Code's, `agent-workspace-modes';
+another's, its :modes (none: not known, none checked)."
+  (if (agent-workspace-kind-claude-code-p kind)
+      agent-workspace-modes
+    (plist-get (alist-get kind agent-workspace-kinds) :modes)))
+
+(defun agent-workspace-kind-mode (kind)
+  "The mode KIND's agents start in when neither they nor their role chose
+one: Claude Code's, `agent-workspace-mode' (auto); another's, its :mode
+\(none: its own default)."
+  (if (agent-workspace-kind-claude-code-p kind)
+      agent-workspace-mode
+    (plist-get (alist-get kind agent-workspace-kinds) :mode)))
+
+(defun agent-workspace-role-kind (role)
+  "ROLE's kind (a plist): its kind:, else `agent-workspace-kind'."
+  (or (plist-get role :kind) agent-workspace-kind))
+
 (defun agent-workspace-role (agent)
   "AGENT's role, a plist (see `agent-workspace-role-function')."
   (funcall agent-workspace-role-function

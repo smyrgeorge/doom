@@ -27,7 +27,8 @@
             "--batch" "-Q" (concat "--init-directory=" (+test-tmp-file "mock-acp-home/"))
             "-l" +test-aws--mock "-f" "mock-acp-main"))
 
-(add-to-list 'agent-workspace-kinds '(mock :config agent-shell-mock-agent-make-agent-config))
+;; The stand-in's modes: Claude Code's, as it lists them; it starts in auto.
+(add-to-list 'agent-workspace-kinds `(mock :config agent-shell-mock-agent-make-agent-config :modes ,agent-workspace-modes :mode "auto"))
 ;; The stand-in, given Claude Code's options as Claude Code is.
 (add-to-list 'agent-workspace-kinds '(mock-claude :config agent-shell-mock-agent-make-agent-config
                                                   :claude-code t))

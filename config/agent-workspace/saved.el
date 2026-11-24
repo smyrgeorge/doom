@@ -192,7 +192,8 @@ place and name. PEEK: only looked at, not as this Emacs reading it
                                  (agent-workspace--crew-json (substring (symbol-name key) 1))))
             (seq-do-indexed
              (lambda (entry i)
-               (let ((why (agent-workspace--crew-entry-problem entry agents))
+               (let ((why (let ((agent-workspace--crew-reading project))
+                            (agent-workspace--crew-entry-problem entry agents)))
                      (name (and (consp entry) (plist-get entry :name))))
                  (if why
                      (progn
@@ -212,9 +213,24 @@ place and name. PEEK: only looked at, not as this Emacs reading it
                         (and left-out (list :left-out (nreverse left-out)))))
               (nreverse problems))))))
 
+(defvar agent-workspace--crew-reading nil
+  "The project whose crew.json is read: its entries' roles' kinds.")
+
+(defun agent-workspace--crew-entry-kind (entry)
+  "ENTRY's kind: its own (crew.json's), else its role's, else
+`agent-workspace-kind'."
+  (let ((kind (plist-get entry :kind)))
+    (or (and (stringp kind) (car (assq (intern kind) agent-workspace-kinds)))
+        (and agent-workspace--crew-reading (stringp (plist-get entry :role))
+             (plist-get (funcall agent-workspace-role-function agent-workspace--crew-reading
+                                 (plist-get entry :role))
+                        :kind))
+        agent-workspace-kind)))
+
 (defun agent-workspace--crew-entry-problem (entry before)
   "What's wrong with ENTRY, an agent of crew.json as JSON has it (BEFORE: the
-ones read already), or nil."
+ones read already), or nil. Its mode is checked against its kind's
+\(Claude Code's ids; another's own, if known)."
   (let* ((name (and (consp entry) (plist-get entry :name)))
          (shown #'agent-workspace--crew-json)
          (not-boolean (and (consp entry)
@@ -230,9 +246,16 @@ ones read already), or nil."
           ((and (plist-member entry :colour) (not (member (plist-get entry :colour) agent-workspace-colours)))
            (format "its colour %s isn't one of %s" (funcall shown (plist-get entry :colour))
                    (string-join agent-workspace-colours ", ")))
-          ((and (plist-member entry :mode) (not (member (plist-get entry :mode) agent-workspace-modes)))
-           (format "its mode %s isn't one of %s" (funcall shown (plist-get entry :mode))
-                   (string-join agent-workspace-modes ", ")))
+          ((and (plist-member entry :mode)
+                (let ((modes (agent-workspace-kind-modes (agent-workspace--crew-entry-kind entry))))
+                  (if modes
+                      (not (member (plist-get entry :mode) modes))
+                    (not (stringp (plist-get entry :mode))))))
+           (let ((modes (agent-workspace-kind-modes (agent-workspace--crew-entry-kind entry))))
+             (if modes
+                 (format "its mode %s isn't one of %s" (funcall shown (plist-get entry :mode))
+                         (string-join modes ", "))
+               (format "its mode %s isn't a string" (funcall shown (plist-get entry :mode))))))
           ((let ((kind (plist-get entry :kind)))
              (and (plist-member entry :kind)
                   (not (and (stringp kind) (assq (intern kind) agent-workspace-kinds)))))
@@ -296,7 +319,9 @@ isn't its role's."
               (and model (not (equal model (plist-get role :model))) (list :model model)))
             ;; Its own mode, unless it's the one it would have anyway.
             (let ((mode (agent-workspace-agent-mode agent)))
-              (and mode (not (equal mode (or (plist-get role :mode) agent-workspace-mode))) (list :mode mode)))
+              (and mode (not (equal mode (or (plist-get role :mode)
+                                             (agent-workspace-kind-mode (agent-workspace-agent-kind agent)))))
+                   (list :mode mode)))
             (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t))
             (and (agent-workspace-agent-loop agent) (list :loop t))
             ;; Not the one its role would have (its kind:, else

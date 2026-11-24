@@ -348,7 +348,7 @@ the columns lined up across the groups."
                            "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident  → builder"
                            "✎ scribe        writes issues with you         0 of 1  your default  auto"
                            "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions"
-                           "✗ local/scribe  line 2: max lots: not a number above 0")))
+                           "✗ local/scribe  line 1: no description: say what it does (description: ...)")))
           ;; Narrower: the role replaced goes first, then hands-to; a left-out
           ;; file's error cut to fit; no row wider than the minibuffer.
           (should (equal (mapcar (lambda (row) (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))
@@ -360,7 +360,7 @@ the columns lined up across the groups."
                            "⌕ investigator  investigates what you give it  0 of 2  your default  auto  investigation, incident"
                            "✎ scribe        writes issues with you         0 of 1  your default  auto"
                            "✗ broken        line 3: mode autoo: not one of default, acceptEdits, plan, auto, dontAsk, bypassPer…"
-                           "✗ local/scribe  line 2: max lots: not a number above 0")))
+                           "✗ local/scribe  line 1: no description: say what it does (description: ...)")))
           (dolist (width '(200 140 100 80 60 40 30 24))
             (dolist (row (agent-workspace--role-rows facts width))
               (should (<= (string-width (substring-no-properties (concat (nth 2 row) (nth 1 row) (nth 3 row))))

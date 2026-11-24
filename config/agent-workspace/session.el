@@ -129,11 +129,12 @@ processes with it."
        nil))))
 
 (defun agent-workspace-mode-of (agent)
-  "The permission mode AGENT's session starts in (Claude Code's id): its own
-\(e, C-u c), else its role's, else `agent-workspace-mode' (auto); nil,
-Claude Code's own default."
+  "The permission mode AGENT's session starts in (its kind's id: Claude
+Code's, auto...): its own (e, C-u c), else its role's, else its kind's
+\(`agent-workspace-kind-mode': Claude Code's `agent-workspace-mode', auto);
+nil, its agent's own default."
   (or (agent-workspace-agent-mode agent) (plist-get (agent-workspace-role agent) :mode)
-      agent-workspace-mode))
+      (agent-workspace-kind-mode (agent-workspace-agent-kind agent))))
 
 ;; ====== ITS ROLE, FILLED IN ======
 ;; A role's tools, deny and instructions may name what's the agent's own,
