@@ -633,6 +633,12 @@ one."
       (user-error "Outcome %s: not one of %s" outcome (string-join allowed ", ")))
     (unless (memq (plist-get (agent-workflow--job run job) :status) '(running waiting))
       (agent-workflow--refuse "%s's job %s isn't running" (agent-workflow-run-issue run) job))
+    ;; Its step not its agent's now (a script runs, its on-fail script, or
+    ;; the user is asked): nothing to say done to.
+    (unless (and (agent-workflow--agent-at-work-p run job)
+                 (not (plist-get (agent-workflow--job run job) :ask)))
+      (agent-workflow--refuse "%s's job %s: its step isn't yours now (a script runs, or the user is asked): nothing to say done to"
+                              (agent-workflow-run-issue run) job))
     (agent-workflow--job-set run job :outcome outcome :notes (and (not (string-empty-p notes)) notes)
                              :finished t :session (agent-workflow-agent-session agent))
     (agent-workflow--journal run "step-ended" :job job :step (plist-get (agent-workflow--job run job) :step)

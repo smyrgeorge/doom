@@ -359,6 +359,30 @@ jobs:
       (+test-awr--commit (agent-workflow-worktree-directory project issue) "lexer.el" "Lexer")
       (should (string-match-p "lexer.el | 1 +" (agent-workflow--diff-stat run))))))
 
+(ert-deftest agent-workflow-steps/done-refused-during-a-script ()
+  "Its agent saying done while its job's step is a script (a command it
+left running, ending): refused, the script's step going on to its end
+\(doom-38o.78)."
+  (+test-awr "done-during-script"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  build:
+    steps:
+      - agent: build
+      - run: sleep 2
+")
+    (let* ((issue (+test-awr--issue project "Done during a script"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "build")))
+      (+test-awr--finish-step run "build")
+      (should (+test-awr--wait (lambda () (eql (plist-get (agent-workflow--job run "build") :step) 1))))
+      (should (string-match-p "isn't yours now"
+                              (cadr (should-error (agent-workflow-done agent nil "again") :type 'user-error))))
+      (should (eql (plist-get (agent-workflow--job run "build") :step) 1))
+      (should (eq (+test-awr--job run "build") 'running))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
+
 (ert-deftest agent-workflow-steps/an-on-fail-script ()
   "on-fail: {run: ...}: a failed step's script first, FAILED_STEP and
 FAILED_OUTPUT in its environment, its output a log of its own. Exit 0 it
