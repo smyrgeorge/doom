@@ -324,9 +324,11 @@ isn't its role's."
                    (list :mode mode)))
             (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t))
             (and (agent-workspace-agent-loop agent) (list :loop t))
-            ;; Not the one its role would have (its kind:, else
-            ;; agent-workspace-kind): said, so it starts again as it was.
-            (unless (eq (agent-workspace-agent-kind agent) (or (plist-get role :kind) agent-workspace-kind))
+            ;; One given it, not the one its role would have (its kind:,
+            ;; else agent-workspace-kind): said, so it starts again as it
+            ;; was; else its role's, following it.
+            (when (and (agent-workspace-agent-kind-given agent)
+                       (not (eq (agent-workspace-agent-kind agent) (or (plist-get role :kind) agent-workspace-kind))))
               (list :kind (symbol-name (agent-workspace-agent-kind agent))))
             (let ((panels (or (agent-workspace-agent-panel-names agent)
                               (gethash agent agent-workspace--crew-panels))))
@@ -548,6 +550,8 @@ issue); asleep if it was, or if it loops and `agent-workspace-loop' is nil
                              kind
                            (or (plist-get (funcall agent-workspace-role-function project role) :kind)
                                agent-workspace-kind)))
+                 :kind-given (let ((kind (plist-get entry :kind)))
+                               (and kind (symbolp kind) (assq kind agent-workspace-kinds) t))
                  :colour (or (plist-get entry :colour) (agent-workspace-free-colour project))
                  :model (plist-get entry :model) :mode (plist-get entry :mode)
                  :project (agent-workspace--root project)

@@ -1222,7 +1222,8 @@ message (no crews); on any other (in progress, blocked, done): a plain one."
       ("role"
        (agent-workspace-set-role agent (agent-workspace-read-role project (agent-workspace-agent-role agent))))
       ((or "mode" "model")
-       (let* ((more (agent-workspace--read-more project (agent-workspace-agent-role agent))))
+       (let* ((more (agent-workspace--read-more project (agent-workspace-agent-role agent)
+                                                (agent-workspace-agent-kind agent))))
          (if (equal what "mode")
              (setf (agent-workspace-agent-mode agent) (plist-get more :mode))
            (setf (agent-workspace-agent-model agent) (plist-get more :model)))

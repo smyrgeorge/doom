@@ -152,6 +152,7 @@ this Emacs's."
   role                       ; its role's name: "builder"
   colour                     ; one of `agent-workspace-colours': "blue"
   (kind 'claude-code)        ; which agent: a key of `agent-workspace-kinds'
+  kind-given                 ; its kind given (made with one, crew.json's): kept, else its role's
   model                      ; its model, when not its role's
   mode                       ; its permission mode, when not its role's
   project                    ; its crew's project: the main checkout's root
@@ -217,6 +218,17 @@ one: Claude Code's, `agent-workspace-mode' (auto); another's, its :mode
   (funcall agent-workspace-role-function
            (agent-workspace-agent-project agent)
            (agent-workspace-agent-role agent)))
+
+(defun agent-workspace--follow-role-kind (agent)
+  "AGENT's kind its role's (its kind:, else `agent-workspace-kind'), unless
+one was given it: after its role changed, or its role file's kind. A kind
+changed: its own mode and model, the old kind's, dropped."
+  (unless (agent-workspace-agent-kind-given agent)
+    (let ((kind (agent-workspace-role-kind (agent-workspace-role agent))))
+      (unless (eq kind (agent-workspace-agent-kind agent))
+        (setf (agent-workspace-agent-kind agent) kind
+              (agent-workspace-agent-mode agent) nil
+              (agent-workspace-agent-model agent) nil)))))
 
 (defun agent-workspace--bare-role (_project name)
   "A role named NAME, with nothing of its own (before roles are defined)."
@@ -768,6 +780,7 @@ session not started, it's stuck saying why, in the crew."
                   :name name :role role :state 'waking
                   :kind (or kind (plist-get (funcall agent-workspace-role-function project role) :kind)
                             agent-workspace-kind)
+                  :kind-given (and kind t)
                   :colour (or colour (agent-workspace-free-colour
                                       project (plist-get (funcall agent-workspace-role-function project role)
                                                          :colour)))
@@ -934,6 +947,9 @@ why."
                     (error (error-message-string err)))))
       (when (and (not failed) (eq what 'renamed) (not (equal was name)))
         (run-hook-with-args 'agent-workspace-renamed-functions agent was))
+      ;; Its new role's kind, unless one was given it.
+      (when (and (not failed) (eq what 'role))
+        (agent-workspace--follow-role-kind agent))
       (agent-workspace--changed agent (if failed 'unmoved what))
       (if live
           (agent-workspace--start agent)

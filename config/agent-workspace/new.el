@@ -481,12 +481,13 @@ made for it; one taken or not valid is refused, and asked again."
               (user-error (message "%s" (error-message-string err))
                           (sit-for 1.5)))))))))
 
-(defun agent-workspace--read-more (project role)
+(defun agent-workspace--read-more (project role &optional kind)
   "Its model, permission mode and colour, read (its role's, else its
 kind's, and a free one by default), its kind's offered (Claude Code's,
-another's own if known): (:model :mode :colour)."
+another's own if known): (:model :mode :colour). KIND: its agent's (an
+agent there already), else its role's."
   (let* ((spec (agent-workspace--project-role project role))
-         (kind (agent-workspace-role-kind spec))
+         (kind (or kind (agent-workspace-role-kind spec)))
          (modes (agent-workspace-kind-modes kind))
          (model (completing-read (format "Model (%s's: %s): " role (or (plist-get spec :model) "inherit"))
                                  (cons "inherit" (agent-workspace-kind-models kind)) nil nil nil nil

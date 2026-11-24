@@ -72,6 +72,26 @@ too."
       (should-not (agent-workspace--check-name "grace" "/tmp/project/"))
       (should-not (agent-workspace--check-name "ada" "/tmp/project/" ada)))))
 
+(ert-deftest agent-workspace/its-kind-follows-its-role ()
+  "An agent's kind its role's unless one was given it: its role changed (or
+its role file's kind), its kind follows, the old kind's own mode and model
+dropped; one given, kept. crew.json says a kind given only (doom-pbk.167)."
+  (let* ((agent-workspace-kind 'claude-code)
+         (agent-workspace-role-function
+          (lambda (_project role) (pcase role ("builder" '(:name "builder")) ("coder" '(:name "coder" :kind codex)))))
+         (ada (agent-workspace--make-agent :name "ada" :role "builder" :kind 'claude-code
+                                           :mode "acceptEdits" :model "haiku" :project "/p/"))
+         (bob (agent-workspace--make-agent :name "bob" :role "builder" :kind 'gemini-cli :kind-given t :project "/p/")))
+    (dolist (agent (list ada bob))
+      (setf (agent-workspace-agent-role agent) "coder")
+      (agent-workspace--follow-role-kind agent))
+    (should (eq (agent-workspace-agent-kind ada) 'codex))
+    (should-not (agent-workspace-agent-mode ada))
+    (should-not (agent-workspace-agent-model ada))
+    (should (eq (agent-workspace-agent-kind bob) 'gemini-cli))
+    (should-not (plist-get (agent-workspace--crew-entry ada) :kind))
+    (should (equal (plist-get (agent-workspace--crew-entry bob) :kind) "gemini-cli"))))
+
 (ert-deftest agent-workspace/a-free-colour ()
   "The first colour no agent has; all taken, the one fewest have."
   (let ((agent-workspace-colours '("blue" "green" "red")))

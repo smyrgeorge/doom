@@ -73,6 +73,8 @@ processes with it."
     (agent-workspace--stop agent 'waking))
   (setf (agent-workspace-agent-buffer agent) nil)
   (agent-workspace--set-state agent 'waking)
+  ;; Its role's kind, its role file changed meanwhile (one given: kept).
+  (ignore-errors (agent-workspace--follow-role-kind agent))
   (let ((made nil))
     (condition-case err
         (let* ((dir (agent-workspace-worktree-ensure agent))

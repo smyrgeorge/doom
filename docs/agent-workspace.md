@@ -607,6 +607,8 @@ Write the tests first, then run them.
 
 - `kind` is its agent: one of `agent-workspace-kinds`, agent-shell's names for them (`claude-code`, `codex`,
   `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor`); none, `agent-workspace-kind` (`claude-code`).
+  An agent follows its role's: given another role (or its role file's `kind` changed), it starts again on that kind,
+  its own model and mode dropped; one given its own (`:kind` in Lisp, `kind` in crew.json) keeps it.
   Its `model` and `mode` are its kind's: Claude Code's checked against its names (`fable`, `opus`, `sonnet`, `haiku`,
   a `claude-...` id) and modes, its agents starting in `agent-workspace-mode` (auto); another agent's taken as they
   are, its agents starting in its own default mode.
