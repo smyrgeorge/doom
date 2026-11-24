@@ -125,14 +125,15 @@ right). No room: said."
 (defun +my/tiling--new-pane ()
   "A new pane where the strategy puts it, or beside a layout kept whole
 \(config/tiling/panes.el), with no tabs yet; nil in a frame without panes."
-  (when-let* ((new (if-let* ((atom (+my/tiling--atom)))
-                         (+my/tiling--beside-atom atom)
-                       (when-let* ((panes (+my/tiling--ready-panes)))
-                         (funcall (plist-get (+my/tiling--strategy) :split) panes)))))
-    (set-window-prev-buffers new nil)
-    (set-window-next-buffers new nil)
-    (set-window-parameter new 'tab-line-buffers nil)
-    new))
+  (+my/tiling--with-layout
+    (when-let* ((new (if-let* ((atom (+my/tiling--atom)))
+                           (+my/tiling--beside-atom atom)
+                         (when-let* ((panes (+my/tiling--ready-panes)))
+                           (funcall (plist-get (+my/tiling--strategy) :split) panes)))))
+      (set-window-prev-buffers new nil)
+      (set-window-next-buffers new nil)
+      (set-window-parameter new 'tab-line-buffers nil)
+      new)))
 
 (defun +my/tiling--hidden-pane (buffer)
   "A hidden pane holding BUFFER brought to the front (the strategy's :show:

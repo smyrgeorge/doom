@@ -136,6 +136,23 @@ the height; of the row's width).")
   "Functions of a frame: non-nil, tiling leaves it alone (see FRAMES LEFT
 ALONE above).")
 
+;; WINDOWS ATTACHED TO A PANE
+;; Another module's windows inside a pane, part of it: Agent UI's views in the
+;; bottom half of their session's pane (config/agent-ui.el). They aren't
+;; panes: tiling skips them, and lays the panes out with them out of the way.
+;; Each function of `+my/tiling-around-layout-functions' is called with the
+;; layout to do (SPC w SPC, a, RET, resizing, a strategy chosen, a new pane, a
+;; pane closed), a function of no argument, and calls it: its module takes its
+;; windows out before and puts them back after. Tiling knows nothing more of
+;; them; one not defined (its module not loaded) is skipped.
+(defvar +my/tiling-attached-functions '(agent-ui-pane-window-p)
+  "Functions of a window: non-nil, it's attached to a pane, not a pane (see
+WINDOWS ATTACHED TO A PANE above).")
+
+(defvar +my/tiling-around-layout-functions '(agent-ui-pane-around-layout)
+  "Functions each called with a layout to do, a function of no argument,
+which they call, returning its value (see WINDOWS ATTACHED TO A PANE above).")
+
 ;; APPLICATIONS, by name (see TILING FIRST above). Which are is chosen in
 ;; config.el: (setq +my/tiling-apps 'all), every one of them (the default), or
 ;; a list of names, '(agent-shell magit); M-x customize-variable +my/tiling-apps

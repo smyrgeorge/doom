@@ -36,6 +36,8 @@ Emacs is tiling first:
   stacked panes share its rows again, at equal heights.
 - A [merge](git.md#resolving-conflicts)'s bar and three panes stay together: an application or a file opened during
   it goes in a pane beside them, and `SPC w a` leaves them as they are.
+- [Agent UI](agent-ui.md#in-the-sessions-pane) is part of its session's pane: laying the panes out, resizing them,
+  fullscreen take it along with the session.
 
 Which applications open in a new pane is chosen in `config.el`: `(setq +my/tiling-apps 'all)` (the default), or a list
 of `agent-shell`, `terminal`, `preview`, `drawings`, `magit`, `issues`, `agent-ui`, `html` (`M-x customize-variable
@@ -70,7 +72,7 @@ it); it keeps its size when you arrange the panes, open one or close another.
 | `bsp` | The current pane's half of its split | Its split's half of the one above |
 
 In `fullscreen`, a new pane opens alone, just after the current one, and closing it (`SPC w d`, its last tab, `q`)
-shows the next one. One that opens by itself (an agent's canvas) goes behind the current one, hidden just after it:
+shows the next one. One that opens by itself (a canvas from a shell) goes behind the current one, hidden just after it:
 `SPC w w` brings it up. Each workspace keeps its own hidden panes. Choosing another strategy shows them all again, laid
 out its way: as many as it has room for, the rest staying hidden.
 

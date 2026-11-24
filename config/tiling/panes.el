@@ -18,14 +18,47 @@
     (nreverse children)))
 
 (defun +my/tiling--panes (&optional frame)
-  "FRAME's (the selected frame's) panes: its windows besides side panels and
-a layout kept whole (see below), in order."
+  "FRAME's (the selected frame's) panes: its windows besides side panels, a
+layout kept whole (see below) and windows attached to a pane (see
+config/tiling.el), in order."
   (let (panes)
     (named-let walk ((window (window-main-window frame)))
       (cond ((window-parameter window 'window-atom))
-            ((window-live-p window) (push window panes))
+            ((window-live-p window)
+             (unless (+my/tiling--attached-p window)
+               (push window panes)))
             (t (mapc #'walk (+my/tiling--children window)))))
     (nreverse panes)))
+
+;; WINDOWS ATTACHED TO A PANE (see config/tiling.el)
+(defun +my/tiling--attached-p (window)
+  "Non-nil if WINDOW is attached to a pane (`+my/tiling-attached-functions'),
+not a pane."
+  (seq-some (lambda (fn) (and (functionp fn) (funcall fn window)))
+            +my/tiling-attached-functions))
+
+(defvar +my/tiling--in-layout nil
+  "Non-nil while a layout is done: one done inside it isn't wrapped again.")
+
+(defun +my/tiling--lay (layout)
+  "Call LAYOUT, a function of no argument, through
+`+my/tiling-around-layout-functions' (the first one outermost), unless
+inside another layout; its value."
+  (if +my/tiling--in-layout
+      (funcall layout)
+    (let ((+my/tiling--in-layout t))
+      (funcall (seq-reduce (lambda (inner around)
+                             (if (functionp around)
+                                 (lambda () (funcall around inner))
+                               inner))
+                           (reverse +my/tiling-around-layout-functions)
+                           layout)))))
+
+(defmacro +my/tiling--with-layout (&rest body)
+  "BODY, a layout done (`+my/tiling--lay'): the windows attached to panes
+out of the way meanwhile."
+  (declare (indent 0) (debug t))
+  `(+my/tiling--lay (lambda () ,@body)))
 
 ;; A LAYOUT KEPT WHOLE
 ;; An atomic window (Emacs's `window-atom' parameter: its windows split,
@@ -116,9 +149,10 @@ kept whole (the panes beside it as they are)."
       (when (and before (< count before) (> count 1))
         (when-let* ((closed (plist-get (+my/tiling--strategy) :closed)))
           (with-selected-frame frame
-            (let ((sizes (+my/tiling--sizes frame)))
-              (funcall closed (+my/tiling--ordered-panes))
-              (+my/tiling--tell-sizes frame sizes))))))))
+            (+my/tiling--with-layout
+              (let ((sizes (+my/tiling--sizes frame)))
+                (funcall closed (+my/tiling--ordered-panes))
+                (+my/tiling--tell-sizes frame sizes)))))))))
 
 (add-hook 'window-state-change-functions #'+my/tiling--closed-h)
 

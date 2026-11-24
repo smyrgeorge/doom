@@ -1,7 +1,8 @@
 ;;; tests/e2e/test-agent-ui.el -*- lexical-binding: t; -*-
-;; config/agent-ui in a GUI Emacs: what needs real windows and redisplay. A
-;; question left waiting at the turn's end, below what its canvas's pane
-;; shows: the pane shown again, scrolled to it, the cursor on it, the focus
+;; config/agent-ui in a GUI Emacs: what needs real windows and redisplay
+;; (window change functions run: Agent UI's views synced in their session's
+;; pane). A question left waiting at the turn's end, below what its view
+;; shows: the view shown again, scrolled to it, the cursor on it, the focus
 ;; left in the session. No agent runs: the session is a buffer, its turn's end
 ;; agent-shell's event called by hand.
 
@@ -10,7 +11,6 @@
 
 (ert-deftest e2e-agent-ui/a-question-waiting-brought-into-view ()
   (let* ((session (generate-new-buffer "Claude Agent @ e2e"))
-         (agent-ui-display-function #'agent-ui-display-canvas)
          ;; What the turn's end does, alone: a question shown taking the focus
          ;; once Emacs is idle (test-agent-ui-agent.el) off, as config.el can.
          ;; The tests run while Emacs has been idle for a while, so its timer
@@ -35,15 +35,20 @@
                              :options ("Change the test" "Revert the message"))
                            :canvas name)
             (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
-              ;; Its pane closed, its top shown before.
+              ;; A view in the session's pane, closed (hidden), its top shown
+              ;; before.
+              (redisplay)
+              (should (agent-ui-pane-window-p (get-buffer-window canvas)))
               (with-current-buffer canvas (goto-char (point-min)))
               (delete-window (get-buffer-window canvas))
+              (redisplay)
               (should-not (get-buffer-window canvas))
               (with-current-buffer session
                 (funcall on-event '((:event . turn-complete))))
               (redisplay)
               (let ((window (get-buffer-window canvas)))
                 (should window)
+                (should (agent-ui-pane-window-p window))
                 ;; The focus where it was.
                 (should (eq (window-buffer (selected-window)) session))
                 ;; The cursor on the question, in view.
@@ -59,16 +64,13 @@
 ;; its pane took another's place (tiling steps aside while it's open), and
 ;; taking the focus, it got the keys typed there (q killed it).
 (ert-deftest e2e-agent-ui/a-question-waits-for-the-minibuffer ()
-  "A question shown while the minibuffer reads: every pane as it was, the
-minibuffer's window selected; once it's closed, its pane opens beside them,
-then takes the focus once Emacs is idle a moment."
+  "A question shown while the minibuffer reads: every window as it was, the
+minibuffer's window selected; once it's closed, its view opens in the
+session's pane, then takes the focus once Emacs is idle a moment."
   (let* ((session (generate-new-buffer "Claude Agent @ e2e-mini"))
          (notes (generate-new-buffer "notes.txt"))
-         (agent-ui-display-function #'agent-ui-display-canvas)
          (agent-ui-focus-questions t)
          (agent-ui-focus-questions-delay 0.2)
-         ;; A new window for it, as tiling's new pane (not the other one's).
-         (split-width-threshold 20)
          (seen nil))
     (unwind-protect
         (cl-letf (((symbol-function 'agent-ui--sessions) (lambda () (list session))))
@@ -88,6 +90,7 @@ then takes the focus once Emacs is idle a moment."
             (should (equal seen (list (list session notes) t)))
             (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
               (should (+test-wait-for (lambda () (get-buffer-window canvas)) 2))
+              (should (agent-ui-pane-window-p (get-buffer-window canvas)))
               (should (get-buffer-window notes))
               (should (get-buffer-window session))
               (should (+test-wait-for (lambda () (eq (window-buffer (selected-window)) canvas)) 3))

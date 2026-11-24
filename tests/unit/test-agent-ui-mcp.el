@@ -43,7 +43,7 @@ recorded, its reply REPLY (a plist)."
         (should (equal (plist-get result :protocolVersion) "2025-03-26"))
         (should (plist-get (plist-get result :capabilities) :tools))
         (should (equal (plist-get (plist-get result :serverInfo) :name) "agent-ui"))
-        (should (string-match-p "canvas beside your session" (plist-get result :instructions)))
+        (should (string-match-p "canvas in your session's pane" (plist-get result :instructions)))
         ;; Information there, each as the element that fits it; questions too
         ;; (doom-ht6.28).
         (should (string-match-p "goes there as the element that fits it" (plist-get result :instructions)))

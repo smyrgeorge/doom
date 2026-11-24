@@ -525,3 +525,12 @@ it."
 
 (agent-workspace--take-canvases)
 (add-hook 'agent-ui-canvas-hook #'agent-workspace--canvas-no-focus-h 90)
+
+;; Agent UI shows a session's views in its session's pane
+;; (config/agent-ui/pane.el): not in the crew's frame, where the stage shows
+;; its agents' (above).
+(defun agent-workspace--pane-skip-p (window)
+  "Non-nil if WINDOW is in a crew's frame (`agent-ui-pane-skip-functions')."
+  (agent-workspace-frame-p (window-frame window)))
+
+(add-hook 'agent-ui-pane-skip-functions #'agent-workspace--pane-skip-p)

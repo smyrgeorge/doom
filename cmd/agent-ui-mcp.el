@@ -25,7 +25,7 @@
 ;; ====== THE TOOLS ======
 
 (defconst agent-ui-mcp--canvas-schema
-  '(:type "string" :description "Optional: another canvas of your session, by name (\"tests\"), a tab beside its first; without it, your session's canvas")
+  '(:type "string" :description "Optional: another canvas of your session, by name (\"tests\"), shown beside its first; without it, your session's canvas")
   "The canvas argument's schema.")
 
 (defconst agent-ui-mcp--panel-schema
@@ -78,7 +78,7 @@ nil if it can't be reached."
           (agent-ui-mcp--with-canvas tool)))
       (list
       (list :name "show"
-            :description (concat "Show an element on the canvas beside your session (the user's Emacs); one with its id there already is replaced in place. For what changes over time or should stay in view: progress, a checklist, test results, a chart. Types:\n"
+            :description (concat "Show an element on the canvas in your session's pane (the user's Emacs); one with its id there already is replaced in place. For what changes over time or should stay in view: progress, a checklist, test results, a chart. Types:\n"
                                  (or types "(ask with the types tool)"))
             :inputSchema (list :type "object" :properties (list :element agent-ui-mcp--element-schema)
                                :required ["element"]))
@@ -217,7 +217,7 @@ an error reply if it said nothing readable)."
         id (list :protocolVersion (or (plist-get params :protocolVersion) agent-ui-mcp-version)
                  :capabilities '(:tools (:listChanged :false))
                  :serverInfo '(:name "agent-ui" :version "1.0")
-                 :instructions "Show the user information in Emacs, on a canvas beside your session, as elements updated in place: whatever you have to tell that has a shape (figures, records, a comparison, a trend, a structure, a plan, changes, output) goes there as the element that fits it, your reply keeping the words and saying what's on the canvas. Ask there too, beyond a quick question: the interactive element that fits it (choice, compare, confirm, form, rank, slider, select), on a canvas of its own, then end your turn. The agent-ui skill has the details: skills/agent-ui/SKILL.md first, then only the reference it points to for your task. When Agent UI itself misbehaves (a wrong drawing, an error, a property it lacks), ask the user, then file it with the bug tool: it goes into Agent UI's own issues, never the project's; then carry on with a workaround.")))
+                 :instructions "Show the user information in Emacs, on a canvas in your session's pane, as elements updated in place: whatever you have to tell that has a shape (figures, records, a comparison, a trend, a structure, a plan, changes, output) goes there as the element that fits it, your reply keeping the words and saying what's on the canvas. Ask there too, beyond a quick question: the interactive element that fits it (choice, compare, confirm, form, rank, slider, select), on a canvas of its own, then end your turn. The agent-ui skill has the details: skills/agent-ui/SKILL.md first, then only the reference it points to for your task. When Agent UI itself misbehaves (a wrong drawing, an error, a property it lacks), ask the user, then file it with the bug tool: it goes into Agent UI's own issues, never the project's; then carry on with a workaround.")))
       ("ping" (agent-ui-mcp--answer id (make-hash-table)))
       ("tools/list" (agent-ui-mcp--answer id (list :tools (agent-ui-mcp--tools))))
       ("tools/call"

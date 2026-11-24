@@ -7,8 +7,8 @@
 > +my/example-agent-ui` shows it ([Examples](examples.md)).
 
 A coding agent (yours, in [agent-shell](agent-shell.md)) shows you things in Emacs beyond its replies: a progress
-bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
-beside its session, through a small command line. Everything works in a terminal (`emacs -nw`); the GUI draws some
+bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, shown
+at the bottom of its session's pane, through a small command line. Everything works in a terminal (`emacs -nw`); the GUI draws some
 elements better (charts as SVG) and has elements of its own (images, drawings, web pages).
 
 ![A canvas beside the conversation: steps, tests, a build, a chart](../examples/agent-ui.png)
@@ -18,8 +18,8 @@ elements better (charts as SVG) and has elements of its own (images, drawings, w
   for the common case, and an element can be saved and shown again.
 - An **element type** (`progress`, `table`...) is defined once in Lisp: its properties, a function drawing it as text,
   and optionally one drawing it for the GUI. The types form a **registry**, from which the agent's catalog is made.
-- A **canvas** is a buffer per agent-shell session, shown in a [tiled](editor.md#tiling) pane beside it, without taking
-  the focus. It holds the session's elements in the order they were shown. Showing an element with an id already there
+- A **canvas** is a buffer per agent-shell session, shown at the bottom of the session's pane
+  ([below](#in-the-sessions-pane)), without taking the focus. It holds the session's elements in the order they were shown. Showing an element with an id already there
   replaces it in place; updating it redraws only that element.
 
 ## Elements as JSON
@@ -103,8 +103,8 @@ agent-shell makes), naming its session after its buffer; the agent's shell inher
 session's canvas, `Agent UI: SESSION`. Without it (a session started before Agent UI was loaded, an agent in a
 terminal), the session working in the script's directory or above it (the deepest; of those, the most recently used),
 else the canvas `default`. A session's canvas is killed with it. `--canvas NAME`, or `"canvas": "NAME"` in the JSON (an
-element's, a change's, a batch's operation's), picks the session's other canvas `Agent UI: SESSION / NAME`, made a
-tab of its canvas's pane when first shown; a name is letters, digits, spaces, `_ . -`, up to 40.
+element's, a change's, a batch's operation's), picks the session's other canvas `Agent UI: SESSION / NAME`, a view of
+its own in the session's pane; a name is letters, digits, spaces, `_ . -`, up to 40.
 
 **In Lisp,** the same operations: `(agent-ui-show SPEC)`, `(agent-ui-update ID PATCH)`, `(agent-ui-append ID PATCH)`,
 `(agent-ui-remove ID)`, each taking an optional `:canvas` (and `:section`, [below](#sections)). SPEC and PATCH are
@@ -112,19 +112,19 @@ plists (`(:type progress :value 3)`), as `json-parse-string` makes them with `:o
 
 ## The canvas
 
-- **Its buffer** is `Agent UI: SESSION`, read-only, in `agent-ui-canvas-mode`. It opens in a tiled pane the first
-  time an element is shown (tiling's `agent-ui` application, `+my/tiling-apps`), without taking the focus, and again if it was closed.
-  With Doom's workspaces, it opens in its session's workspace: while you're in another, it waits there for you.
-  `q` closes it for good: its pane and its buffer, its elements with it (a session's saved ones come back when the
-  session is resumed; one the agent updates after is gone). Emptying it (cleared, its last element removed) hides it;
-  it closes with its session. `a` on an element puts it into the session's prompt; `b` on one files a bug in Agent UI ([below](#bugs-in-agent-ui)); `c` on a line of code or a diff (or a region's lines) writes a review comment under it (`c` on a comment edits it, `d` removes it), Send the review sending them all, with their places, to the agent at once; `s` on a table's
+- **Its buffer** is `Agent UI: SESSION`, read-only, in `agent-ui-canvas-mode`, shown in its session's pane
+  ([below](#in-the-sessions-pane)) the first time an element is shown, without taking the focus. A canvas of no
+  session (an agent in a terminal) opens in a [tiled](editor.md#tiling) pane of its own instead (tiling's `agent-ui`
+  application). `q` closes it for good, its elements with it (a session's saved ones come back when the session is
+  resumed; one the agent updates after is gone). Emptying it (cleared, its last element removed) hides it; it closes
+  with its session. `a` on an element puts it into the session's prompt; `b` on one files a bug in Agent UI ([below](#bugs-in-agent-ui)); `c` on a line of code or a diff (or a region's lines) writes a review comment under it (`c` on a comment edits it, `d` removes it), Send the review sending them all, with their places, to the agent at once; `s` on a table's
   column sorts it by it (again: the other way); `M-↑` / `M-↓` (`K` / `J`) move a rank's item; `x` drops a plan's step or rejects a diff's hunk (again: back), `e` rewords a step; `h` / `l` on a slider's track move its knob; `R` reviews the types the agent made.
 - **Other canvases:** a session has its canvas and may have others, named (`--canvas tests`, `"canvas": "tests"` in
-  the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, with its own elements and ids. Each opens as a tab
-  of the pane showing another of the session's canvases (in front, the one before behind it; back with its session:
-  behind), else in a pane of its own. They close with the session, and are kept and come back with it. Emptied
-  (cleared, its last element removed), one closes, its tab gone, until an element is shown there again. A question
-  taking the focus is brought all into view, its pane made taller if it must.
+  the JSON, the MCP tools' `canvas`): `Agent UI: SESSION / tests`, with its own elements and ids, each a view of its
+  own in the session's pane. They close with the session, and are kept and come back with it. Emptied (cleared, its
+  last element removed), one closes, until an element is shown there again. A question taking the focus is brought all
+  into view, its view made taller if it must.
+- **In the session's pane:** see [below](#in-the-sessions-pane).
 - **Finished, it closes:** a `steps`, `todo` or `progress` that finished well (every step done or skipped, every item
   ticked, the bar at its end) closes itself 10 seconds later, a line under it counting down with a **Keep** button
   ("closing" when it's the canvas's last element and the canvas goes with it, "removed" when the canvas stays); the
@@ -147,6 +147,30 @@ plists (`(:type progress :value 3)`), as `json-parse-string` makes them with `:o
   wider or narrower than a column and taller than a line. A canvas draws such a glyph as large as a line holds, and
   makes the space beside it narrower or wider by as much: borders and the `│` between columns stay at their columns'
   pixels, every line the same height.
+
+## In the session's pane
+
+A session's Agent UI is shown in its session's pane: the conversation on top, Agent UI at the bottom, a quarter of the
+pane. It grows when what it shows needs more room (a tall table, a third view), up to half the pane, and goes back to a
+quarter when that's gone; a height you give it stays until what it shows needs another. The session's canvas and its other ones (`ask`, `tests`...) are **views**, laid out there as a grid: two side
+by side, three as two and one, four as two by two, as many columns as fit (40 columns each). Each view scrolls and is
+selected on its own, with a bar naming it (the session's own: `Agent UI`) instead of a mode line; the session's mode
+line stays under the conversation.
+
+| Key | Action |
+|---|---|
+| `q` (in a view) | Close it for good, the others laid out again |
+| `SPC w d` (in a view) | Hide it until something new is shown on it |
+| `SPC m u` (in the session or a view) | Hide Agent UI for the session, or show it again |
+
+- [Tiling](editor.md#tiling) lays the session's pane out as one pane: arranging, resizing, moving it to the main
+  pane, fullscreen, Agent UI goes with it. Closing the conversation's pane closes its views.
+- A session in no window (another buffer in its pane, another workspace): Agent UI waits, and shows with the session.
+- Hidden, Agent UI stays so while the agent shows things; a question shows it again (the session too, if it's in no
+  window, as `C-c C-q` does).
+- A pane too short for both (6 lines each, `agent-ui-pane-min-lines`): the view opens in a pane of its own.
+  `agent-ui-pane-share` (0.25), `agent-ui-pane-max-share` (0.5) and `agent-ui-grid-min-width` (40) are settings, in
+  `config.el`.
 
 ## Sections
 
@@ -424,7 +448,7 @@ Each question is brought up once: at the first turn's end it's waiting at, not a
 
 | Key | Action |
 |---|---|
-| `C-c C-q` (`SPC m q`) in a session | Go to its question waiting: the canvas's pane selected, the cursor on it (in a canvas: its session's; elsewhere: any session's) |
+| `C-c C-q` (`SPC m q`) in a session | Go to its question waiting: its view selected, the cursor on it (in a canvas: its session's; elsewhere: any session's) |
 
 ## Bugs in Agent UI
 
@@ -625,7 +649,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws; its sections, a canvas shown in one |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
-| `config/agent-ui/workspaces.el` | A session's canvas in its session's workspace (persp-mode), not the current one |
+| `config/agent-ui/pane.el` | A session's canvases in its session's pane: at the bottom, a grid of views |
 | `config/agent-ui/persist.el` | Kept with the session: saved as it changes, back when it's resumed |
 | `config/agent-ui/ask.el` | What the elements that ask share: picking, a note, the answer into the session's prompt, locked once given |
 | `config/agent-ui/snapshot.el` | In the conversation: an element as an SVG for the agent's reply, into the prompt |

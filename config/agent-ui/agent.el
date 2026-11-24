@@ -132,12 +132,16 @@ canvas's name (nil for the session's canvas); nil if none."
 
 (defun agent-ui--session-window (canvas)
   "A window of the selected frame showing another canvas of CANVAS's
-session, its own first (`agent-ui-share-window-functions'): CANVAS goes
-there, a tab beside it, not in a pane of its own (five canvases took five
-panes, each a few lines high)."
+session, its own first, not as a view in the session's pane
+\(`agent-ui-share-window-functions'): CANVAS goes there, a tab beside it,
+not in a pane of its own (five canvases took five panes, each a few lines
+high). In the session's pane: config/agent-ui/pane.el."
   (when-let* ((session (buffer-local-value 'agent-ui--session-buffer canvas))
               ((buffer-live-p session)))
-    (seq-some (lambda (other) (and (not (eq other canvas)) (get-buffer-window other)))
+    (seq-some (lambda (other)
+                (and (not (eq other canvas))
+                     (seq-find (lambda (window) (not (window-parameter window 'agent-ui-pane)))
+                               (get-buffer-window-list other 'nomini))))
               (sort (agent-ui-session-canvases session)
                     (lambda (a b) (and (null (buffer-local-value 'agent-ui--canvas-part a))
                                        (buffer-local-value 'agent-ui--canvas-part b)
@@ -224,8 +228,8 @@ prompt); nil while Emacs runs no server (the command couldn't reach it)."
   (when (and (fboundp 'server-running-p) (server-running-p))
     (let ((command (agent-ui--home-relative agent-ui-command))
           (skill (agent-ui--home-relative agent-ui-skill)))
-      (format "Agent UI: beside this session, Emacs has a canvas (a pane of its \
-own, opened without taking the user's focus when you first show something) \
+      (format "Agent UI: in this session's pane, Emacs has a canvas (at its \
+bottom, opened without taking the user's focus when you first show something) \
 where you show the user things as elements, each updated in place. It is where \
 information goes: whatever you have to tell that has a shape (figures, records, \
 a comparison, a trend, a structure, steps, changes, output), show it there as \
@@ -265,7 +269,7 @@ From your shell: %s show \
 '{\"id\":\"build\",\"type\":\"progress\",\"title\":\"Build\",\"max\":12}', then \
 %s update build '{\"value\":5}'; append adds a table's rows or a \
 checklist's steps; remove ID; clear; --canvas NAME on any of them uses \
-another canvas of this session, a tab beside its first. It replies with JSON. Before using it \
+another canvas of this session, shown beside its first. It replies with JSON. Before using it \
 the first time, read %s: the core (when to use it, which element for what, the \
 command, the everyday types), and which of its references to read only when \
 needed (asking the user, charts, layouts, following a command, a type of \
@@ -416,12 +420,17 @@ a section hosting its canvas too), but EXCEPT's (a canvas being killed):
                                              when (agent-ui-ask-waiting-p e)
                                              collect (cons canvas (agent-ui--key (plist-get e :id) section)))))))
 
+(defvar agent-ui-reveal-function #'agent-ui--display
+  "Called with a canvas in no window that has a question to be answered:
+shows it (config/agent-ui/pane.el: in its session's pane, the session shown
+first, its Agent UI even if hidden).")
+
 (defun agent-ui--show-question (canvas id &optional select)
   "CANVAS's pane shown (SELECT: selected), the cursor on question ID (a
 key), its line in view: its section unfolded."
   (ignore-errors (agent-ui-reveal id canvas))
   (unless (get-buffer-window canvas t)
-    (agent-ui--display canvas))
+    (funcall agent-ui-reveal-function canvas))
   (let ((window (get-buffer-window canvas t))
         (pos (with-current-buffer canvas
                (agent-ui--flush)

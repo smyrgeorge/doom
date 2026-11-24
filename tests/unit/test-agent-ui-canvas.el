@@ -85,8 +85,8 @@ current after the window closed)."
   (should (= (default-value 'agent-ui-redraw-delay) 0.1))
   (should (= (default-value 'agent-ui-max-elements) 100))
   (should (equal (default-value 'agent-ui-default-canvas) "default"))
-  ;; Its own default; the config's is the session's workspace's
-  ;; (config/agent-ui/workspaces.el, test-agent-ui-workspaces.el).
+  ;; Its own default; the config's shows a session's canvases in its
+  ;; session's pane (config/agent-ui/pane.el, test-agent-ui-pane.el).
   (should (eq (eval (car (get 'agent-ui-display-function 'standard-value)) t) #'agent-ui-display-canvas)))
 
 (ert-deftest agent-ui-canvas/a-canvas-made ()
@@ -99,9 +99,10 @@ current after the window closed)."
       ;; Without Evil, and with it (normal state).
       (should (eq (lookup-key agent-ui-canvas-mode-map "g") #'agent-ui-canvas-redraw))
       (let ((normal (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal)))
-        ;; q kills it (config/agent-ui.el), in Vim's keys and Emacs's.
-        (should (eq (lookup-key normal "q") #'kill-current-buffer))
-        (should (eq (lookup-key agent-ui-canvas-mode-map "q") #'kill-current-buffer))
+        ;; q kills it (config/agent-ui.el), in Vim's keys and Emacs's: a
+        ;; view in its session's pane, or a pane of its own.
+        (should (eq (lookup-key normal "q") #'agent-ui-quit))
+        (should (eq (lookup-key agent-ui-canvas-mode-map "q") #'agent-ui-quit))
         (should (eq (lookup-key normal "gr") #'agent-ui-canvas-redraw))))
     ;; The same one again; others by name.
     (should (eq (agent-ui-canvas) canvas))

@@ -8,39 +8,41 @@
 (defun +my/tiling-split ()
   "SPC w SPC: a new pane where the tiling strategy puts it (config/tiling.el)."
   (interactive)
-  (let* ((strategy (+my/tiling--strategy))
-         (atom (+my/tiling--atom))
-         (panes (if atom (+my/tiling--panes) (+my/tiling--ready-panes)))
-         (from (selected-window)))
-    (unless (memq from panes)
-      (+my/tiling--not-in-pane))
-    (let ((buffer (window-buffer from))
-          (point (window-point from))
-          (start (window-start from))
-          (new (if atom
-                   (+my/tiling--beside-atom atom)
-                 (funcall (plist-get strategy :split) panes))))
-      ;; The current buffer, its only tab (it showed another first).
-      (set-window-buffer new buffer)
-      (set-window-start new start t)
-      (set-window-point new point)
-      (set-window-prev-buffers new nil)
-      (set-window-next-buffers new nil)
-      (set-window-parameter new 'tab-line-buffers nil)
-      ;; New panes take focus (config/emacs/window.el).
-      (when (or (not (boundp '+my/focus-new-windows)) +my/focus-new-windows)
-        (select-window new))
-      new)))
+  (+my/tiling--with-layout
+    (let* ((strategy (+my/tiling--strategy))
+           (atom (+my/tiling--atom))
+           (panes (if atom (+my/tiling--panes) (+my/tiling--ready-panes)))
+           (from (selected-window)))
+      (unless (memq from panes)
+        (+my/tiling--not-in-pane))
+      (let ((buffer (window-buffer from))
+            (point (window-point from))
+            (start (window-start from))
+            (new (if atom
+                     (+my/tiling--beside-atom atom)
+                   (funcall (plist-get strategy :split) panes))))
+        ;; The current buffer, its only tab (it showed another first).
+        (set-window-buffer new buffer)
+        (set-window-start new start t)
+        (set-window-point new point)
+        (set-window-prev-buffers new nil)
+        (set-window-next-buffers new nil)
+        (set-window-parameter new 'tab-line-buffers nil)
+        ;; New panes take focus (config/emacs/window.el).
+        (when (or (not (boundp '+my/focus-new-windows)) +my/focus-new-windows)
+          (select-window new))
+        new))))
 
 (defun +my/tiling-arrange ()
   "SPC w a: lay the panes out as the tiling strategy does (config/tiling.el)."
   (interactive)
-  (let* ((strategy (+my/tiling--strategy))
-         (panes (+my/tiling--ready-panes)))
-    (unless (memq (selected-window) panes)
-      (+my/tiling--not-in-pane))
-    (when (cdr panes)
-      (funcall (plist-get strategy :arrange) panes))))
+  (+my/tiling--with-layout
+    (let* ((strategy (+my/tiling--strategy))
+           (panes (+my/tiling--ready-panes)))
+      (unless (memq (selected-window) panes)
+        (+my/tiling--not-in-pane))
+      (when (cdr panes)
+        (funcall (plist-get strategy :arrange) panes)))))
 
 (defun +my/tiling-swap-main ()
   "SPC w RET: the selected pane's buffer to the main pane (the strategy's,
@@ -50,23 +52,24 @@ to the main pane. From the main pane: the next pane's buffer to it
 sizes stay. A strategy of its own (fullscreen's :swap-main): it says what it
 did."
   (interactive)
-  (let* ((swap (plist-get (+my/tiling--strategy) :swap-main))
-         (panes (+my/tiling--ready-panes))
-         (from (selected-window)))
-    (unless (memq from panes)
-      (+my/tiling--not-in-pane))
-    (if swap
-        (message "%s" (funcall swap))
-      (unless (cdr panes)
-        (user-error "Only one pane"))
-      (let* ((main (car panes))
-             (other (if (eq from main) (cadr panes) from))
-             (main-state (+my/tiling--state main))
-             (other-state (+my/tiling--state other)))
-        (+my/tiling--restore main other-state)
-        (+my/tiling--restore other main-state)
-        (select-window main)
-        main))))
+  (+my/tiling--with-layout
+    (let* ((swap (plist-get (+my/tiling--strategy) :swap-main))
+           (panes (+my/tiling--ready-panes))
+           (from (selected-window)))
+      (unless (memq from panes)
+        (+my/tiling--not-in-pane))
+      (if swap
+          (message "%s" (funcall swap))
+        (unless (cdr panes)
+          (user-error "Only one pane"))
+        (let* ((main (car panes))
+               (other (if (eq from main) (cadr panes) from))
+               (main-state (+my/tiling--state main))
+               (other-state (+my/tiling--state other)))
+          (+my/tiling--restore main other-state)
+          (+my/tiling--restore other main-state)
+          (select-window main)
+          main)))))
 
 (defvar +my/tiling-resize-map
   (let ((map (make-sparse-keymap)))
@@ -86,20 +89,21 @@ of them again (see config/tiling.el).")
   "Resize by the strategy's KEY (:resize-main or :resize-pane), WHAT it
 resizes (said if it has nothing so), in DIRECTION (1 bigger, -1 smaller);
 then KEYS repeat it, and what the strategy did is said."
-  (let* ((resize (plist-get (+my/tiling--strategy) key))
-         (panes (and resize (+my/tiling--ready-panes)))
-         (pane (selected-window)))
-    (unless resize
-      (user-error "The tiling strategy `%s' has no %s to resize" +my/tiling-strategy what))
-    (unless (memq pane panes)
-      (+my/tiling--not-in-pane))
-    (unless (cdr panes)
-      (user-error "Only one pane"))
-    (let ((said (if (eq key :resize-pane)
-                    (funcall resize panes pane direction)
-                  (funcall resize panes direction))))
-      (set-transient-map +my/tiling-resize-map t)
-      (message "%s (%s again)" said keys))))
+  (+my/tiling--with-layout
+    (let* ((resize (plist-get (+my/tiling--strategy) key))
+           (panes (and resize (+my/tiling--ready-panes)))
+           (pane (selected-window)))
+      (unless resize
+        (user-error "The tiling strategy `%s' has no %s to resize" +my/tiling-strategy what))
+      (unless (memq pane panes)
+        (+my/tiling--not-in-pane))
+      (unless (cdr panes)
+        (user-error "Only one pane"))
+      (let ((said (if (eq key :resize-pane)
+                      (funcall resize panes pane direction)
+                    (funcall resize panes direction))))
+        (set-transient-map +my/tiling-resize-map t)
+        (message "%s (%s again)" said keys)))))
 
 (defun +my/tiling-resize-main (direction)
   "The main area bigger (DIRECTION 1) or smaller (-1), as the strategy has
@@ -144,24 +148,25 @@ as the strategy has it."
 pane or from a side panel (as from the pane used last, the focus kept
 there). What to say besides, or nil: hidden panes left for want of room, no
 room for the panes (nothing changed)."
-  (let* ((from (selected-window))
-         ;; config/tiling/apps.el's.
-         (pane (if (memq from (+my/tiling--panes)) from (+my/tiling--last-pane))))
-    (when (and pane (not (eq pane from)))
-      (select-window pane 'norecord))
-    (unwind-protect
-        (condition-case err
-            (let ((strategy (+my/tiling--strategy))
-                  (panes (+my/tiling--ready-panes)))
-              (when (cdr panes)
-                (funcall (plist-get strategy :arrange) panes))
-              (unless (plist-get strategy :hides)
-                (when-let* ((hidden (remq :shown (+my/tiling--slots))))
-                  (format "No room to show %d hidden pane%s"
-                          (length hidden) (if (cdr hidden) "s" "")))))
-          (user-error (error-message-string err)))
-      (when (and (not (eq pane from)) (window-live-p from))
-        (select-window from 'norecord)))))
+  (+my/tiling--with-layout
+    (let* ((from (selected-window))
+           ;; config/tiling/apps.el's.
+           (pane (if (memq from (+my/tiling--panes)) from (+my/tiling--last-pane))))
+      (when (and pane (not (eq pane from)))
+        (select-window pane 'norecord))
+      (unwind-protect
+          (condition-case err
+              (let ((strategy (+my/tiling--strategy))
+                    (panes (+my/tiling--ready-panes)))
+                (when (cdr panes)
+                  (funcall (plist-get strategy :arrange) panes))
+                (unless (plist-get strategy :hides)
+                  (when-let* ((hidden (remq :shown (+my/tiling--slots))))
+                    (format "No room to show %d hidden pane%s"
+                            (length hidden) (if (cdr hidden) "s" "")))))
+            (user-error (error-message-string err)))
+        (when (and (not (eq pane from)) (window-live-p from))
+          (select-window from 'norecord))))))
 
 (defun +my/tiling--set-strategy (name &optional keys)
   "NAME, one of `+my/tiling-strategies', the strategy (for the session), the

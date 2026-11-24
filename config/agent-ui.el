@@ -1,8 +1,8 @@
 ;;; $DOOMDIR/config/agent-ui.el -*- lexical-binding: t; -*-
 ;; Agent UI: what a coding agent (yours, in agent-shell) shows you in
-;; Emacs beyond its replies: progress bars, tables, charts, on a canvas beside
-;; its session, updated as things change (docs/agent-ui.md). Loaded from
-;; config.el; its code is in config/agent-ui/.
+;; Emacs beyond its replies: progress bars, tables, charts, at the bottom of
+;; its session's pane, updated as things change (docs/agent-ui.md).
+;; Loaded from config.el; its code is in config/agent-ui/.
 
 ;; ====== VARIABLES ======
 
@@ -19,10 +19,30 @@
 ;; A buffer per agent session, "Agent UI: NAME" (config/agent-ui/canvas.el):
 ;; its elements in the order shown, each redrawn in place when it changes,
 ;; `agent-ui-redraw-delay' after (updates within it drawn together); animated
-;; ones every `agent-ui-animation-interval'. It opens in a tiled pane (one of
-;; tiling's applications, config/tiling.el) when an element is added while
-;; it's in no window, without taking the focus. In it: g r redraws it, q
-;; kills it (its pane closed). At most `agent-ui-max-elements'.
+;; ones every `agent-ui-animation-interval'. In it: g r redraws it, q kills it.
+;; At most `agent-ui-max-elements'.
+
+;; IN ITS SESSION'S PANE
+;; A session's Agent UI opens in its session's pane when an element is shown,
+;; without taking the focus (config/agent-ui/pane.el): the pane split, the
+;; conversation on top, Agent UI at the bottom, a quarter of the pane
+;; (`agent-ui-pane-share'), more when what it shows needs it, up to half
+;; (`agent-ui-pane-max-share'); back to a quarter when that's gone.
+;; Its views (the session's canvas, and its others: ask, tests...) are laid
+;; out there in a grid: as many columns as fit, `agent-ui-grid-min-width'
+;; each, up to the square root of their count, rows filled in turn. Each view
+;; is a window of its own, with a bar naming it; the session's mode line stays
+;; under the conversation. q closes a view (killed); a view's window closed
+;; (SPC w d) hides it until something new is shown in it; SPC m u, in the
+;; session or a view, hides Agent UI for the session or shows it again (a
+;; question shows it anyway). A session in no window (another workspace,
+;; another buffer in its pane): Agent UI waits, shown with it. Tiling lays
+;; the pane out as one, Agent UI's windows in it (config/tiling.el, WINDOWS
+;; ATTACHED TO A PANE). A pane too short for both halves
+;; (`agent-ui-pane-min-lines' each): the view in a pane of its own. A canvas
+;; without a session (from a shell), a project panel: a tiled pane of its own
+;; (one of tiling's applications).
+(setq agent-ui-pane-keys "q close · SPC m u hide")
 
 ;; SOURCES
 ;; An element can follow what changes by itself (config/agent-ui/source.el):
@@ -114,9 +134,10 @@
 
 ;; THE CANVAS (see above): Vim's keys, as Doom's other buffers'.
 (map! :map agent-ui-canvas-mode-map
-      ;; q closes it for good: its pane and its buffer (killed, its elements
-      ;; with it; a session's saved ones come back when it's resumed).
-      :gn "q" #'kill-current-buffer
+      ;; q closes it for good: its buffer killed, its elements with it (a
+      ;; session's saved ones come back when it's resumed); in its session's
+      ;; pane, the other views laid out again; else its pane closed.
+      :gn "q" #'agent-ui-quit
       :n "gr" #'agent-ui-canvas-redraw
       ;; A project panel, read again from its file (edited) and run anew.
       :n "gR" #'agent-ui-panel-reload
@@ -135,7 +156,10 @@
       :n "M-<down>" #'agent-ui-move-item-down
       ;; A plan's steps dropped (again: back), reworded, before approving it.
       :n "x"  #'agent-ui-drop-item
-      :n "e"  #'agent-ui-edit-item)
+      :n "e"  #'agent-ui-edit-item
+      ;; Agent UI hidden in its session's pane, or shown again (see above).
+      :localleader
+      :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle)
 
 ;; A FORM, filled in its buffer (config/agent-ui/elements/form.el): typed
 ;; into, so Emacs's keys there, as beads.el's forms (C-c C-c sends it, C-c
@@ -165,7 +189,8 @@
 (load! "agent-ui/canvas")
 (load! "agent-ui/request")
 (load! "agent-ui/agent")
-(load! "agent-ui/workspaces")
+;; In its session's pane: at the bottom, a grid of its views.
+(load! "agent-ui/pane")
 (load! "agent-ui/persist")
 ;; What the elements that ask share (picking, a note, the answer).
 (load! "agent-ui/ask")
@@ -256,7 +281,9 @@ session's name and directory read when the session starts (in its buffer)."
       :map agent-shell-mode-map
       "C-c C-q" #'agent-ui-goto-question
       :localleader
-      :desc "Question waiting" "q" #'agent-ui-goto-question)
+      :desc "Question waiting" "q" #'agent-ui-goto-question
+      ;; IN ITS SESSION'S PANE (see above): hidden, or shown again.
+      :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle)
 
 ;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
 ;; project's issues).

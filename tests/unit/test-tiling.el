@@ -2693,3 +2693,51 @@ git (with-editor, git-commit-mode): in magit's pane, as git opens them."
           (set (make-local-variable mode) t)
           (should-not (+my/tiling--file-p (current-buffer)))
           (set (make-local-variable mode) nil))))))
+
+;; ====== WINDOWS ATTACHED TO A PANE ======
+
+(ert-deftest tiling/attached-windows-not-panes ()
+  "A window `+my/tiling-attached-functions' say is attached to a pane (Agent
+UI's views): not a pane, neither counted nor laid out."
+  (+test-tiling
+    (let* ((+my/tiling-attached-functions (list (lambda (window) (window-parameter window 'test-attached))))
+           (attached (split-window nil nil 'below)))
+      (set-window-parameter attached 'test-attached t)
+      (should (equal (+my/tiling--panes) (list (selected-window))))
+      (should-not (+my/tiling--attached-p (selected-window)))
+      (should (+my/tiling--attached-p attached)))))
+
+(ert-deftest tiling/each-layout-wrapped-once ()
+  "Each layout (SPC w SPC, SPC w a, a new pane, resizing, SPC w RET, a
+strategy chosen) done through each around function, once (the outermost:
+a layout inside another isn't wrapped again), its value theirs."
+  (+test-tiling
+    (let* ((calls 0)
+           (+my/tiling-around-layout-functions
+            (list (lambda (layout)
+                    (cl-incf calls)
+                    (should +my/tiling--in-layout)
+                    (funcall layout)))))
+      (should (window-live-p (+my/tiling-split)))
+      (should (= calls 1))
+      (+my/tiling-arrange)
+      (should (= calls 2))
+      (pop-to-buffer "C" '(+my/tiling-display-buffer))
+      (should (= calls 3))
+      (select-window (get-buffer-window "C"))
+      (+my/tiling-pane-bigger)
+      (should (= calls 4))
+      (+my/tiling-swap-main)
+      (should (= calls 5))
+      (+my/tiling--set-strategy 'wide)
+      (should (= calls 6))
+      (should-not +my/tiling--in-layout)
+      ;; Its value: the layout's.
+      (should (equal (+my/tiling--lay (lambda () 'done)) 'done))
+      (should (= calls 7)))))
+
+(ert-deftest tiling/attached-functions-name-agent-ui ()
+  "Agent UI's views attached to their session's pane, by name (as frames
+left alone name the agent workspace's): config/tiling.el."
+  (should (memq 'agent-ui-pane-window-p (default-value '+my/tiling-attached-functions)))
+  (should (memq 'agent-ui-pane-around-layout (default-value '+my/tiling-around-layout-functions))))

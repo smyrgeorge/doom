@@ -1,31 +1,44 @@
 ;;; tests/unit/test-agent-ui-tiling.el -*- lexical-binding: t; -*-
-;; config/agent-ui with config/tiling: where a canvas's pane opens, as the
-;; tiling strategy has it. No agent runs: the session is a buffer.
+;; config/agent-ui with config/tiling: a session's Agent UI in its session's
+;; pane, which tiling lays out as one pane, its views' windows taken out
+;; before and put back after (config/tiling.el, WINDOWS ATTACHED TO A PANE).
+;; No agent runs: the session is a buffer. A batch Emacs doesn't run window
+;; change functions: the tests run them where Emacs would.
 
 (+test-load "config/emacs" "config/tiling" "config/agent-ui")
 
 ;; ====== HELPERS ======
 
 (defmacro +test-auti (strategy &rest body)
-  "BODY from one window on a session's buffer (`session', its canvas's name
-`name'), tiling's STRATEGY, nothing hidden before or after; its canvases
-killed after."
+  "BODY from one window on notes.txt, a session's buffer (`session', its
+canvas's name `name') in a pane of its own beside it, tiling's STRATEGY,
+nothing hidden before or after; its canvases killed after."
   (declare (indent 1))
   `(+test-with-reset
      (set-frame-parameter nil '+my/tiling-hidden nil)
      (let* ((+my/tiling-strategy ,strategy)
-            (agent-ui-display-function #'agent-ui-display-canvas)
+            (+my/tiling-tall-ratio 0.5)
             (agent-ui-focus-questions nil)
             (agent-ui-close-finished nil)
-            (session (+test-buffer "Claude Agent @ tiling"))
+            (this-command 'test)
+            (notes (+test-buffer "notes.txt" "Notes.\n"))
+            (session (+test-buffer "Claude Agent @ tiling" "The conversation.\n"))
             (sessions (list session)))
        (cl-letf (((symbol-function 'agent-ui--sessions) (lambda () sessions))
                  ((symbol-function 'message) #'ignore))
-         (switch-to-buffer session)
+         (switch-to-buffer notes)
+         (pop-to-buffer session '(+my/tiling-display-buffer))
          (let ((name (agent-ui--session-name session)))
            (unwind-protect (progn ,@body)
              (set-frame-parameter nil '+my/tiling-hidden nil)
-             (dolist (canvas (agent-ui-canvases)) (kill-buffer canvas))))))))
+             (dolist (canvas (agent-ui-canvases)) (kill-buffer canvas))
+             (kill-buffer session)))))))
+
+(defun +test-auti-in-place-p (session)
+  "Non-nil if SESSION's views are under its window, in its pane."
+  (when-let* ((window (agent-ui--pane-session-window session))
+              (cells (agent-ui--pane-cells (selected-frame) session)))
+    (agent-ui--pane-in-place-p window cells)))
 
 (defun +test-auti-slots ()
   "The panes in order (fullscreen): each one's buffer name, the one on the
@@ -36,153 +49,151 @@ screen with a *."
               (buffer-name (plist-get slot :buffer))))
           (or (+my/tiling--slots) (list :shown))))
 
+;; ====== ONE PANE ======
+
+(ert-deftest agent-ui-tiling/agent-ui-not-a-pane ()
+  "Tall: the session's first element opens Agent UI in its pane, not a new
+pane; its windows aren't panes (tiling's count, SPC w w's turns)."
+  (+test-auti 'tall
+    (should (= (length (+my/tiling--panes)) 2))
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (agent-ui-show '(:id "t" :type "text" :text "x") :canvas (agent-ui-sub-canvas name "tests"))
+    (should (= (length (agent-ui--pane-cells (selected-frame))) 2))
+    (should (= (length (+my/tiling--panes)) 2))
+    (should (equal (mapcar #'window-buffer (+my/tiling--panes)) (list notes session)))
+    (should (+test-auti-in-place-p session))
+    (should (eq (window-buffer (selected-window)) session))))
+
+(ert-deftest agent-ui-tiling/tiling-takes-it-along ()
+  "SPC w a, SPC w SPC (another pane), SPC w RET (the session to the main
+pane), SPC w } (the pane bigger), a strategy chosen: Agent UI stays in the
+session's pane each time, the panes as tiling has them."
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (+my/tiling-arrange)
+    (should (+test-auti-in-place-p session))
+    (should (= (length (+my/tiling--panes)) 2))
+    ;; Another pane, from notes.txt: three panes, Agent UI still the session's.
+    (select-window (get-buffer-window notes))
+    (+my/tiling-split)
+    (should (= (length (+my/tiling--panes)) 3))
+    (should (+test-auti-in-place-p session))
+    ;; The session to the main pane: its Agent UI with it.
+    (select-window (agent-ui--pane-session-window session))
+    (+my/tiling-swap-main)
+    (should (eq (window-buffer (car (+my/tiling--ordered-panes))) session))
+    (should (+test-auti-in-place-p session))
+    ;; Resized, then another strategy.
+    (select-window (get-buffer-window notes))
+    (+my/tiling-pane-bigger)
+    (should (+test-auti-in-place-p session))
+    (+my/tiling--set-strategy 'wide)
+    (should (+test-auti-in-place-p session))
+    (should (= (length (+my/tiling--panes)) 3))))
+
+(ert-deftest agent-ui-tiling/from-a-view-as-from-its-session ()
+  "SPC w a from one of Agent UI's views: as from its session's pane, the
+view selected again after."
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name))))
+      (select-window (get-buffer-window canvas))
+      (+my/tiling-arrange)
+      (should (eq (window-buffer (selected-window)) canvas))
+      (should (agent-ui-pane-window-p (selected-window)))
+      (should (+test-auti-in-place-p session)))))
+
+(ert-deftest agent-ui-tiling/a-pane-closed ()
+  "Another pane closed: the stack laid out again (tiling's :closed), Agent
+UI still in the session's pane."
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (pop-to-buffer (+test-buffer "x.txt") '(+my/tiling-display-buffer))
+    (should (= (length (+my/tiling--panes)) 3))
+    (+my/tiling--closed-h (selected-frame)) ; seen: 3 panes
+    (delete-window (get-buffer-window "x.txt"))
+    (+my/tiling--closed-h (selected-frame))
+    (should (= (length (+my/tiling--panes)) 2))
+    (should (+test-auti-in-place-p session))))
+
+(ert-deftest agent-ui-tiling/the-sessions-pane-closed ()
+  "The session's pane closed (SPC w d): Agent UI's windows go with it, the
+other pane alone."
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (+my/tiling--closed-h (selected-frame))
+    (delete-window (agent-ui--pane-session-window session))
+    (+my/tiling--closed-h (selected-frame))
+    (should-not (agent-ui--pane-cells (selected-frame)))
+    (should (equal (window-list nil 'nomini) (list (get-buffer-window notes))))))
+
 ;; ====== FULLSCREEN ======
 
-(ert-deftest agent-ui-tiling/fullscreen-the-canvas-behind-the-session ()
-  "Fullscreen: the agent's first element (no command running: a request to
-the server) opens its canvas behind the session, which stays on the screen,
-selected (the canvas took the frame and the keys); its next ones leave it
-there; SPC w w brings it up. A question taking the focus brings it up too,
-as C-c C-q does."
+(ert-deftest agent-ui-tiling/fullscreen-on-the-screen-with-its-session ()
+  "Fullscreen, the session on the screen: Agent UI shown in its pane, not
+behind it. Another pane brought up (SPC w w): it's gone; the session back:
+back with it. An element shown while the session is hidden opens nothing."
   (+test-auti 'fullscreen
-    (let ((this-command nil)
-          (canvas-name (agent-ui-canvas-buffer-name name)))
-      (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
-      (should (equal (+test-auti-slots) (list (concat "*" (buffer-name session)) canvas-name)))
-      (should (eq (window-buffer (selected-window)) session))
-      (agent-ui-show '(:id "tests" :type "text" :text "running") :canvas name)
-      (should (equal (+test-auti-slots) (list (concat "*" (buffer-name session)) canvas-name)))
-      (let ((this-command '+my/tiling-next-pane))
-        (+my/tiling-next-pane))
-      (should (eq (window-buffer (selected-window)) (get-buffer canvas-name)))
-      (let ((this-command '+my/tiling-next-pane))
-        (+my/tiling-next-pane))
-      (should (eq (window-buffer (selected-window)) session))
-      ;; A question taking the focus: in front, selected.
-      (let ((agent-ui-focus-questions t)
-            (idle nil))
-        (cl-letf (((symbol-function 'run-with-idle-timer)
-                   (lambda (_secs _repeat f &rest args) (push (lambda () (apply f args)) idle))))
-          (agent-ui-show '(:id "fix" :type "choice" :question "Which?" :options ("A" "B")) :canvas name)
-          (should (eq (window-buffer (selected-window)) session))
-          (funcall (car idle))
-          (should (eq (window-buffer (selected-window)) (get-buffer canvas-name)))
-          (should (equal (get-text-property (point) 'agent-ui-id) "fix")))))))
+    (+my/tiling--lay-out)
+    (should (equal (+test-auti-slots) (list "notes.txt" (concat "*" (buffer-name session)))))
+    (let ((this-command nil))
+      (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name))
+    (should (equal (+test-auti-slots) (list "notes.txt" (concat "*" (buffer-name session)))))
+    (should (+test-auti-in-place-p session))
+    (should (= (length (+my/tiling--panes)) 1))
+    (let ((this-command '+my/tiling-next-pane))
+      (+my/tiling-next-pane))
+    (agent-ui--pane-sync)
+    (should (eq (window-buffer (car (+my/tiling--panes))) notes))
+    (should-not (agent-ui--pane-cells (selected-frame)))
+    (let ((this-command nil))
+      (agent-ui-show '(:id "tests" :type "text" :text "running") :canvas name))
+    (should (equal (+test-auti-slots) (list "*notes.txt" (buffer-name session))))
+    (let ((this-command '+my/tiling-next-pane))
+      (+my/tiling-next-pane))
+    (agent-ui--pane-sync)
+    (should (+test-auti-in-place-p session))))
 
-;; ====== A SESSION'S CANVASES, ONE PANE ======
+;; ====== QUESTIONS ======
 
-(ert-deftest agent-ui-tiling/a-sessions-canvases-tabs-of-one-pane ()
-  "Tall: the session's canvas in a pane of its own; its other canvases (tests,
-logs, ask) tabs of that pane, each in front when it opens, the ones before
-kept as its tabs (each took a stack pane: five canvases, five panes of a
-few lines). A question answered, its canvas gone: the tab before it in
-front again. Coming back with the session: behind the one shown."
+(ert-deftest agent-ui-tiling/a-question-its-view-selected ()
+  "A question taking the focus: its view selected, the cursor on it, all of
+it in view, Answer too (its view grown if it must)."
   (+test-auti 'tall
     (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
-    (let* ((main (get-buffer (agent-ui-canvas-buffer-name name)))
-           (pane (get-buffer-window main)))
-      (should pane)
-      (should (= (length (+my/tiling--panes)) 2))
-      (dolist (part '("tests" "logs"))
-        (agent-ui-show '(:id "t" :type "text" :text "x") :canvas (agent-ui-sub-canvas name part)))
-      (should (= (length (+my/tiling--panes)) 2))
-      (should (eq (window-buffer pane) (get-buffer (agent-ui-canvas-buffer-name (concat name " / logs")))))
-      (should (equal (mapcar (lambda (b) (buffer-name b)) (mapcar #'car (window-prev-buffers pane)))
-                     (list (agent-ui-canvas-buffer-name (concat name " / tests")) (buffer-name main))))
-      ;; Selected still: the session.
-      (should (eq (window-buffer (selected-window)) session))
-      ;; A question: a tab too; answered, gone: the one before in front.
-      (let ((agent-ui-action-function #'ignore)
-            (ask (agent-ui-sub-canvas name "ask")))
-        (agent-ui-show '(:id "go" :type "confirm" :question "Deploy?") :canvas ask)
-        (should (= (length (+my/tiling--panes)) 2))
-        (let ((canvas (get-buffer (agent-ui-canvas-buffer-name ask))))
-          (should (eq (window-buffer pane) canvas))
-          (with-current-buffer canvas
-            (agent-ui--flush)
-            (goto-char (point-min))
-            (search-forward "⏵ Proceed")
-            (goto-char (match-beginning 0))
-            (agent-ui-button-press))
-          (let ((end (+ (float-time) 0.2)))
-            (while (< (float-time) end) (accept-process-output nil 0.02)))
-          (should-not (buffer-live-p canvas))
-          (should (eq (window-buffer pane) (get-buffer (agent-ui-canvas-buffer-name (concat name " / logs")))))
-          (should (= (length (+my/tiling--panes)) 2))))
-      ;; Coming back with its session: a tab behind the one shown.
-      (let ((agent-ui--restoring t))
-        (agent-ui-show '(:id "x" :type "text" :text "x") :canvas (agent-ui-sub-canvas name "later")))
-      (should (eq (window-buffer pane) (get-buffer (agent-ui-canvas-buffer-name (concat name " / logs")))))
-      (should (assq (get-buffer (agent-ui-canvas-buffer-name (concat name " / later"))) (window-prev-buffers pane))))))
-
-(ert-deftest agent-ui-tiling/an-emptied-canvas-its-tab-gone ()
-  "A session's other canvas emptied (cleared, its last element removed),
-in front or behind: killed, as an answered question's, its tab gone from
-its pane (it stayed there, an empty tab beside the session's canvas:
-doom-j4q); an element shown on it again, it opens again. The session's own
-canvas emptied: its pane closed, it kept."
-  (require 'tab-line)
-  (+test-auti 'tall
-    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
-    (let* ((main (get-buffer (agent-ui-canvas-buffer-name name)))
-           (pane (get-buffer-window main))
-           (ask (agent-ui-sub-canvas name "ask"))
-           (canvas (lambda () (get-buffer (agent-ui-canvas-buffer-name ask))))
-           (tabs (lambda () (with-selected-window pane (tab-line-tabs-window-buffers)))))
-      ;; Cleared, in front: the session's canvas in front again, alone.
-      (agent-ui-show '(:id "q" :type "text" :text "Which?") :canvas ask)
-      (let ((shown (funcall canvas)))
-        (should (eq (window-buffer pane) shown))
-        (should (equal (funcall tabs) (list main shown)))
-        (agent-ui-clear :canvas ask)
-        (should-not (buffer-live-p shown))
-        (should (eq (window-buffer pane) main))
-        (should (equal (funcall tabs) (list main))))
-      ;; Shown again: a tab again, in front. Behind the session's canvas (an
-      ;; element shown there), its last element removed: gone too.
-      (agent-ui-show '(:id "q" :type "text" :text "Which?") :canvas ask)
-      (let ((shown (funcall canvas)))
-        (should (eq (window-buffer pane) shown))
-        (agent-ui-show '(:id "tests" :type "text" :text "running") :canvas name)
-        (should (eq (window-buffer pane) main))
-        (should (equal (funcall tabs) (list shown main)))
-        (agent-ui-remove "q" :canvas ask)
-        (should-not (buffer-live-p shown))
-        (should (equal (funcall tabs) (list main))))
-      ;; The session's own: its pane closed, it kept; the other opens again.
-      (agent-ui-clear :canvas name)
-      (should (buffer-live-p main))
-      (should-not (get-buffer-window main))
-      (should (= (length (+my/tiling--panes)) 1))
-      (agent-ui-show '(:id "q" :type "text" :text "Which?") :canvas ask)
-      (should (get-buffer-window (funcall canvas)))
-      (should (= (length (+my/tiling--panes)) 2)))))
-
-(ert-deftest agent-ui-tiling/a-questions-answer-in-view ()
-  "A question taking the focus in a short pane: its pane grown to show it
-all, its first line at the top, Answer in view (5 lines showed its first
-lines, the cursor on the first, Answer below)."
-  (+test-auti 'tall
-    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
-    (let* ((main (get-buffer (agent-ui-canvas-buffer-name name)))
-           (pane (get-buffer-window main)))
-      ;; Short: the stack's other panes taking the room.
-      (dolist (other '("x1" "x2" "x3"))
-        (let ((this-command 'test))
-          (set-window-buffer (+my/tiling-split) (+test-buffer other))))
-      (select-window (get-buffer-window session))
-      (should (< (window-body-height pane) 6))
+    ;; Another pane in the stack: the session's pane shorter, its view too.
+    (pop-to-buffer (+test-buffer "x1") '(+my/tiling-display-buffer))
+    (select-window (agent-ui--pane-session-window session))
+    (let ((main (get-buffer (agent-ui-canvas-buffer-name name))))
       (agent-ui-show (list :id "fix" :type "choice" :question "Which fix?"
                            :options '("One" "Two" "Three" "Four" "Five" "Six")
                            :title "Pick")
                      :canvas name)
       (let ((agent-ui-focus-questions t))
         (agent-ui--focus-question main "fix"))
-      (should (eq (selected-window) pane))
-      (with-current-buffer main
-        (let* ((start (agent-ui--element-start main "fix"))
-               (end (agent-ui--element-end "fix" start)))
-          (should (equal (get-text-property (window-point pane) 'agent-ui-id) "fix"))
-          (should (= (window-start pane) (save-excursion (goto-char start) (line-beginning-position))))
-          (should (>= (window-body-height pane) (count-lines (window-start pane) end)))
-          (should (save-excursion (goto-char start) (search-forward "⏵ Answer" end t))))))))
+      (let ((view (selected-window)))
+        (should (eq (window-buffer view) main))
+        (should (agent-ui-pane-window-p view))
+        (with-current-buffer main
+          (let* ((start (agent-ui--element-start main "fix"))
+                 (end (agent-ui--element-end "fix" start)))
+            (should (equal (get-text-property (window-point view) 'agent-ui-id) "fix"))
+            (should (= (window-start view) (save-excursion (goto-char start) (line-beginning-position))))
+            (should (save-excursion (goto-char start) (search-forward "⏵ Answer" end t)))))))))
+
+(ert-deftest agent-ui-tiling/a-question-shows-a-hidden-session ()
+  "A question while the session is in no window (notes.txt in its pane):
+the session shown (as C-c C-q), Agent UI with it, the question selected."
+  (+test-auti 'tall
+    (agent-ui-show '(:id "build" :type "progress" :max 4) :canvas name)
+    (let ((pane (agent-ui--pane-session-window session)))
+      (with-selected-window pane
+        (switch-to-buffer notes))
+      (agent-ui--pane-sync)
+      (should-not (agent-ui--pane-cells (selected-frame)))
+      (agent-ui-show '(:id "fix" :type "choice" :question "Which?" :options ("A" "B")) :canvas name)
+      (let ((this-command 'agent-ui-goto-question))
+        (agent-ui-goto-question))
+      (should (agent-ui--pane-session-window session))
+      (should (+test-auti-in-place-p session))
+      (should (eq (window-buffer (selected-window)) (get-buffer (agent-ui-canvas-buffer-name name)))))))

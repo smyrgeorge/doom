@@ -1,7 +1,7 @@
 ---
 name: agent-ui
 description: >-
-  Show the user information in Emacs beside your agent-shell session, on its Agent UI canvas, and ask them things
+  Show the user information in Emacs in your agent-shell session's pane, on its Agent UI canvas, and ask them things
   there: figures, tables, charts, diagrams, plans, changes, each as the element that fits it, updated in place. Use
   when running inside Emacs (agent-shell) with this Doom config, for whatever you have to tell that has a shape, and
   for questions beyond a quick one.
@@ -9,8 +9,8 @@ description: >-
 
 # Agent UI
 
-Beside your agent-shell session, Emacs has a **canvas**: a pane of its own that opens, without taking the user's focus,
-the first time you show something. It holds **elements**, in the order you showed them. Each has an id you choose, and
+In your agent-shell session's pane, Emacs has a **canvas**: at its bottom, it opens, without taking the user's
+focus, the first time you show something. It holds **elements**, in the order you showed them. Each has an id you choose, and
 you change it in place: a progress bar moves, a table fills in, a step goes from running to done. The canvas belongs to
 your session and closes with it; it's kept with it too, and comes back when the session is resumed (its sources not
 started again).
@@ -67,7 +67,7 @@ lists the right ones). Exit status: 0 done, 1 not done, 2 a wrong use, 3 no Emac
 wrong element is refused whole; nothing half-shown. A reply's `hidden`: its pane couldn't open; tell the user.
 
 **Several canvases.** `--canvas NAME` on any operation (or `"canvas": "NAME"` in the JSON; the MCP tools' `canvas`)
-uses another canvas of your session, a tab beside the first: for a second subject, or a question (`ask`). Ids, `list`
+uses another canvas of your session, shown beside the first: for a second subject, or a question (`ask`). Ids, `list`
 and `clear` are a canvas's own. It closes, is kept and comes back with your session.
 
 ## The types

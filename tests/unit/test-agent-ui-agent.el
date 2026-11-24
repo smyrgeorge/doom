@@ -174,7 +174,7 @@ killed after."
     (should-not (agent-ui-agent-context)))
   (cl-letf (((symbol-function 'server-running-p) (lambda (&rest _) t)))
     (let ((text (agent-ui-agent-context)))
-      (should (string-prefix-p "Agent UI: beside this session" text))
+      (should (string-prefix-p "Agent UI: in this session's pane" text))
       ;; Where the command and the skill are.
       (should (string-search (concat (abbreviate-file-name agent-ui-command) " show '{\"id\":\"build\"")
                              text))
@@ -579,6 +579,8 @@ asking: doesn't."
             (name (agent-ui--session-name session))
             (shown nil) (said nil) (on-event nil)
             (agent-ui-display-function (lambda (b) (push b shown)))
+            ;; A question's canvas, in no window, shown so (config/agent-ui/pane.el).
+            (agent-ui-reveal-function (lambda (b) (push b shown)))
             (agent-ui-question-waiting-functions (list (lambda (&rest args) (push args said)))))
        (cl-letf (((symbol-function 'agent-shell-subscribe-to)
                   (lambda (&rest args)
@@ -689,11 +691,12 @@ looking at the same turn's end (its notification) gets the same."
       (should (equal (mapcar #'cdr (agent-ui--waiting other)) '("q3"))))))
 
 (ert-deftest agent-ui-agent/going-to-the-question-waiting ()
-  "C-c C-q in a session: its canvas's pane selected, the cursor on its
-question; none waiting: said."
+  "C-c C-q in a session: its canvas shown (in the session's pane) and
+selected, the cursor on its question; none waiting: said."
   (should (eq (keymap-lookup agent-shell-mode-map "C-c C-q") #'agent-ui-goto-question))
   (+test-aua-turns
-    (setq agent-ui-display-function #'agent-ui-display-canvas)
+    (setq agent-ui-display-function #'agent-ui-display-canvas
+          agent-ui-reveal-function #'agent-ui-pane-reveal)
     (dotimes (i 60)
       (agent-ui-show (list :id (format "line%d" i) :type "text" :text (format "line %d" i)) :canvas name))
     (agent-ui-show '(:id "fix" :type "choice" :question "Which fix?" :options ("Test" "Revert")) :canvas name)
@@ -702,6 +705,7 @@ question; none waiting: said."
     (with-current-buffer session
       (agent-ui-goto-question))
     (should (eq (window-buffer (selected-window)) canvas))
+    (should (agent-ui-pane-window-p (selected-window)))
     (should (equal (get-text-property (window-point) 'agent-ui-id canvas) "fix"))
     ;; From the canvas, its session's.
     (with-current-buffer canvas
