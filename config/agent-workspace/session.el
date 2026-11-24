@@ -193,7 +193,12 @@ placeholders filled in (see ITS ROLE, FILLED IN)."
   (let* ((kind (or (alist-get (agent-workspace-agent-kind agent) agent-workspace-kinds)
                    (error "No such kind of agent: %s" (agent-workspace-agent-kind agent))))
          (role (agent-workspace-role-filled agent))
-         (model (or (agent-workspace-agent-model agent) (plist-get role :model)))
+         ;; Its model; a Claude Code one (a starter's haiku) only for Claude
+         ;; Code: another agent keeps its own default.
+         (model (let ((model (or (agent-workspace-agent-model agent) (plist-get role :model))))
+                  (unless (and model (not (agent-workspace-kind-claude-code-p (agent-workspace-agent-kind agent)))
+                               (agent-workspace--model-p model))
+                    model)))
          (mode (agent-workspace-mode-of agent))
          ;; A copy: the maker's own values (a quoted session meta) stay.
          (config (copy-tree (funcall (plist-get kind :config))))

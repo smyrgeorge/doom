@@ -541,13 +541,14 @@ From the shell: `cmd/agent-workspace crew full` ([more](cmd.md#cmdagent-workspac
 
 ## An agent
 
-- **Its session** is a Claude Code session in agent-shell, in the buffer `ada · builder`. It's told who it is, that
+- **Its session** is an agent-shell session of its role's `kind` (Claude Code by default), in the buffer
+  `ada · builder`. It's told who it is, that
   it works with you only (a [lead](#the-lead): that it runs the crew on your word), to commit in its worktree, on the
   branch made for its work, and never to switch, make or rename branches, then its role's instructions. Its role's
   model and tools apply.
 - **Its permission mode** is Claude Code's auto mode: Claude decides what needs your OK. A role's `mode` changes it
-  for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all (`nil`: Claude Code's own default).
-  The agent's bar shows it.
+  for its agents, and `e` for one agent. `agent-workspace-mode` sets it for all of Claude Code's (`nil`: Claude Code's
+  own default); another agent starts in its own default mode. The agent's bar shows it.
 - **Its worktree** is `.agent-shell/worktrees/builder-ada` (its role, then its name), made with the agent on the
   branch `agent/ada`, from your checkout's HEAD. Each piece of its work gets a [branch](#its-branches) there. It's kept
   when the agent stops, so the next start finds its work, on the branch it was on. Renaming the agent or changing its
@@ -580,7 +581,13 @@ A role is what a kind of agent does and may do. These ship with this config, the
 The tester edits only `tests/` without asking, the documenter only `docs/` and Markdown files: a project whose tests or
 docs are elsewhere changes that in its copy (`M-x agent-workspace-copy-role`, below).
 
-Each role is a Markdown file, as Claude Code's own agents are: a front matter, then its instructions.
+The starters name no `kind`: they run on `agent-workspace-kind` (Claude Code). They're written for Claude Code: their
+`tools` and `deny` in its syntax (another agent's requests answered by them), the designer's Agent UI tools as Claude
+Code names an MCP server's (`mcp__agent-ui`), the triager on Claude Code's `haiku` (another agent keeps its own
+default model: a Claude Code model is set for Claude Code only).
+
+Each role is a Markdown file, as Claude Code's own agents are: a front matter, then its instructions. Its `tools`,
+`deny`, `model` and `mode` are written as Claude Code has them; another agent's are its own (see `kind` below).
 
 ```markdown
 ---
@@ -633,8 +640,8 @@ letters, digits or `-`. A file with a mistake is left out (the [picker](#making-
 names its file and line: a key that isn't one, a `mode`, `max` or `colour` that isn't one there is, a `leads` that
 isn't `true` or `false`, a `tools` or
 `deny` entry that isn't `Tool` or `Tool(pattern)`. Some things are only warned about, the role kept: an unknown key or
-one given twice (the last is used), a `model` that isn't `inherit`, one of `agent-workspace-models` or a model's id
-(`claude-...`), an `icon` that isn't a nerd icon, a `{word}` in `tools` or `deny` that isn't one of the placeholders
+one given twice (the last is used), a Claude Code role's `model` that isn't `inherit`, one of `agent-workspace-models`
+or a model's id (`claude-...`), another agent's role with `deny` (weaker there), an `icon` that isn't a nerd icon, a `{word}` in `tools` or `deny` that isn't one of the placeholders
 (left as it is), a tool both allowed and denied (it's denied), no instructions, a `talks-to` or `hands-to` naming no
 role of the project's, or its own. `M-x agent-workspace-check-roles` reads them all again and lists every problem, each
 line taking you to its file and line.

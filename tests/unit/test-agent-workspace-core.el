@@ -648,7 +648,17 @@ it's told as it starts; the maker's own config untouched."
            (config (agent-workspace--config (+test-awc--agent :name "grace" :model "sonnet"))))
       (should (equal (alist-get :buffer-name config) "grace · builder"))
       (should (equal (funcall (alist-get :default-model-id config)) "sonnet"))
-      (should-not (alist-get :mcp-servers config)))))
+      (should-not (alist-get :mcp-servers config)))
+    ;; Another agent: a Claude Code model (a starter's haiku) not set, its own kept.
+    (let* ((agent-workspace-role-function (lambda (_project name) (list :name name :model "haiku")))
+           (agent-workspace-kinds (append agent-workspace-kinds '((other :config agent-shell-anthropic-make-claude-code-config))))
+           (other (+test-awc--agent :name "hal")))
+      (setf (agent-workspace-agent-kind other) 'other)
+      (should-not (equal (when-let* ((model (alist-get :default-model-id (agent-workspace--config other))))
+                           (funcall model))
+                         "haiku"))
+      (setf (agent-workspace-agent-model other) "gpt-5")
+      (should (equal (funcall (alist-get :default-model-id (agent-workspace--config other))) "gpt-5")))))
 
 (ert-deftest agent-workspace/an-unknown-kind ()
   (should-error (agent-workspace--config (+test-awc--agent :kind 'nope))))
