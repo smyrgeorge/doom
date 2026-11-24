@@ -174,9 +174,12 @@ editor's text."
 
 (ert-deftest agent-shell-beads/bd-commands-recognised ()
   (dolist (command '("bd list" "bd" "bd close t-1 --reason done" "cd x && bd ready --json"
-                     "true; bd show t-2" "(bd ready)" "echo $(bd q New)" "x | bd create --stdin"))
+                     "true; bd show t-2" "(bd ready)" "echo $(bd q New)" "x | bd create --stdin"
+                     ;; Wrapped by a shell, as agent-shell writes an argv
+                     ;; (doom-djc.30).
+                     "bash -lc \"bd list --json\"" "sh -c 'bd ready'" "bash -lc \"bd\""))
     (should (string-match-p +my/agent-shell-beads--command-regexp command)))
-  (dolist (command '("ls" "abd list" "./bdx" "git log -- bd.el" "rg bdtest"))
+  (dolist (command '("ls" "abd list" "./bdx" "git log -- bd.el" "rg bdtest" "echo \"bdx\"" "grep 'bd\\.el'"))
     (should-not (string-match-p +my/agent-shell-beads--command-regexp command))))
 
 (defun +test-asb--event (status command)

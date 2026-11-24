@@ -87,8 +87,9 @@ above); else nil."
 ;; again).
 
 (defconst +my/agent-shell-beads--command-regexp
-  "\\(?:\\`\\|[;&|(`]\\|\\$(\\|[[:space:]]\\)bd\\(?:[[:space:]]\\|\\'\\)"
-  "A shell command running bd.")
+  "\\(?:\\`\\|[;&|(`\"']\\|\\$(\\|[[:space:]]\\)bd\\(?:[[:space:]]\\|[\"']\\|\\'\\)"
+  "A shell command running bd: also one a shell runs quoted, as agent-shell
+writes an argv (bash -lc \"bd list --json\").")
 
 (defvar +my/agent-shell-beads--refresh-timers (make-hash-table :test #'equal)
   "Each project's refresh to come: its root -> a timer.")
