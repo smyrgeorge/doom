@@ -1019,6 +1019,62 @@ pressed: shown."
           (should-not (funcall box "docs")))
       (when (buffer-live-p session) (kill-buffer session)))))
 
+(ert-deftest agent-workflow-pane/an-agent-s-model-and-effort ()
+  "An agent's box says what its session runs, after its agent: its model
+(its default by what it is) and its effort, as its session says them; until
+it does, what it was asked for; neither known, nothing."
+  (let* ((session (generate-new-buffer " *test agent session*"))
+         (agent (agent-workflow-agent--make :issue "github" :job "docs" :definition "docs" :buffer session))
+         (options (lambda (model effort)
+                    ;; Its config options, as agent-shell keeps claude-agent-acp's.
+                    (delq nil
+                          (list (list (cons :id "model") (cons :category "model") (cons :current-value model)
+                                      (cons :options (list (list (cons :value "default") (cons :name "Default (recommended)")
+                                                                 (cons :description "Opus 5.5"))
+                                                           (list (cons :value "sonnet") (cons :name "Sonnet 5.5")
+                                                                 (cons :description "Most efficient")))))
+                                (and effort
+                                     (list (cons :id "effort") (cons :category "thought_level")
+                                           (cons :current-value effort)
+                                           (cons :options (mapcar (lambda (level) (list (cons :value level)))
+                                                                  '("default" "low" "high")))))))))
+         (state (lambda (state) (with-current-buffer session (setq-local agent-shell--state state))))
+         (run (agent-workflow-run--make :project "/p/" :issue "github" :n 1 :state 'running
+                                        :workflow '(:name "github" :jobs (("docs" :name "docs" :steps ((:kind agent :agent "docs" :name "write")))))
+                                        :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "docs" (list :status 'running :step 0 :agent agent)))))
+         (agent-workflow--pane-activity (make-hash-table :test #'eq :weakness 'key)))
+    (unwind-protect
+        (progn
+          ;; Nothing known: nothing said.
+          (should-not (agent-workflow--pane-agent-model agent))
+          ;; Asked (its step's), its session not saying yet.
+          (setf (agent-workflow-agent-model agent) "sonnet"
+                (agent-workflow-agent-effort agent) "low")
+          (should (equal (agent-workflow--pane-agent-model agent) "sonnet · low effort"))
+          ;; Its session's: its default by what it is, its effort.
+          (funcall state (list (cons :config-options (funcall options "default" "high"))))
+          (should (equal (agent-workflow--pane-agent-model agent) "Opus 5.5 · high effort"))
+          (funcall state (list (cons :config-options (funcall options "sonnet" "default"))))
+          (should (equal (agent-workflow--pane-agent-model agent) "Sonnet 5.5 · default effort"))
+          ;; Its model offering no effort: none said (what was asked, skipped).
+          (funcall state (list (cons :config-options (funcall options "sonnet" nil))))
+          (should (equal (agent-workflow--pane-agent-model agent) "Sonnet 5.5"))
+          ;; No config options: its session's model, the effort asked.
+          (funcall state (list (cons :session (list (cons :model-id "haiku")
+                                                    (cons :models (list (list (cons :model-id "haiku") (cons :name "Haiku 5.5"))))))))
+          (should (equal (agent-workflow--pane-agent-model agent) "Haiku 5.5 · low effort"))
+          ;; In its box's header, after its agent, before what it's on.
+          (funcall state (list (cons :config-options (funcall options "default" "high"))))
+          (with-temp-buffer
+            (setq-local agent-workflow--pane-run run
+                        agent-workflow--pane-times (make-hash-table :test #'equal))
+            (let ((element (agent-workflow--pane-box "docs" (cdr (assoc "docs" (agent-workflow-run-jobs run))))))
+              (should (equal (mapcar (lambda (key) (plist-get element key)) '(:label :detail))
+                             '("agent docs" "Opus 5.5 · high effort · step 1 (write)")))
+              (should (agent-ui-check 'activity element)))))
+      (kill-buffer session))))
+
 (ert-deftest agent-workflow-pane/live-boxes-at-the-bottom ()
   "The live boxes at the Run section's bottom: under Rounds, even one
 shown before Rounds came (all shown again under it)."

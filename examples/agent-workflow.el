@@ -17,6 +17,16 @@
 
 ;; ====== VARIABLES ======
 
+(defvar agent-shell--state)
+
+(defconst +my/example-agent-workflow--session-state
+  '((:config-options ((:id . "model") (:category . "model") (:current-value . "default")
+                      (:options ((:value . "default") (:name . "Default (recommended)") (:description . "Opus 5.5"))))
+                     ((:id . "effort") (:category . "thought_level") (:current-value . "high")
+                      (:options ((:value . "default")) ((:value . "high"))))))
+  "The docs agent's session's state, as agent-shell keeps it: its model (its
+default, Opus 5.5) and its effort, high.")
+
 (defconst +my/example-agent-workflow--issue "demo-1"
   "The example run's issue.")
 
@@ -214,7 +224,9 @@ examples/agent-workflow.el."
     (with-current-buffer session
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (insert "A stand-in for the docs agent's agent-shell session: in a run, the agent works here.\n")))
+        (insert "A stand-in for the docs agent's agent-shell session: in a run, the agent works here.\n"))
+      ;; What it runs on, as a session says it (its box's header).
+      (setq-local agent-shell--state +my/example-agent-workflow--session-state))
     (+my/example-agent-workflow--write-journal run-dir now)
     (let* ((run (+my/example-agent-workflow--run run-dir project base now session process))
            (pane (agent-workflow--pane-make run)))

@@ -9,6 +9,8 @@
 (require 'map)
 (require 'ansi-color)
 
+(defvar agent-shell--state)
+
 
 ;; ====== WHAT EACH JOB RUNS, LIVE ======
 
@@ -77,6 +79,55 @@ kept for later)."
                          (1+ (or (plist-get step :retries) 0))))
           ((and step (eq (plist-get step :kind) 'agent)) name))))
 
+(defun agent-workflow--pane-model-name (value name description)
+  "A model as a box says it: VALUE, its id; NAME and DESCRIPTION, as its
+session lists it. Its default: what it is (its description: Opus 5.5),
+else \"default model\"; another, its name (Sonnet 5.5), else its id."
+  (cond ((equal value "default")
+         (if (and description (not (string-blank-p description))) description "default model"))
+        ((and name (not (string-blank-p name))) name)
+        (t value)))
+
+(defun agent-workflow--pane-agent-model (agent)
+  "What AGENT's session runs, as its box says it: its model and its effort
+\(Opus 5.5 · high effort), as its session says (its config options, else
+its model), what it was asked for until it does (its step's, else its
+agent's); nil if neither is known."
+  (let* ((buffer (agent-workflow-agent-buffer agent))
+         (state (and (buffer-live-p buffer) (buffer-local-boundp 'agent-shell--state buffer)
+                     (buffer-local-value 'agent-shell--state buffer)))
+         (reported (and state (map-elt state :config-options)))
+         ;; An option by its id, else its category (ACP's: model,
+         ;; thought_level), as agent-shell finds it.
+         (option (lambda (id category)
+                   (or (seq-find (lambda (option) (equal (map-elt option :id) id)) reported)
+                       (seq-find (lambda (option) (equal (map-elt option :category) category)) reported))))
+         ;; What it was asked for: its step's, else its agent's.
+         (asked (lambda (key)
+                  (or (plist-get (list :model (agent-workflow-agent-model agent)
+                                       :effort (agent-workflow-agent-effort agent))
+                                 key)
+                      (when-let* ((project (agent-workflow-agent-project agent)))
+                        (plist-get (alist-get (agent-workflow-agent-definition agent)
+                                              (ignore-errors (agent-workflow-agent-definitions project))
+                                              nil nil #'equal)
+                                   key)))))
+         (model (if-let* ((model (funcall option "model" "model")))
+                    (let* ((value (map-elt model :current-value))
+                           (entry (seq-find (lambda (entry) (equal (map-elt entry :value) value))
+                                            (map-elt model :options))))
+                      (agent-workflow--pane-model-name value (map-elt entry :name) (map-elt entry :description)))
+                  (if-let* ((id (and state (map-nested-elt state '(:session :model-id)))))
+                      (let ((entry (seq-find (lambda (entry) (equal (map-elt entry :model-id) id))
+                                             (map-nested-elt state '(:session :models)))))
+                        (agent-workflow--pane-model-name id (map-elt entry :name) (map-elt entry :description)))
+                    (and (not reported) (funcall asked :model)))))
+         (effort (if-let* ((effort (funcall option "effort" "thought_level")))
+                     (map-elt effort :current-value)
+                   (and (not reported) (funcall asked :effort)))))
+    (when (or model effort)
+      (string-join (delq nil (list model (and effort (concat effort " effort")))) " · "))))
+
 (cl-defun agent-workflow--pane-box-of (id job &key label detail right right-face waiting lines footer empty actions)
   "A live box, Agent UI's activity: ID; JOB in its colour (its Log's, by
 its place in its run), what it runs (LABEL), DETAIL muted, RIGHT at its
@@ -97,8 +148,8 @@ buffer."
 
 (defun agent-workflow--pane-agent-box (job state)
   "JOB's live box while its agent works (STATE its job's; nil else): its
-agent (agent ci), what on, how long its turn's been (or that it asks you,
-◆) in its header; its last actions, each marked by its kind, the latest
+agent (agent ci), its model and effort, what on, how long its turn's been
+\(or that it asks you, ◆) in its header; its last actions, each marked by its kind, the latest
 bright, those before muted; what it asks you after them; how many in its
 turn; Show session (at its question, if it asks)."
   (when-let* (((not (plist-get state :fix-script)))
@@ -118,7 +169,8 @@ turn; Show session (at its question, if it asks)."
        ;; An agent's, said (its name alone read as part of its job's: a
        ;; script's box, it looked).
        :label (concat "agent " (agent-workflow-agent-definition agent))
-       :detail doing
+       ;; What it runs on first: its model and effort.
+       :detail (string-join (delq nil (list (agent-workflow--pane-agent-model agent) doing)) " · ")
        :waiting (or asks (eq (plist-get state :status) 'waiting))
        :right (cond (asks "asks you")
                     (turn (format "its turn %s" (agent-workflow--duration-words (round (- (float-time) turn))))))

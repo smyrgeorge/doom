@@ -528,7 +528,9 @@ actions); q closes it, its script and timer stopped, its folder gone."
                       (mapcar #'+test-examples--log-line
                               (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
       (should (equal (plist-get (agent-ui-get "now-test" :canvas pane :section "run") :label) "e2e"))
-      (should (equal (plist-get (agent-ui-get "now-docs" :canvas pane :section "run") :label) "agent docs"))
+      (should (equal (mapcar (lambda (key) (plist-get (agent-ui-get "now-docs" :canvas pane :section "run") key))
+                             '(:label :detail))
+                     '("agent docs" "Opus 5.5 · high effort · step 1 (write)")))
       (should (timerp +my/example-agent-workflow--timer))
       (kill-buffer pane)
       (should-not +my/example-agent-workflow--timer)
