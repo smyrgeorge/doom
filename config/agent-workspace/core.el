@@ -34,6 +34,7 @@
 (declare-function agent-workspace-send "agent-workspace/session")
 (declare-function agent-shell--emit-event "agent-shell")
 (declare-function agent-ui--waiting "agent-ui/agent")
+(defvar agent-workspace-kind)
 (defvar agent-shell--state)
 (declare-function agent-workspace--check-role "agent-workspace/roles")
 (declare-function agent-workspace--check-room "agent-workspace/roles")
@@ -686,11 +687,12 @@ first of `agent-workspace-colours'; all in use, the one fewest have."
                           #'< agent-workspace-colours)))))
 
 (cl-defun agent-workspace-create (&key role name colour model mode prompt issue issue-title
-                                       issue-type project (kind 'claude-code))
+                                       issue-type project kind)
   "Make an agent in PROJECT's crew (default: the current project's) and start
 it: ROLE (its name, required), NAME (required), COLOUR (default: its role's
 while free, else a free one), MODEL and MODE (default: its role's), KIND (an
-agent of `agent-workspace-kinds'). It gets its own worktree, always, and its
+agent of `agent-workspace-kinds'; default: its role's kind:, else
+`agent-workspace-kind'). It gets its own worktree, always, and its
 session starts there. PROMPT, if given, is its first message, sent once it's
 ready; ISSUE (an id, and ISSUE-TITLE, ISSUE-TYPE), the issue it's for (its
 branch for it opened in its worktree: `agent-workspace-give'): its first
@@ -713,7 +715,9 @@ session not started, it's stuck saying why, in the crew."
       (user-error "Not a colour for an agent: %s (one of %s)"
                   colour (string-join agent-workspace-colours ", ")))
     (let ((agent (agent-workspace--make-agent
-                  :name name :role role :kind kind :state 'waking
+                  :name name :role role :state 'waking
+                  :kind (or kind (plist-get (funcall agent-workspace-role-function project role) :kind)
+                            agent-workspace-kind)
                   :colour (or colour (agent-workspace-free-colour
                                       project (plist-get (funcall agent-workspace-role-function project role)
                                                          :colour)))

@@ -19,6 +19,8 @@
 ;;   tools: Read, Edit, Bash(git:*)  allowed without asking (Claude Code's
 ;;                                   allowedTools); a YAML list too
 ;;   deny: WebFetch                  never available (disallowedTools)
+;;   kind: codex                     its agent (agent-workspace-kinds: claude-code,
+;;                                   codex, gemini-cli...); none: agent-workspace-kind
 ;;   model: opus                     inherit (or none): the user's default
 ;;   mode: acceptEdits               its permission mode: default,
 ;;                                   acceptEdits, plan, dontAsk,
@@ -84,8 +86,8 @@ them too. They replace the project's and the starters of the same name."
   "Claude Code's permission modes (auto: Claude decides what needs your OK).")
 
 (defconst agent-workspace--role-keys
-  '("name" "description" "tools" "deny" "model" "mode" "labels" "talks-to" "hands-to" "returns-to" "max"
-    "leads" "icon" "verb" "colour" "color")
+  '("name" "description" "kind" "tools" "deny" "model" "mode" "labels" "talks-to" "hands-to" "returns-to"
+    "max" "leads" "icon" "verb" "colour" "color")
   "A role file's keys (color as Claude Code's agents spell it).")
 
 (defvar agent-workspace--roles-quiet nil
@@ -93,6 +95,7 @@ them too. They replace the project's and the starters of the same name."
 listed elsewhere).")
 
 (defvar agent-workspace-models)
+(defvar agent-workspace-kinds)
 
 ;; crews.el's, loaded after.
 (defvar agent-workspace--crew-specs-cache)
@@ -292,6 +295,12 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
                       (problem 'error n "description: empty: say what it does")
                     (setq role (plist-put role :description value))))
                  ("verb" (setq role (plist-put role :verb value)))
+                 ("kind"
+                  (if (assq (intern value) (bound-and-true-p agent-workspace-kinds))
+                      (setq role (plist-put role :kind (intern value)))
+                    (problem 'error n "kind %s: not one of %s" value
+                             (mapconcat (lambda (kind) (symbol-name (car kind)))
+                                        (bound-and-true-p agent-workspace-kinds) ", "))))
                  ("model"
                   (unless (member value '("" "inherit"))
                     (unless (agent-workspace--model-p value)

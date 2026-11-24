@@ -55,6 +55,7 @@
 ;; ====== VARIABLES ======
 
 ;; config/agent-workspace.el's.
+(defvar agent-workspace-kind)
 (defvar agent-workspace-loop)
 
 (defcustom agent-workspace-crew-file ".agent-shell/agent-workspace/crew.json"
@@ -298,8 +299,9 @@ isn't its role's."
               (and mode (not (equal mode (or (plist-get role :mode) agent-workspace-mode))) (list :mode mode)))
             (and (eq (agent-workspace-agent-state agent) 'asleep) (list :asleep t))
             (and (agent-workspace-agent-loop agent) (list :loop t))
-            ;; Not Claude Code (the example's stand-in): said, so it starts again as it was.
-            (unless (eq (agent-workspace-agent-kind agent) 'claude-code)
+            ;; Not the one its role would have (its kind:, else
+            ;; agent-workspace-kind): said, so it starts again as it was.
+            (unless (eq (agent-workspace-agent-kind agent) (or (plist-get role :kind) agent-workspace-kind))
               (list :kind (symbol-name (agent-workspace-agent-kind agent))))
             (let ((panels (or (agent-workspace-agent-panel-names agent)
                               (gethash agent agent-workspace--crew-panels))))
@@ -517,7 +519,10 @@ issue); asleep if it was, or if it loops and `agent-workspace-loop' is nil
          (agent (agent-workspace--make-agent
                  :name name :role role
                  :kind (let ((kind (plist-get entry :kind)))
-                         (if (and kind (symbolp kind) (assq kind agent-workspace-kinds)) kind 'claude-code))
+                         (if (and kind (symbolp kind) (assq kind agent-workspace-kinds))
+                             kind
+                           (or (plist-get (funcall agent-workspace-role-function project role) :kind)
+                               agent-workspace-kind)))
                  :colour (or (plist-get entry :colour) (agent-workspace-free-colour project))
                  :model (plist-get entry :model) :mode (plist-get entry :mode)
                  :project (agent-workspace--root project)

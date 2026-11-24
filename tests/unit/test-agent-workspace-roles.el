@@ -103,6 +103,23 @@ inherit, Claude Code's color spelling; no instructions, warned about."
     (should-not (plist-get role :leads))
     (should-not (plist-get role :instructions))))
 
+(ert-deftest agent-workspace-roles/kind ()
+  "kind: names its agent, one of `agent-workspace-kinds' (agent-shell's
+identifier); none: none said (`agent-workspace-kind' then); another: an
+error naming them."
+  (pcase-let ((`(,role . ,problems) (+test-awr--read "---\ndescription: builds\nkind: codex\n---\nBuild.\n")))
+    (should-not problems)
+    (should (eq (plist-get role :kind) 'codex)))
+  (pcase-let ((`(,role . ,_) (+test-awr--read "---\ndescription: builds\n---\nBuild.\n")))
+    (should-not (plist-get role :kind)))
+  (pcase-let ((`(,role . ,problems) (+test-awr--read "---\ndescription: builds\nkind: chatgpt\n---\nBuild.\n")))
+    (should-not role)
+    (should (equal (+test-awr--messages problems)
+                   (list (list 'error (concat "tester.md:3: kind chatgpt: not one of "
+                                              (mapconcat (lambda (kind) (symbol-name (car kind)))
+                                                         agent-workspace-kinds ", ")))))))
+  (should (equal (mapcar #'car (seq-take agent-workspace-kinds 3)) '(claude-code codex gemini-cli))))
+
 (ert-deftest agent-workspace-roles/leads ()
   "leads: true (or yes, any case), it runs the crew from its shell; false
 or no, it doesn't, as without it (doom-pbk.134)."

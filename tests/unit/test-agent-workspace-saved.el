@@ -353,7 +353,7 @@ read; an unknown key said, ignored."
                        "crew.json: agent 6 (tim): no role: left out"
                        "crew.json: agent 7: an agent is an object: {\"name\": ..., \"role\": ...}: left out"
                        "crew.json: agent 8 (vic): its asleep \"yes\" isn't true or false: left out"
-                       "crew.json: agent 9 (wes): its kind \"robot\" isn't one of claude-code: left out"
+                       "crew.json: agent 9 (wes): its kind \"robot\" isn't one of claude-code, codex, gemini-cli, opencode, qwen-code, copilot, goose, cursor: left out"
                        "crew.json: agent 10 (xan): its model 4 isn't a string: left out"))))))
 
 (ert-deftest agent-workspace-saved/a-wrong-entry-kept-as-it-was ()
@@ -437,6 +437,32 @@ ignored; the agents read."
                      "crew.json: its layout's sources_off [[\"ci\"]] isn't a list of [source, target]: ignored")))))
 
 ;; ====== STARTED AGAIN ======
+
+(ert-deftest agent-workspace-saved/its-role-s-kind ()
+  "An agent runs its role's kind (kind:), else `agent-workspace-kind': that
+one isn't written, and it comes back from its role; another is written."
+  (+test-aws2 "role-kind"
+    (let* ((agent-workspace-kinds (append agent-workspace-kinds '((robot :config ignore) (droid :config ignore))))
+           (roles agent-workspace-role-function)
+           (agent-workspace-role-function
+            (lambda (project name)
+              (let ((role (funcall roles project name)))
+                (if (equal name "investigator") (plist-put (copy-sequence role) :kind 'robot) role)))))
+      (let ((sam (agent-workspace-create :role "investigator" :name "sam"))
+            (ada (agent-workspace-create :role "builder" :name "ada"))
+            (ken (agent-workspace-create :role "builder" :name "ken" :kind 'droid)))
+        (should (eq (agent-workspace-agent-kind sam) 'robot))
+        (should (eq (agent-workspace-agent-kind ada) 'claude-code))
+        (should (eq (agent-workspace-agent-kind ken) 'droid))
+        (let ((text (+test-aws2--compact (agent-workspace-crew-text project))))
+          (should (string-search "{\"name\": \"sam\", \"role\": \"investigator\", \"colour\": \"magenta\"}" text))
+          (should (string-search "\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"green\", \"kind\": \"droid\"" text))))
+      (agent-workspace-crew-save project)
+      (agent-workspace-close project)
+      (agent-workspace-open t)
+      (should (eq (agent-workspace-agent-kind (agent-workspace-agent "sam" project)) 'robot))
+      (should (eq (agent-workspace-agent-kind (agent-workspace-agent "ada" project)) 'claude-code))
+      (should (eq (agent-workspace-agent-kind (agent-workspace-agent "ken" project)) 'droid)))))
 
 (ert-deftest agent-workspace-saved/started-again ()
   "SPC o w with no crew running: every agent in crew.json again, fresh, in its

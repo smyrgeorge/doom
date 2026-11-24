@@ -45,9 +45,15 @@ needs your OK. nil: Claude Code's own default."
 ;; An agent of a project's crew (config/agent-workspace/core.el): a name
 ;; ("ada": a lowercase letter, then lowercase letters, digits or -), a role
 ;; ("builder"), a colour (one of the theme's ANSI faces, its role's or a free
-;; one by default: `agent-workspace-colours'), an agent kind (Claude Code:
-;; `agent-workspace-kinds'), its session, its worktree, its state and the issue
+;; one by default: `agent-workspace-colours'), an agent kind (its role's kind:,
+;; else `agent-workspace-kind'; one of `agent-workspace-kinds': claude-code,
+;; codex, gemini-cli...), its session, its worktree, its state and the issue
 ;; you gave it.
+(defcustom agent-workspace-kind 'claude-code
+  "The kind of agent a role without kind: runs: a key of
+`agent-workspace-kinds' (agent-shell's identifier: claude-code, codex...)."
+  :type 'symbol
+  :group 'agent-workspace)
 
 ;; MAKING ONE
 ;; M-x agent-workspace-new (config/agent-workspace/new.el; the app's c) asks

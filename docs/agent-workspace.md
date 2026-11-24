@@ -598,6 +598,8 @@ colour: yellow
 Write the tests first, then run them.
 ```
 
+- `kind` is its agent: one of `agent-workspace-kinds`, agent-shell's names for them (`claude-code`, `codex`,
+  `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor`); none, `agent-workspace-kind` (`claude-code`).
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the
   starters have none: their agents run in auto mode). Claude Code enforces all three.
 - `tools`, `deny` and the instructions can name the agent's own paths, filled in as its session starts: `{main}` (the

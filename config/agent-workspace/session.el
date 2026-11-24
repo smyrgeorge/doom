@@ -27,10 +27,19 @@
 ;; ====== VARIABLES ======
 
 (defcustom agent-workspace-kinds
-  '((claude-code :config agent-shell-anthropic-make-claude-code-config :claude-code t))
-  "The agents a crew can have: a kind (a symbol) and how its session starts.
-:config, a function returning agent-shell's config for it; :claude-code,
-non-nil if it's Claude Code (its role's tools go to Claude Code's options)."
+  '((claude-code :config agent-shell-anthropic-make-claude-code-config :claude-code t)
+    (codex :config agent-shell-openai-make-codex-config)
+    (gemini-cli :config agent-shell-google-make-gemini-config)
+    (opencode :config agent-shell-opencode-make-agent-config)
+    (qwen-code :config agent-shell-qwen-make-agent-config)
+    (copilot :config agent-shell-github-make-copilot-config)
+    (goose :config agent-shell-goose-make-agent-config)
+    (cursor :config agent-shell-cursor-make-agent-config))
+  "The agents a crew can have: a kind (a symbol: agent-shell's identifier
+for it) and how its session starts. :config, a function returning
+agent-shell's config for it; :claude-code, non-nil if it's Claude Code (its
+role's tools go to Claude Code's options). A role says which (kind:), else
+`agent-workspace-kind'."
   :type '(alist :key-type symbol :value-type plist)
   :group 'agent-workspace)
 
