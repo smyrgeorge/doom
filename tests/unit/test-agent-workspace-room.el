@@ -398,6 +398,21 @@ cut as a reply's, never a line at column 0; kept whole (doom-pbk.52)."
                                                 (insert-file-contents (expand-file-name ".agent-shell/agent-workspace/room.jsonl" project))
                                                 (buffer-string))))))
 
+(ert-deftest agent-workspace-room/kept-without-nil ()
+  "A line's nil values aren't kept as \"nil\": read back, none; t read back
+true (doom-pbk.172)."
+  (+test-awr2 "nil-kept"
+    (agent-workspace-room-post project :kind 'note :agent nil :text "merged" :again nil :seen t)
+    (let ((text (with-temp-buffer
+                  (insert-file-contents (expand-file-name ".agent-shell/agent-workspace/room.jsonl" project))
+                  (buffer-string))))
+      (should-not (string-search "\"nil\"" text)))
+    (let ((entry (car (last (agent-workspace--room-load project)))))
+      (should (equal (plist-get entry :text) "merged"))
+      (should-not (plist-get entry :agent))
+      (should-not (plist-get entry :again))
+      (should (eq (plist-get entry :seen) t)))))
+
 (ert-deftest agent-workspace-room/filtered ()
   "F: raised hands only, then the selected agent's only, then all."
   (+test-awr2 "filter"

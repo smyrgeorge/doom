@@ -243,9 +243,13 @@ an old line (its buttons drawn by id) never names a new one."
       (make-directory (file-name-directory file) t)
       (let ((coding-system-for-write 'utf-8-unix))
         (write-region (concat (json-serialize
+                               ;; nil left out (read back as none, not
+                               ;; "nil"), t as true.
                                (cl-loop for (key value) on entry by #'cddr
-                                        unless (memq key '(:answered))
-                                        append (list key (if (symbolp value) (symbol-name value) value))))
+                                        unless (or (memq key '(:answered)) (null value))
+                                        append (list key (cond ((eq value t) t)
+                                                               ((symbolp value) (symbol-name value))
+                                                               (t value)))))
                               "\n")
                       nil file t 'silent)))))
 
