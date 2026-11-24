@@ -946,7 +946,8 @@ the id. Signals `agent-ui-error' if ELEMENT is wrong."
        (owner
         ;; A panel's child: replaced in its place, its panel redrawn.
         (let ((old (agent-ui--find-child (agent-ui--entry-element owner) id)))
-          (agent-ui--ids-free (agent-ui--replace-child (agent-ui--entry-element owner) id nil)
+          ;; The panel with it replaced: its own children's ids checked too.
+          (agent-ui--ids-free (agent-ui--replace-child (agent-ui--entry-element owner) id element)
                               section (agent-ui--entry-id owner))
           (setf (agent-ui--entry-element owner)
                 (agent-ui--checked (agent-ui--replace-child (agent-ui--entry-element owner) id element))

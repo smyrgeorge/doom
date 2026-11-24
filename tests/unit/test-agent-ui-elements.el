@@ -5446,6 +5446,19 @@ in the agent's directory, as its own: a redraw elsewhere finds them
       (should (equal (plist-get (agent-ui-get "c") :file) (expand-file-name "notes.txt" dir)))
       (should (equal (plist-get (agent-ui-get "f") :dir) dir)))))
 
+(ert-deftest agent-ui-elements/panel-a-child-replaced-its-ids-checked ()
+  "A panel's child replaced by one whose own children have an id taken:
+refused, the canvas as it was (doom-ht6.58)."
+  (+test-aue-canvas
+    (agent-ui-show '(:id "x" :type "text" :text "top"))
+    (agent-ui-show '(:id "p" :type "panel" :children ((:id "c" :type "text" :text "child"))))
+    (should (string-match-p "the id \"x\" is taken"
+                            (agent-ui-error-message
+                             (should-error (agent-ui-show '(:id "c" :type "panel" :children ((:id "x" :type "text" :text "again"))))
+                                           :type 'agent-ui-error))))
+    (should (equal (plist-get (agent-ui-get "c") :text) "child"))
+    (should (equal (plist-get (agent-ui-get "x") :text) "top"))))
+
 (ert-deftest agent-ui-elements/panel-a-child-without-an-id ()
   "A panel's child without an id: given one by its place (PANEL.N, its own
 children the same, not one taken), so its buttons and keys change it, not
