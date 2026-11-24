@@ -14,6 +14,41 @@ coding agent in a pane of its own. The keys use `Cmd` on macOS and `Ctrl` on Lin
 Each feature below opens on files of its own with `M-x +my/example-NAME`, so you can try it without a project of your
 own ([Examples](docs/examples.md)).
 
+### Agent UI
+
+Your agent keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
+test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
+place. It draws them with `cmd/agent-ui`, which its system prompt tells it about ([more](docs/agent-ui.md)).
+
+![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
+
+### Agent workflow
+
+A workflow describes the work on an issue as GitHub Actions does: jobs, the order they run in, which run in parallel,
+and their steps, some of them an agent (an LLM with its own instructions). `M-x agent-workflow-run-ticket` runs one on
+an issue, in a worktree of its own, and its pane follows it: how it stands, its branch, its flow and jobs, what each
+job runs as it goes, its agents' notes and its Log ([more](docs/agent-workflow.md)).
+
+![A run's pane: how it stands, its flow and jobs; beside it, what its jobs run now and its Log](examples/agent-workflow.png)
+
+### Agent workspace
+
+Several coding agents work on a project at once, a crew: each with a name, a role and a colour, each in its own git
+worktree, so they don't get in each other's way or touch your checkout. `SPC o w` opens the crew's app: the project's
+issues, the stage where they work, the room where they talk. They ask each other, and hand work on through issues
+([more](docs/agent-workspace.md)).
+
+![The crew's app: the issues and the minimap, the stage, the room](examples/agent-workspace.png)
+
+### Project panels
+
+A dashboard kept in a project's repository, `.agent-ui/panels/NAME.el`: what it shows and the Emacs Lisp filling it,
+in one file. `SPC o u` opens one, its data fetched afresh and refreshed as often as it says, its slow queries
+(a database's, minutes) each loading on its own without freezing Emacs. Your agent writes them, checks them and
+opens them too ([more](docs/agent-ui.md#project-panels)).
+
+![A project panel: this Mac's CPU, every second](examples/panel.png)
+
 ### Tiling
 
 Applications (your agent, the terminal, Magit, the Markdown preview, drawings, issues) open in a new pane where the
@@ -30,22 +65,12 @@ their dependencies ([more](docs/issues.md)).
 
 ![A project's issues in their list](examples/issues.png)
 
-### Agent UI
+### Mermaid diagrams
 
-Your agent keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
-test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
-place. It draws them with `cmd/agent-ui`, which its system prompt tells it about ([more](docs/agent-ui.md)).
+`.mmd` files open with their diagram beside them, updated as you type, in the theme's colours. ```` ```mermaid ````
+blocks are drawn too: in the Markdown preview, in your agent's replies and on its canvas ([more](docs/mermaid.md)).
 
-![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
-
-### Project panels
-
-A dashboard kept in a project's repository, `.agent-ui/panels/NAME.el`: what it shows and the Emacs Lisp filling it,
-in one file. `SPC o u` opens one, its data fetched afresh and refreshed as often as it says, its slow queries
-(a database's, minutes) each loading on its own without freezing Emacs. Your agent writes them, checks them and
-opens them too ([more](docs/agent-ui.md#project-panels)).
-
-![A project panel: this Mac's CPU, every second](examples/panel.png)
+![A Mermaid file beside its preview](examples/mermaid.png)
 
 ### Excalidraw drawings
 
@@ -54,13 +79,6 @@ GitHub show. In your agent's session, `C-c C-d` draws something for it to see ([
 
 ![Excalidraw](examples/excalidraw.png)
 
-### PDFs
-
-PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search and an outline. Pages are dark,
-their colours' hues kept, and `SPC m d` turns them light ([more](docs/pdf.md)).
-
-![PDF with dark pages](examples/pdf.png)
-
 ### Markdown preview
 
 `SPC m p` shows the rendered file beside it, in GitHub's style, updated as you type and following the cursor
@@ -68,12 +86,19 @@ their colours' hues kept, and `SPC m d` turns them light ([more](docs/pdf.md)).
 
 ![Markdown live preview](examples/markdown.png)
 
-### Mermaid diagrams
+### PDFs
 
-`.mmd` files open with their diagram beside them, updated as you type, in the theme's colours. ```` ```mermaid ````
-blocks are drawn too: in the Markdown preview, in your agent's replies and on its canvas ([more](docs/mermaid.md)).
+PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with Vim keys, search and an outline. Pages are dark,
+their colours' hues kept, and `SPC m d` turns them light ([more](docs/pdf.md)).
 
-![A Mermaid file beside its preview](examples/mermaid.png)
+![PDF with dark pages](examples/pdf.png)
+
+### Images
+
+Images open with a toolbar: the folder's other images, zoom, rotate, flip, crop, sharp pixels, copy the image, and its
+version in Git's HEAD beside it with `SPC m g` ([more](docs/images.md)).
+
+![A picture beside its version in git's HEAD](examples/image.png)
 
 ### Three-way merge
 
@@ -82,13 +107,6 @@ Take a change with `>>` / `<<`, ignore it with `x`, or let the ✨ wand merge th
 terminal too, and from the shell with `cmd/diff` ([more](docs/git.md#resolving-conflicts)).
 
 ![Three-way merge](examples/merge.png)
-
-### Images
-
-Images open with a toolbar: the folder's other images, zoom, rotate, flip, crop, sharp pixels, copy the image, and its
-version in Git's HEAD beside it with `SPC m g` ([more](docs/images.md)).
-
-![A picture beside its version in git's HEAD](examples/image.png)
 
 ## Installation
 
