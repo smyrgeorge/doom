@@ -1,7 +1,7 @@
 # Issues
 
-A project's issues, tracked with [Beads](https://github.com/gastownhall/beads) (`bd`): a git-backed issue tracker
-that keeps them in the project's `.beads/`, beside the code. Coding agents such as Claude Code use it as their memory
+A project's issues, tracked with [Beads](https://github.com/gastownhall/beads) (`bd`): a git-backed issue tracker that
+keeps them in the project's `.beads/`, beside the code. Coding agents (Claude Code, Codex...) use it as their memory
 across sessions; [beads.el](https://codeberg.org/ctietze/beads.el) shows the same issues in Emacs. `scripts/tools.sh`
 installs `bd` (Homebrew on macOS, npm on Linux). Try it: `M-x +my/example-issues`.
 
@@ -12,18 +12,18 @@ installs `bd` (Homebrew on macOS, npm on Linux). Try it: `M-x +my/example-issues
 | `SPC o i` | The project's issues |
 | `SPC o I` | A new issue: title, type, priority |
 
-In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` offer a terminal at its root with
-`bd init --skip-agents` typed, not run: read it, run it with `RET`, then `SPC o i` again. It adds `.beads/` and
-`.gitignore` and commits them (with what's staged), and no files for AI tools (`CLAUDE.md`, `AGENTS.md`, `.codex/`,
-`.cursor/`...). Claude Code in Emacs is told about the issues anyway ([more](agent-shell.md#issues-for-the-agent)); run
-from a terminal, after `bd setup claude`. Add `--skip-hooks` before running it to install no git hooks. The command
-typed is `+my/beads-init-command` in `config/beads.el`.
+In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` offer a terminal at its root with `bd init
+--skip-agents` typed, not run: read it, run it with `RET`, then `SPC o i` again. It adds `.beads/` and `.gitignore` and
+commits them (with what's staged), and no files for AI tools (`CLAUDE.md`, `AGENTS.md`, `.codex/`, `.cursor/`...). Your
+agent in Emacs is told about the issues anyway ([more](agent-shell.md#issues-for-the-agent)); run from a terminal, after
+`bd setup AGENT` (`claude`, `codex`...). Add `--skip-hooks` before running it to install no git hooks. The command typed
+is `+my/beads-init-command` in `config/beads.el`.
 
 ## The list
 
-The list opens in a new pane where [tiling](editor.md#tiling) puts it, as Claude Code and Magit do; an issue opened
-from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) opens beside the list, its
-room taken from the pane next to it when the list's is narrow, and closes with the list.
+The list opens in a new pane where [tiling](editor.md#tiling) puts it, as an agent's session and Magit do; an issue
+opened from it in a new pane too, and the next ones in that pane, as its tabs. The preview (`P`) opens beside the list,
+its room taken from the pane next to it when the list's is narrow, and closes with the list.
 
 Each issue's status, priority and type are icons and badges in their colours: ○ ready (nothing open blocks it), ◔ in
 progress, ⊘3 blocked by 3 open issues (in the Blocked section), ✓ closed; P0 and P1 stand out, P3 and P4 are muted; the
@@ -76,10 +76,11 @@ issues depending on it (an epic's issues, what a blocker holds up) and its comme
 `M-x beads-stale`, `beads-orphans` (issues mentioned in commits but still open), `beads-duplicates` and `beads-lint`
 (issues missing their type's sections) are reports of their own.
 
-## With Claude
+## With your agent
 
-Claude Code works with the same issues: a session in the project is told about them, your open lists follow its
-changes, and `C-c C-a` on an issue hands it to the project's session ([more](agent-shell.md#issues-for-the-agent)).
+Your agent works with the same issues, whichever it is: a session in the project is told about them (Beads' guide
+too), your open lists follow its `bd` commands, and `C-c C-a` on an issue hands it to the project's session
+([more](agent-shell.md#issues-for-the-agent)).
 
 ## With bd 1.x
 
