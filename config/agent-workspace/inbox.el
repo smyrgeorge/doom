@@ -432,7 +432,17 @@ and an event being given hold them. In `agent-workspace-renamed-functions'."
         (plist-put event :from name)
         (setq changed t)))
     (when changed
-      (agent-workspace--inbox-write project (agent-workspace-inbox project)))))
+      (agent-workspace--inbox-write project (agent-workspace-inbox project)))
+    ;; Its sources off (its messages to another, another's to it): by its
+    ;; new name, not left on the old one for an agent made with it.
+    (let ((off (agent-workspace-inbox-sources-off project)))
+      (when (seq-some (lambda (pair) (or (equal (car pair) was) (equal (cdr pair) was))) off)
+        (agent-workspace--inbox-set-sources-off
+         project (delete-dups (mapcar (lambda (pair) (cons (if (equal (car pair) was) name (car pair))
+                                                           (if (equal (cdr pair) was) name (cdr pair))))
+                                      off)))
+        ;; Kept in crew.json.
+        (run-hook-with-args 'agent-workspace-layout-functions project)))))
 
 (add-hook 'agent-workspace-renamed-functions #'agent-workspace--inbox-renamed-h)
 

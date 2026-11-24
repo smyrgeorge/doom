@@ -332,9 +332,17 @@ it's delivered to her), her thread with ken too (doom-pbk.51)."
     (agent-workspace-open t)
     (puthash (agent-workspace--root project) t agent-workspace--inbox-paused)
     (agent-workspace-inbox-add project "ada" "build 41 broke" :from "ci")
+    (agent-workspace-inbox-source-toggle project "ci" "ada")
+    (agent-workspace-inbox-source-toggle project "ada" "ken")
     (let ((thread (agent-workspace--thread-between project "ada" "ken")))
       (agent-workspace-rename ada "ann")
       (should (equal (agent-workspace-agent-name ada) "ann"))
+      ;; Its sources off follow it, not left for an agent made with its old
+      ;; name (doom-pbk.178).
+      (should (equal (sort (copy-sequence (agent-workspace-inbox-sources-off project))
+                           (lambda (a b) (string< (car a) (car b))))
+                     '(("ann" . "ken") ("ci" . "ann"))))
+      (agent-workspace-inbox-source-toggle project "ci" "ann")
       (should (equal (mapcar (lambda (event) (plist-get event :to)) (agent-workspace-inbox project)) '("ann")))
       (should (= (agent-workspace-inbox-count ada) 1))
       (should (equal (agent-workspace--thread-pair thread) '("ann" "ken")))
