@@ -267,7 +267,13 @@ oldest first: plists."
                 (plist-get payload :agent))))
     (if (not (and (stringp name) (not (string-empty-p name))))
         "shell"
-      (let ((agent (agent-workspace-agent name project)))
+      ;; The agent that sent it, itself: one of this crew (another
+      ;; project's of the same name isn't its lead).
+      (let ((agent (if agent-workspace--request-from
+                       (and (equal (agent-workspace-agent-project agent-workspace--request-from)
+                                   (agent-workspace--root project))
+                            agent-workspace--request-from)
+                     (agent-workspace-agent name project))))
         (cond
          ;; "%s": its apostrophes kept straight, for scripts.
          ((not agent) (user-error "%s" (format "only a lead runs the crew: %s isn't in it" name)))

@@ -404,6 +404,14 @@ to sleep."
                      "only a lead runs the crew: ada's role, builder, doesn't lead")))
     (should (equal (+test-awq--error "sleep" "{\"name\":\"ada\",\"agent\":\"ghost\"}")
                    "only a lead runs the crew: ghost isn't in it"))
+    ;; Another project's max (the same name) asking from this one's
+    ;; folder: not its lead (doom-pbk.180).
+    (let ((agent-workspace--request-from
+           (agent-workspace--make-agent :name "max" :role "lead" :project "/another/project/")))
+      (should (equal (cadr (should-error (agent-workspace--request-actor project nil) :type 'user-error))
+                     "only a lead runs the crew: max isn't in it")))
+    (let ((agent-workspace--request-from max))
+      (should (equal (agent-workspace--request-actor project nil) "max")))
     (should (eq (plist-get (+test-awq--request "status" "{\"agent\":\"ada\"}") :ok) t))
     (should (agent-workspace-live-p max))
     (should-not (agent-workspace-agent-loop ada))
