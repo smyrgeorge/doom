@@ -314,8 +314,12 @@ again at its next change."
     (agent-ui-after-minibuffer
      (lambda ()
        (when (and (buffer-live-p buffer) (not (get-buffer-window buffer t)))
+         ;; The current buffer kept: what showed it may have deleted the
+         ;; selected window (another selected, its buffer current), and the
+         ;; canvas's new element was then drawn there (a session's start
+         ;; replaced by it).
          (let ((hidden (condition-case err
-                           (progn (funcall display buffer) nil)
+                           (progn (save-current-buffer (funcall display buffer)) nil)
                          (error (error-message-string err)))))
            (with-current-buffer buffer
              (when (and hidden (not agent-ui--hidden))
@@ -421,7 +425,13 @@ was in no window, at the default width) all drawn again soon."
 
 (defun agent-ui--draw (entry ctx)
   "Draw ENTRY again, in its place: point and the windows' inside it kept at
-their line and column (its text replaced, they went to its start)."
+their line and column (its text replaced, they went to its start). In its
+canvas, whatever buffer is current (another's text replaced by it, else)."
+  (with-current-buffer (marker-buffer (agent-ui--entry-start entry))
+    (agent-ui--draw-here entry ctx)))
+
+(defun agent-ui--draw-here (entry ctx)
+  "Draw ENTRY again (see `agent-ui--draw'), in the current canvas, its own."
   (agent-ui--drawn-at ctx)
   (let* ((inhibit-read-only t)
          (start (agent-ui--entry-start entry))

@@ -426,3 +426,20 @@ lines under the views of the short one."
         (dolist (cell (list a c))
           (should (= (window-body-height cell)
                      (with-current-buffer (window-buffer cell) (count-lines (point-min) (point-max))))))))))
+
+(ert-deftest agent-ui-pane/laid-out-again-from-a-view-touches-no-other-buffer ()
+  "A new view laid out while one is selected (its window made again, the
+selected one deleted, another selected meanwhile): the new element drawn in
+its own canvas, never in the session's buffer (it was: its start replaced
+by the element); the view selected still, in its new window."
+  (+test-aup
+    (+test-aup-show name)
+    (let ((before (with-current-buffer session (buffer-string))))
+      (select-window (get-buffer-window (+test-aup-canvas name)))
+      (+test-aup-show (agent-ui-sub-canvas name "files"))
+      (should (equal (with-current-buffer session (buffer-string)) before))
+      (with-current-buffer (+test-aup-canvas name "files")
+        (should (string-search "something" (buffer-string)))
+        (should (eq (marker-buffer (agent-ui--entry-end (gethash "x" agent-ui--entries))) (current-buffer))))
+      (should (eq (window-buffer (selected-window)) (+test-aup-canvas name)))
+      (should (agent-ui-pane-window-p (selected-window))))))

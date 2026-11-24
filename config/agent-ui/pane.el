@@ -512,25 +512,38 @@ session shown, its views in its pane."
     (when (and (not agent-ui--pane-syncing)
                (frame-live-p frame)
                (not (frame-parent frame)))
-      (let* ((agent-ui--pane-syncing t)
-             (shown (agent-ui--pane-session-windows frame (agent-ui--pane-sessions))))
-        (dolist (cell (agent-ui--pane-cells frame))
-          (when (window-live-p cell)
-            (let ((session (agent-ui--pane-cell-session cell)))
-              (cond
-               ;; Not a canvas (a workspace's windows made again at startup,
-               ;; its buffers gone): a window like any.
-               ((not (eq (buffer-local-value 'major-mode (window-buffer cell)) 'agent-ui-canvas-mode))
-                (agent-ui--pane-unattach cell))
-               ((not (and session (rassq session shown)))
-                (let ((agent-ui--pane-detaching t))
-                  (condition-case nil
-                      (let ((ignore-window-parameters t))
-                        (delete-window cell))
-                    (error (agent-ui--pane-unattach cell)))))))))
-        (pcase-dolist (`(,window . ,session) shown)
-          (when (window-live-p window)
-            (agent-ui--pane-sync-window window session)))))))
+      ;; The current buffer and the view selected kept: a view's window made
+      ;; again, deleted while selected, selected another (its buffer
+      ;; current: a canvas's new element was drawn there).
+      (save-current-buffer
+        (let ((view (and (agent-ui-pane-window-p (selected-window)) (window-buffer (selected-window)))))
+          (agent-ui--pane-sync-frame frame)
+          (when (and view (not (agent-ui-pane-window-p (selected-window))))
+            (when-let* ((window (get-buffer-window view frame)))
+              (when (agent-ui-pane-window-p window)
+                (select-window window 'norecord)))))))))
+
+(defun agent-ui--pane-sync-frame (frame)
+  "FRAME's sessions' panes as they should be (see `agent-ui--pane-sync')."
+  (let* ((agent-ui--pane-syncing t)
+         (shown (agent-ui--pane-session-windows frame (agent-ui--pane-sessions))))
+    (dolist (cell (agent-ui--pane-cells frame))
+      (when (window-live-p cell)
+        (let ((session (agent-ui--pane-cell-session cell)))
+          (cond
+           ;; Not a canvas (a workspace's windows made again at startup, its
+           ;; buffers gone): a window like any.
+           ((not (eq (buffer-local-value 'major-mode (window-buffer cell)) 'agent-ui-canvas-mode))
+            (agent-ui--pane-unattach cell))
+           ((not (and session (rassq session shown)))
+            (let ((agent-ui--pane-detaching t))
+              (condition-case nil
+                  (let ((ignore-window-parameters t))
+                    (delete-window cell))
+                (error (agent-ui--pane-unattach cell)))))))))
+    (pcase-dolist (`(,window . ,session) shown)
+      (when (window-live-p window)
+        (agent-ui--pane-sync-window window session)))))
 
 (defun agent-ui--pane-sync-h (frame)
   "A window change in FRAME (`window-state-change-functions'): its panes

@@ -801,3 +801,25 @@ showed another buffer goes back to it; a frame's last window stays."
       (should (equal (get-text-property (match-beginning 0) 'agent-ui-id) "dash"))
       ;; Its link, its start.
       (should (equal (get-text-property (agent-ui--element-start canvas "b") 'agent-ui-child) "b")))))
+
+(ert-deftest agent-ui-canvas/drawn-in-its-own-buffer-whatever-is-current ()
+  "An element drawn while another buffer is current (what showed its canvas
+selected another window, its buffer current): drawn in its canvas, the
+other buffer untouched (a session's start was replaced by an element)."
+  (+test-auc
+    (let ((other (+test-buffer "agent-ui-other" "Other text.\n")))
+      (unwind-protect
+          (progn
+            ;; Showing the canvas makes another buffer current.
+            (let ((agent-ui-display-function (lambda (_canvas) (set-buffer other))))
+              (agent-ui-show '(:id "m" :type "meter" :value 3 :max 4)))
+            (should (equal (with-current-buffer other (buffer-string)) "Other text.\n"))
+            (with-current-buffer canvas
+              (should (string-search "3/4" (buffer-string)))
+              (should (eq (marker-buffer (agent-ui--entry-end (gethash "m" agent-ui--entries))) canvas)))
+            ;; Drawn again from the other buffer: in the canvas still.
+            (with-current-buffer other
+              (agent-ui--draw (gethash "m" (buffer-local-value 'agent-ui--entries canvas))
+                              (with-current-buffer canvas (agent-ui--context)))
+              (should (equal (buffer-string) "Other text.\n"))))
+        (kill-buffer other)))))
