@@ -184,7 +184,10 @@ another visible frame's; nil if it's in none."
 ;; columns, the views are dealt into them: the session's own first, in the
 ;; first column; then the others, the tallest first, each into the column
 ;; with the fewest lines so far (the leftmost of those); each column's views
-;; in their order. Of those layouts, each view at least its width
+;; in their order. Dealt so, and also with the views showing a wide type
+;; going only into the columns allowed to be wide, every set of columns tried
+;; (two wide views in two columns took 80 + 80 and left no room for four
+;; columns, both in one did). Of those layouts, each view at least its width
 ;; (`agent-ui-grid-min-width'; showing a wide type, `agent-ui-grid-wide-width')
 ;; and no column holding more views than it has room for (3 lines each), the
 ;; one with the least height and room left empty together (its tallest
@@ -215,23 +218,53 @@ many on the screen), its dirty elements drawn first; and its bar."
   (1+ (/ (float (cdr (buffer-text-pixel-size view window)))
          (frame-char-height (window-frame window)))))
 
-(defun agent-ui--pane-deal (lines count)
+(defun agent-ui--pane-deal (lines count &optional allowed)
   "The views (indices into LINES, their lines) dealt into COUNT columns (see
-above): lists of indices, each column's in their order."
+above): lists of indices, each column's in their order. ALLOWED, a function
+of a view's index and a column's: non-nil if the view may go there (default:
+any); nil if a view has no column it may go in."
   (let ((sums (make-vector count 0))
-        (columns (make-vector count nil)))
-    (aset columns 0 (list 0))
-    (aset sums 0 (car lines))
-    ;; `sort' is stable: views as tall in their order.
-    (dolist (index (sort (number-sequence 1 (1- (length lines)))
-                         (lambda (a b) (> (nth a lines) (nth b lines)))))
-      (let ((target 0))
-        (dotimes (column count)
-          (when (< (aref sums column) (aref sums target))
-            (setq target column)))
-        (aset columns target (cons index (aref columns target)))
-        (aset sums target (+ (aref sums target) (nth index lines)))))
-    (mapcar (lambda (column) (sort column #'<)) (append columns nil))))
+        (columns (make-vector count nil))
+        (allowed (or allowed #'always)))
+    (when (funcall allowed 0 0)
+      (aset columns 0 (list 0))
+      (aset sums 0 (car lines))
+      (catch 'none
+        ;; `sort' is stable: views as tall in their order.
+        (dolist (index (sort (number-sequence 1 (1- (length lines)))
+                             (lambda (a b) (> (nth a lines) (nth b lines)))))
+          (let ((target nil))
+            (dotimes (column count)
+              (when (and (funcall allowed index column)
+                         (or (null target) (< (aref sums column) (aref sums target))))
+                (setq target column)))
+            (unless target
+              (throw 'none nil))
+            (aset columns target (cons index (aref columns target)))
+            (aset sums target (+ (aref sums target) (nth index lines)))))
+        (mapcar (lambda (column) (sort column #'<)) (append columns nil))))))
+
+(defun agent-ui--pane-subsets (count)
+  "Every set of the numbers 0 to COUNT - 1 but the empty one: lists."
+  (cl-loop for mask from 1 below (ash 1 count)
+           collect (cl-loop for bit below count
+                            unless (zerop (logand mask (ash 1 bit))) collect bit)))
+
+(defun agent-ui--pane-deals (lines widths count)
+  "The ways views needing LINES and WIDTHS are dealt into COUNT columns (see
+above): any column allowed for any view; and, with views showing a wide
+type, those allowed only in each set of columns."
+  (let ((wide (cl-loop for width in widths for index from 0
+                       when (> width agent-ui-grid-min-width) collect index)))
+    (delq nil
+          (cons (agent-ui--pane-deal lines count)
+                (when wide
+                  (mapcar (lambda (wide-columns)
+                            (agent-ui--pane-deal
+                             lines count
+                             (lambda (index column)
+                               (or (not (memq index wide)) (memq column wide-columns)))))
+                          (agent-ui--pane-subsets count)))))))
 
 (defun agent-ui--pane-plan (lines widths width most)
   "The layout (see above) of views needing LINES (lines each, their bars)
@@ -242,19 +275,19 @@ fits."
   (let (best best-key)
     (cl-loop
      for count from 1 to (min (length lines) (max 1 (/ width (max 1 agent-ui-grid-min-width))))
-     do (let* ((columns (agent-ui--pane-deal lines count))
-               (pick (lambda (list column) (mapcar (lambda (index) (nth index list)) column)))
-               (needs (mapcar (lambda (column) (apply #'max (funcall pick widths column))) columns))
-               (heights (mapcar (lambda (column) (apply #'+ (funcall pick lines column))) columns))
-               (height (apply #'max heights)))
-          (when (and (<= (apply #'+ needs) width)
-                     (<= (* 3 (apply #'max (mapcar #'length columns))) most))
-            ;; The least height and room left empty together (see above),
-            ;; then the least room left empty, then the fewest columns.
-            (let* ((empty (- (* height count) (apply #'+ heights)))
-                   (key (list (+ height (/ (float empty) count)) empty count)))
-              (when (or (null best-key) (agent-ui--pane-key< key best-key))
-                (setq best (list columns needs height) best-key key))))))
+     do (dolist (columns (agent-ui--pane-deals lines widths count))
+          (let* ((pick (lambda (list column) (mapcar (lambda (index) (nth index list)) column)))
+                 (needs (mapcar (lambda (column) (apply #'max (funcall pick widths column))) columns))
+                 (heights (mapcar (lambda (column) (apply #'+ (funcall pick lines column))) columns))
+                 (height (apply #'max heights)))
+            (when (and (<= (apply #'+ needs) width)
+                       (<= (* 3 (apply #'max (mapcar #'length columns))) most))
+              ;; The least height and room left empty together (see above),
+              ;; then the least room left empty, then the fewest columns.
+              (let* ((empty (- (* height count) (apply #'+ heights)))
+                     (key (list (+ height (/ (float empty) count)) empty count)))
+                (when (or (null best-key) (agent-ui--pane-key< key best-key))
+                  (setq best (list columns needs height) best-key key)))))))
     (when best
       (pcase-let* ((`(,columns ,needs ,height) best)
                    (count (length columns))
@@ -290,11 +323,16 @@ to bottom."
     (cl-loop for column in columns
              for size in sizes
              do (let ((here (list column)))
-                  (dotimes (_ (1- size))
+                  (dotimes (placed (1- size))
                     ;; Its first split: a stack of its own (one column: not
-                    ;; beside the conversation in its pane's group).
-                    (let ((window-combination-limit (null (cdr here))))
-                      (setq here (append here (list (split-window (car (last here)) nil 'below))))))
+                    ;; beside the conversation in its pane's group). Each
+                    ;; view its share: the last window keeps one, the next
+                    ;; ones below it (halving it each time left the fifth
+                    ;; of five too small).
+                    (let* ((window-combination-limit (null (cdr here)))
+                           (last (car (last here)))
+                           (share (max window-min-height (/ (window-total-height last) (- size placed)))))
+                      (setq here (append here (list (split-window last share 'below))))))
                   (setq cells (append cells here))))
     cells))
 
@@ -390,21 +428,31 @@ windows; nil without room (WINDOW as it was)."
                               (let ((window-combination-limit t))
                                 (split-window window (- lines) 'below))
                             (error nil))))
-          (let* ((cells (agent-ui--pane-build area plan))
+          (let* ((cells (condition-case nil
+                            (agent-ui--pane-build area plan)
+                          (error nil)))
                  (session (window-buffer window))
                  (columns (mapcar (lambda (column) (mapcar (lambda (index) (nth index views)) column))
                                   (car plan))))
-            (cl-mapc #'agent-ui--pane-show-in cells (apply #'append columns))
-            (agent-ui--pane-decorate window cells)
-            (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
-            (with-current-buffer session
-              (setq agent-ui--pane-plan columns
-                    agent-ui--pane-height nil))
-            ;; As high as each needs now; again once drawn at their widths.
-            (agent-ui--pane-fit window session)
-            (agent-ui--pane-tops cells)
-            (agent-ui--pane-fit-soon session)
-            cells))))))
+            (if (not cells)
+                ;; Half built (no room after all): what it made deleted, the
+                ;; session's window as it was (they stayed, showing the
+                ;; session, more at each try: 18 windows of it).
+                (let ((ignore-window-parameters t))
+                  (when-let* ((made (window-next-sibling window)))
+                    (delete-window made))
+                  nil)
+              (cl-mapc #'agent-ui--pane-show-in cells (apply #'append columns))
+              (agent-ui--pane-decorate window cells)
+              (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
+              (with-current-buffer session
+                (setq agent-ui--pane-plan columns
+                      agent-ui--pane-height nil))
+              ;; As high as each needs now; again once drawn at their widths.
+              (agent-ui--pane-fit window session)
+              (agent-ui--pane-tops cells)
+              (agent-ui--pane-fit-soon session)
+              cells)))))))
 
 ;; ====== ITS HEIGHT (see above) ======
 

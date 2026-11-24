@@ -483,3 +483,56 @@ again, the same id: back."
       (+test-aup-show tests)
       (should (= (length (+test-aup-cells)) 2))
       (should (get-buffer-window (+test-aup-canvas name "tests"))))))
+
+(ert-deftest agent-ui-pane/wide-views-together ()
+  "Two wide views (80) dealt into the columns allowed to be wide: four
+columns fit across 205 with both in one (80 + 40 + 40 + 40), not with each
+in its own (240); the ten-view experiment's ninth step: 22.1 lines high,
+not 27.8 in three columns."
+  (let* ((lines '(8.6 7.6 8.1 9.6 14.0 9.6 5.6 6.6 9.6))
+         (widths '(40 80 40 80 40 40 40 40 40))
+         (plan (agent-ui--pane-plan lines widths 205 33)))
+    (should (= (length (car plan)) 4))
+    (should (< (nth 2 plan) 23))
+    (should (seq-find (lambda (column) (and (memq 1 column) (memq 3 column))) (car plan)))
+    (should (= (apply #'+ (nth 1 plan)) 205)))
+  ;; A wide session's own view: its column allowed to be wide.
+  (should (equal (car (agent-ui--pane-plan '(4 4 4) '(80 40 40) 205 32)) '((0) (1) (2)))))
+
+(ert-deftest agent-ui-pane/a-stack-with-room-for-all ()
+  "Views in one column (the pane too narrow for two), the column with room
+for them all: each its share, none too small (halving the last window each
+time: 1/2, 1/4, 1/8... the last ones failed)."
+  (+test-aup
+    (let ((agent-ui-grid-min-width 80))
+      ;; Four: as many as the 24 lines of a batch Emacs's frame have room
+      ;; for (3 lines each); halving, the fourth failed already.
+      (dolist (part '(nil "b" "c" "d"))
+        (+test-aup-show (if part (agent-ui-sub-canvas name part) name)))
+      (let ((cells (agent-ui--pane-cells (selected-frame))))
+        (should (= (length cells) 4))
+        (should (= (length (window-list nil 'nomini)) 5))
+        (dolist (cell cells)
+          (should (>= (window-total-height cell) 2)))))))
+
+(ert-deftest agent-ui-pane/a-layout-failing-half-built-leaves-nothing ()
+  "A layout failing half built (no room after all): what it made deleted,
+the session's window as it was, no window of it left over (each try left
+more: 18 windows of the session); its view in a pane of its own then."
+  (+test-aup
+    (let ((height (window-total-height))
+          (calls 0))
+      (cl-letf (((symbol-function 'agent-ui--pane-build)
+                 (lambda (area _plan)
+                   (cl-incf calls)
+                   (split-window area nil 'right)
+                   (error "Window too small for splitting"))))
+        (+test-aup-show name)
+        (agent-ui--pane-sync)
+        (agent-ui--pane-sync))
+      (should (>= calls 1))
+      (should-not (agent-ui--pane-cells (selected-frame)))
+      (should (= (length (get-buffer-window-list session 'nomini)) 1))
+      ;; Its view in a pane of its own then, not one of Agent UI's.
+      (should (get-buffer-window (+test-aup-canvas name)))
+      (ignore height))))
