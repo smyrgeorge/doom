@@ -425,12 +425,20 @@ shares (`agent-ui-panel-trust-root-function'), its true name, a folder."
 
 (defun agent-ui-panel-trusted-p (file)
   "Whether panel FILE's code may run unasked: its project trusted, or the
-file, there and as it is now, let run (the same in another repository
-isn't: its scripts aren't the ones you let run)."
-  (let ((file (expand-file-name file)))
+file, as it is now, let run in its project (its own, or one sharing its
+trust: an agent's worktree its project's). The same in another repository
+isn't: its scripts aren't the ones you let run."
+  (let* ((file (expand-file-name file))
+         (project (lambda (file) (when-let* ((root (agent-ui-panel-root (file-name-directory file))))
+                                   (agent-ui-panels--project root))))
+         (here (funcall project file)))
     (and (or (agent-ui-panel-project-trusted-p (agent-ui-panel-root (file-name-directory file)))
              (let ((hash (agent-ui-panels--hash file)))
-               (seq-some (lambda (entry) (and (equal (car-safe entry) hash) (equal (nth 1 entry) file)))
+               (seq-some (lambda (entry)
+                           (and (equal (car-safe entry) hash)
+                                (stringp (nth 1 entry))
+                                (or (equal (nth 1 entry) file)
+                                    (and here (equal (ignore-errors (funcall project (nth 1 entry))) here)))))
                          (agent-ui-panels--trusted))))
          t)))
 
