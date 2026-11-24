@@ -1048,10 +1048,9 @@ Nothing written meanwhile."
         (dolist (canvas (agent-workspace-agent-panels ada))
           (should (equal (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state canvas)))
                          (file-truename (agent-workspace-agent-worktree ada))))
+          ;; Shown in ada's Agent UI, as its views.
           (dolist (window (get-buffer-window-list canvas nil t))
-            (should (eq (window-parameter window 'agent-workspace-side) ada))))
-        (should (<= (seq-count (lambda (canvas) (get-buffer-window canvas t)) (agent-workspace-agent-panels ada))
-                    1)))
+            (should (eq (agent-workspace--window-agent window) ada)))))
       (should (equal warned '("ada's panel gone: not one of this project's: logs, tests: skipped"))))
     (should (string-search "\"panels\": [\"gone\", \"logs\", \"tests\"]" (+test-aws2--file project)))))
 

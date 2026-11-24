@@ -29,14 +29,13 @@ as anywhere in the app, makes an agent, or a whole [crew](#crews).
   terminal, its first letter). Moving onto an issue in progress selects its agent. The [minimap](#the-minimap) is
   under them.
 - **The stage** is in the middle. Every agent has a pane, in role order. The selected agent's is open: its session,
-  and below it (beside it from 140 columns) its Agent UI canvas, its other canvases (`ask`, where it asks you
-  things) and its [panels](#an-agents-panels) as tabs, `Canvas │ ask │ logs`, one shown at a time. `v` shows the
-  next one, `V` the one there full size, in the whole pane (`V` again: back), and a click on a tab shows it.
-  Something new on a canvas brings its tab back; a question there doesn't take your cursor. `q` in a canvas closes
-  it, as it does when the agent clears it, or once you've answered the question on `ask`: the tab shown before is
-  shown, or the session takes the whole pane again. The others are folded to a bar: its avatar, name, role, state
-  and how long it's been working, and `◫2` when it has two panels open. The stage arranges itself: drag a border
-  and it's tiled again.
+  and below it its [Agent UI](agent-ui.md#in-the-sessions-pane), as in any session's pane: its canvas, its other
+  canvases (`ask`, where it asks you things) and its [panels](#an-agents-panels), laid out to use the room, each
+  with a bar naming it. `v` goes into them, again to the next one; `V` lets Agent UI take the whole pane, the session
+  keeping its last lines (`V` again: back). A question there doesn't take your cursor. `q` in a view closes it, as
+  it goes when the agent clears it, or once you've answered the question on `ask`; with none left, the session takes
+  the whole pane again. The others are folded to a bar: its avatar, name, role, state and how long it's been
+  working, and `◫2` when it has two panels open. The stage arranges itself: drag a border and it's tiled again.
 
   A bar and an open pane's header line show, first on their right, how full the agent's context is: `20%`, green,
   yellow from 60%, red from 85%, as agent-shell colours it. Hover it for its tokens and cost. It's updated as the agent
@@ -71,8 +70,8 @@ terminal with `git init` typed.
 | `e` | anywhere | Change its name, colour, role, permission mode or model |
 | `d` / `M` | anywhere | Its [branch](#its-branches)'s changes / merge its branch |
 | `b` | anywhere | The [branches waiting to be merged](#its-branches), in the stage's place (`q` back) |
-| `v` | anywhere | Its canvas and panels, the cursor in the one shown; there, the next one |
-| `V` | anywhere | The one shown, full size; again: back beside its session |
+| `v` | anywhere | Its Agent UI, the cursor in its first view; there, the next one |
+| `V` | anywhere | Its Agent UI full size, the session keeping its last lines; again: back |
 | `I` | anywhere | Its issue |
 | `L` | anywhere | Its [loop](#loops) on or off: once free, it takes the next ready issue by itself |
 | `a` / `A` | anywhere | The next raised hand / answer it |
@@ -325,7 +324,7 @@ the room, on its agent's bar and on its pane's header line:
 
 - a permission's are agent-shell's own: Allow, Always allow, Reject;
 - a question on the agent's canvas (a choice) has its options;
-- anything else has "Go to it", which opens the agent's pane at the question: its canvas's tab, the cursor on
+- anything else has "Go to it", which opens the agent's pane at the question: its view, the cursor on
   it.
 
 `a` goes to the next raised hand, across the crew, and `A` answers it. Once you answer from the room, it says what you
@@ -369,9 +368,9 @@ and it loops.
 
 An agent can open [project panels](agent-ui.md#project-panels) and keep them open while it works (a test watcher, a
 service's logs). A panel it opens runs in its worktree, on its branch's code, and is its own: `tests · ada`. Two agents
-opening `tests` get one each, and yours from the main checkout stays yours. They're tabs in its pane, beside its
-canvas (`v` shows them), and its bar and header line count them: `◫2`. It reads them as data
-(`agent-ui get --panel tests`), and a panel whose tab isn't shown fetches only when its agent reads it. They share the
+opening `tests` get one each, and yours from the main checkout stays yours. They're shown in its Agent UI, with its
+canvases (`v` goes there), and its bar and header line count them: `◫2`. It reads them as data (`agent-ui get --panel
+tests`), and a panel not shown (its agent's pane folded) fetches only when its agent reads it. They share the
 project's trust: trust the project and its agents' worktrees are trusted too, but a panel file changed on an agent's
 branch is asked about again. They close when the agent is killed, put to sleep or forgotten, and when the crew closes.
 Renamed, it keeps them: they open again in its moved worktree, under its new name. They're saved with the crew, by name, and open again when it starts again ([The saved crew](#the-saved-crew)).

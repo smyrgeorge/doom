@@ -185,9 +185,9 @@ said answered from here)."
 
 (ert-deftest agent-workspace-hands/a-question-on-its-ask-canvas ()
   "sam asks on a canvas of its own (--canvas ask), as agents are told to:
-it's a tab of its pane, \"ask\", the cursor left where it was; its raised
+a view of its Agent UI, \"ask\", the cursor left where it was; its raised
 hand's Go to it, and a, show it, the cursor on the question; answered there,
-sam gets the answer, the ask tab goes, its side area closes."
+sam gets the answer, the ask view goes, its Agent UI closes."
   (+test-awh "ask"
     (agent-workspace-select ada)
     (let* ((session (agent-workspace-agent-buffer sam))
@@ -228,7 +228,7 @@ sam gets the answer, the ask tab goes, its side area closes."
         (should (+test-awh--wait (lambda () (member "Answer to confirm push (Push?): proceed"
                                                     (+test-awh--prompts "sam")))))
         (should (+test-awh--wait (lambda () (not (buffer-live-p ask)))))
-        (should (+test-awh--wait (lambda () (not (agent-workspace--side-window sam)))))
+        (should (+test-awh--wait (lambda () (not (agent-workspace--views-window sam)))))
         (should (get-buffer-window session))
         (should (eq (window-buffer (get-buffer-window session)) session))))))
 

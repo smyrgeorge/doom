@@ -91,8 +91,7 @@ pane opened or folded.")
   others             ; its frame's windows that aren't its own (a popup...), as last seen
   resizes            ; when it was last laid out after a resize
   relayout           ; its layout to come after a resize (a timer), moved at each change
-  tabs               ; ((AGENT TAB...)...): the tabs each agent's side area showed, the last first
-  full               ; the agent whose open pane shows its tab full size, or nil
+  full               ; the agent whose open pane shows its Agent UI full size, or nil
   workspace)         ; its workspace's name, chosen as it's made (`agent-workspace-workspace-name')
 
 (defvar agent-workspace--apps (make-hash-table :test #'equal)
@@ -176,10 +175,10 @@ made: the stage's order, which never changes."
 
 (defun agent-workspace--own-window-p (window app)
   "Non-nil if WINDOW is one of APP's own: its issue list, its minimap, its
-room, a pane, a bar or a side area of its stage."
+room, a pane, a bar or an agent's Agent UI view on its stage."
   (or (window-parameter window 'agent-workspace-pane)
       (window-parameter window 'agent-workspace-room)
-      (window-parameter window 'agent-workspace-side)
+      (and (fboundp 'agent-ui-pane-window-p) (agent-ui-pane-window-p window))
       (memq (window-buffer window) (agent-workspace--app-buffers (agent-workspace--app-project app)))))
 
 (defun agent-workspace--others (app &optional frame)
@@ -444,9 +443,8 @@ frame of the app. In `persp-activated-functions'."
           open
           (mapcar (lambda (agent) (buffer-live-p (agent-workspace-agent-buffer agent)))
                   (agent-workspace-agents (agent-workspace--app-project app)))
-          ;; Its open pane's side: its tabs, the one shown, full size.
-          (and open (list (agent-workspace-agent-tabs open) (agent-workspace--side-tab open)
-                          (agent-workspace--full-tab open))))))
+          ;; Its open pane's Agent UI: its views, full size.
+          (and open (list (agent-workspace-agent-tabs open) (agent-workspace--full-p open))))))
 
 (defun agent-workspace--sizes-now (frame)
   "FRAME's windows' sizes: (FRAME-SIZE ROOT-HEIGHT WINDOWS...), ROOT-HEIGHT
@@ -460,21 +458,15 @@ its windows' height above the echo area."
 (defun agent-workspace--settle (app agents)
   "APP's selection among AGENTS: the selected agent gone (or none yet), the
 first selected, its pane open; an open pane whose agent went, none. Full
-size only while its pane is the open one, with a tab to show."
+size only while its pane is the open one, with something to show."
   (unless (memq (agent-workspace--app-selected app) agents)
     (setf (agent-workspace--app-selected app) (car agents)
           (agent-workspace--app-open app) (car agents)))
   (unless (memq (agent-workspace--app-open app) agents)
     (setf (agent-workspace--app-open app) nil))
   (let ((full (agent-workspace--app-full app)))
-    (unless (and full (eq full (agent-workspace--app-open app)) (agent-workspace--side-tab full))
-      (setf (agent-workspace--app-full app) nil)))
-  (setf (agent-workspace--app-tabs app)
-        (delq nil (mapcar (lambda (entry)
-                            (when-let* (((memq (car entry) agents))
-                                        (tabs (seq-filter #'buffer-live-p (cdr entry))))
-                              (cons (car entry) tabs)))
-                          (agent-workspace--app-tabs app)))))
+    (unless (and full (eq full (agent-workspace--app-open app)) (agent-workspace-agent-tabs full))
+      (setf (agent-workspace--app-full app) nil))))
 
 (defun agent-workspace--clear (app base)
   "The selected frame's windows deleted but BASE and the side windows that
@@ -511,9 +503,14 @@ buffer is current: a timer's, a canvas's being shown)."
          (anew (not (agent-workspace--shown-p app)))
          ;; Its panes shown again where they were (laid out again, not anew).
          (agent-workspace--pane-places (and (not anew) (agent-workspace--pane-places (selected-frame))))
-         (base (or (seq-find (lambda (window) (not (window-parameter window 'window-side)))
-                             (window-list nil 'nomini))
-                   (frame-first-window))))
+         (base (progn
+                 ;; Agent UI's views out first (put back in the open pane):
+                 ;; one of them is no base.
+                 (when (fboundp 'agent-ui-pane-detach)
+                   (agent-ui-pane-detach (selected-frame)))
+                 (or (seq-find (lambda (window) (not (window-parameter window 'window-side)))
+                               (window-list nil 'nomini))
+                     (frame-first-window)))))
     (agent-workspace--settle app agents)
     ;; Laid out in another frame before: that one given back what it showed
     ;; (its windows restored there: this frame selected after).
@@ -586,6 +583,9 @@ alone, the branches in its place): laid out as it comes back."
              (first (car windows))
              ;; Its open pane shown again where it was.
              (agent-workspace--pane-places (agent-workspace--pane-places (selected-frame))))
+        ;; Agent UI's views out (put back in the open pane).
+        (when (fboundp 'agent-ui-pane-detach)
+          (agent-ui-pane-detach (selected-frame)))
         (let ((ignore-window-parameters t))
           (dolist (window (cdr windows))
             (when (window-live-p window) (delete-window window))))
@@ -635,20 +635,12 @@ all (`agent-workspace--roles-checked')."
                 ((consp (window-parameter window 'header-line-format))
                  (with-current-buffer buffer (force-mode-line-update)))))))))
 
-(defun agent-workspace--tab-pick (agent tab)
-  "TAB the one AGENT's side area shows, from its next layout; it gone, the
-one shown before it."
-  (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent))))
-    (setf (alist-get agent (agent-workspace--app-tabs app))
-          (seq-take (cons tab (delq tab (alist-get agent (agent-workspace--app-tabs app)))) 8))))
-
 (defun agent-workspace--canvas-changed (agent &optional canvas)
-  "AGENT's CANVAS (its own, by default) shows something new: its tab the
-one its side area shows, in its pane if it's open and it isn't there yet."
+  "AGENT's CANVAS (its own, by default) shows something new: in its Agent
+UI, in its pane if it's open and it isn't there yet."
   (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent)))
               (canvas (or canvas (agent-workspace--canvas agent)))
               ((memq canvas (agent-workspace-agent-tabs agent))))
-    (agent-workspace--tab-pick agent canvas)
     (when (and (eq (agent-workspace--app-open app) agent)
                (agent-workspace--shown-p app)
                (not (get-buffer-window canvas (agent-workspace--app-frame app))))
@@ -659,37 +651,32 @@ one its side area shows, in its pane if it's open and it isn't there yet."
 ;; An agent's canvas (its own, or another: ask) closed (q kills it) or
 ;; emptied (cleared, its last element removed or closed by itself, a
 ;; question answered): its stage laid out again at once, as for a panel
-;; closed (panels.el). Its side area shows the tab shown before, or its
-;; next, else it's gone, its session taking the whole pane; shown full
-;; size, its pane is back to its session. Never what Emacs put in its window
-;; instead of a killed buffer (Doom's dashboard), or Agent UI in an emptied
-;; canvas's pane (its session again). The cursor, there, goes to what's
-;; there now: its next tab, else its session.
+;; closed (panels.el). Its Agent UI shows the views left, else it's gone, its
+;; session taking the whole pane (full size: back to its session). Never what
+;; Emacs put in its window instead of a killed buffer (Doom's dashboard). The
+;; cursor, there, goes to what's there now: its first view, else its
+;; session.
 
 (defun agent-workspace--canvas-gone (canvas)
   "CANVAS, killed or emptied: if it's a crew's agent's (its own, or another
 of its session's: ask), its stage laid out again (see above)."
   (when-let* ((agent (agent-workspace--canvas-agent canvas))
               (app (agent-workspace--app (agent-workspace-agent-project agent))))
-    ;; Shown full size: the tab shown as if it were still one.
+    ;; Full size, nothing else to show: back to its session.
     (when (and (eq (agent-workspace--app-full app) agent)
-               (eq (agent-workspace--side-tab
-                    agent (let ((tabs (agent-workspace-agent-tabs agent)))
-                            (if (memq canvas tabs) tabs (cons canvas tabs))))
-                   canvas))
+               (not (remq canvas (agent-workspace-agent-tabs agent))))
       (setf (agent-workspace--app-full app) nil))
     (run-at-time 0 nil #'agent-workspace--canvas-gone-later agent
-                 (eq (window-parameter nil 'agent-workspace-side) agent))))
+                 (eq (agent-workspace--window-agent (selected-window)) agent))))
 
 (defun agent-workspace--canvas-gone-later (agent focused)
   "AGENT's canvas gone, done with: its stage laid out again; FOCUSED (the
-cursor was in its side area), the cursor in its side area, else in its
-session."
+cursor was in its pane), the cursor in its Agent UI, else in its session."
   (agent-workspace--changed agent 'canvas)
   (when-let* ((focused)
               (app (agent-workspace--app (agent-workspace-agent-project agent)))
               ((agent-workspace--shown-p app))
-              (window (or (agent-workspace--side-window agent)
+              (window (or (agent-workspace--views-window agent)
                           (let ((session (agent-workspace-agent-buffer agent)))
                             (and (buffer-live-p session)
                                  (get-buffer-window session (agent-workspace--app-frame app)))))))
@@ -776,6 +763,21 @@ isn't (tried again every half second)."
       (push (float-time) (agent-workspace--app-resizes app))
       (with-selected-frame frame
         (agent-workspace-layout app)))))
+
+;; Agent UI's own changes in an app's frame (its views fitted to what they
+;; show): the app's own, no border dragged (laid out again for it, its
+;; sizes changed by it at each change).
+(defun agent-workspace--agent-ui-change (frame change)
+  "CHANGE, Agent UI's own change of FRAME's windows
+\(`agent-ui-pane-change-functions'): in an app's frame, the sizes it leaves
+taken as laid out, if they were before."
+  (let* ((app (agent-workspace--app (frame-parameter frame 'agent-workspace)))
+         (laid-out (and app (equal (agent-workspace--sizes-now frame) (agent-workspace--app-sizes app)))))
+    (prog1 (funcall change)
+      (when laid-out
+        (setf (agent-workspace--app-sizes app) (agent-workspace--sizes-now frame))))))
+
+(add-hook 'agent-ui-pane-change-functions #'agent-workspace--agent-ui-change)
 
 (defun agent-workspace--resize-own (frame fun)
   "FUN called to resize FRAME's windows, the app's own change (the room's
@@ -958,11 +960,13 @@ opened, its pane open, the cursor in it."
       (and (fboundp 'agent-workspace--panel-agent) (agent-workspace--panel-agent buffer))))
 
 (defun agent-workspace--window-agent (window)
-  "The agent whose line, pane or side area WINDOW shows, or nil."
+  "The agent whose line, pane or Agent UI view WINDOW shows, or nil."
   (when (window-live-p window)
     (or (with-current-buffer (window-buffer window)
           (or agent-workspace--bar-of (agent-workspace-buffer-agent)))
-        (window-parameter window 'agent-workspace-side))))
+        (and (fboundp 'agent-ui-pane-window-session)
+             (when-let* ((session (agent-ui-pane-window-session window)))
+               (agent-workspace-buffer-agent session))))))
 
 (defun agent-workspace--current ()
   "The agent the command is about: the bar's, the pane's, the issue's, the
@@ -1139,30 +1143,35 @@ its holding work you choose (`agent-workspace-read-branch')."
         app
       (agent-workspace--open-project (agent-workspace-agent-project agent)))))
 
-(defun agent-workspace--side-show (agent &optional tab)
-  "AGENT's side area showing TAB (else the one it shows), its pane open (its
-crew's app opened if it isn't shown), the cursor in it."
-  (agent-workspace--app-shown agent)
-  (when tab
-    (agent-workspace--tab-pick agent tab))
-  (agent-workspace-select agent)
-  (when-let* ((window (agent-workspace--side-window agent)))
+(defun agent-workspace--side-show (agent &optional view)
+  "AGENT's Agent UI, its pane open (its crew's app opened if it isn't
+shown), the cursor in VIEW's window (else its first view's). Its pane open
+already, its views shown: not laid out again (they'd move under the cursor
+going through them)."
+  (let ((app (agent-workspace--app-shown agent)))
+    (unless (and app (eq (agent-workspace--app-open app) agent) (agent-workspace--views-windows agent))
+      (agent-workspace-select agent)))
+  (when-let* ((window (or (and view (seq-find (lambda (window) (eq (window-buffer window) view))
+                                              (agent-workspace--views-windows agent)))
+                          (agent-workspace--views-window agent))))
     (select-window window)))
 
 (defun agent-workspace-panels-here ()
-  "The agent's canvas and panels, in its pane (opened): the cursor in the
-one shown; in it already, the next one shown."
+  "The agent's Agent UI (its canvases and panels), in its pane (opened): the
+cursor in its first view; in one already, in the next (the first after the
+last)."
   (interactive)
   (let* ((agent (agent-workspace--current))
-         (tabs (agent-workspace--tabs-or-error agent))
-         (window (agent-workspace--side-window agent)))
+         (_ (agent-workspace--tabs-or-error agent))
+         (windows (agent-workspace--views-windows agent))
+         (here (memq (selected-window) windows)))
     (agent-workspace--side-show
-     agent (and window (eq window (selected-window))
-                (or (cadr (memq (window-buffer window) tabs)) (car tabs))))))
+     agent (and here (window-buffer (or (cadr here) (car windows)))))))
 
 (defun agent-workspace-full-here ()
-  "The agent's canvas or panel shown full size, in its pane's whole room,
-the cursor in it; full size already: back beside its session."
+  "The agent's Agent UI full size, taking its pane's whole room (its session
+keeping its last lines), the cursor in it; full size already: back to its
+share."
   (interactive)
   (let* ((agent (agent-workspace--current))
          (app (progn (agent-workspace--tabs-or-error agent)
@@ -1171,29 +1180,18 @@ the cursor in it; full size already: back beside its session."
           (unless (and (eq (agent-workspace--app-full app) agent)
                        (eq (agent-workspace--app-open app) agent))
             agent))
+    ;; Its pane made again, its Agent UI at its new height.
+    (when (eq (agent-workspace--app-open app) agent)
+      (with-selected-frame (agent-workspace--app-frame app)
+        (agent-workspace--retile app)))
     (agent-workspace--side-show agent)))
 
 (defun agent-workspace--session-shown (agent)
-  "AGENT's pane back to its session (beside its side area) if it showed a
-tab full size: what it asks is there."
+  "AGENT's pane back to its session's share if its Agent UI was full size:
+what it asks is there."
   (when-let* ((app (agent-workspace--app (agent-workspace-agent-project agent))))
     (when (eq (agent-workspace--app-full app) agent)
       (setf (agent-workspace--app-full app) nil))))
-
-(defun agent-workspace-tab-click (event)
-  "A click on a tab of an agent's side area (EVENT): it's shown, the cursor
-in it."
-  (interactive "e")
-  (let* ((posn (event-start event))
-         (text (posn-string posn))
-         (tab (and text (get-text-property (cdr text) 'agent-workspace-tab (car text))))
-         (agent (agent-workspace--window-agent (posn-window posn))))
-    (when (and agent (buffer-live-p tab))
-      (agent-workspace--side-show agent tab))))
-
-;; Here, not in the defvar (stage.el's): loading the file again sets them again.
-(define-key agent-workspace-tab-map [header-line mouse-1] #'agent-workspace-tab-click)
-(define-key agent-workspace-tab-map [mouse-1] #'agent-workspace-tab-click)
 
 (defun agent-workspace-new-here (&optional more)
   "Make a new agent in this crew (MORE, C-u: its model, mode and colour too),

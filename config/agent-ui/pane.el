@@ -67,6 +67,21 @@ pane: in a pane too short for both, a view opens in a pane of its own."
   "The most steps the search for the best layout takes (see THE LAYOUT): the
 best found by then taken.")
 
+(defvar agent-ui-pane-views-functions nil
+  "Functions of a session (its buffer): more views of it, after its canvases
+\(the agent workspace's: an agent's panels), canvases too.")
+
+(defvar agent-ui-pane-change-functions nil
+  "Functions called with a frame and a function of no argument, Agent UI's
+own change of the frame's windows (its views laid out, fitted, taken out),
+which they call, returning its value: the agent workspace's takes the sizes
+it leaves as laid out (not a border dragged).")
+
+(defvar-local agent-ui-pane-full nil
+  "In a session: non-nil, its Agent UI takes its pane's whole room, the
+conversation keeping `agent-ui-pane-min-lines', whatever its views need
+\(the agent workspace's V: full size).")
+
 (defvar agent-ui-pane-skip-functions nil
   "Functions of a window showing a session: non-nil, Agent UI isn't shown in
 its pane (the agent workspace's stage shows its crew's).")
@@ -120,30 +135,47 @@ closed by you).")
 \(to a window manager, tiling's in config/tiling.el: not a pane)."
   (and (window-parameter window 'agent-ui-pane) t))
 
-(defun agent-ui--pane-sessions ()
-  "The sessions with canvases (live buffers)."
+(defun agent-ui--pane-sessions (&optional frame)
+  "The sessions with canvases (live buffers), and FRAME's windows' buffers
+with views from `agent-ui-pane-views-functions'."
   (let (sessions)
     (dolist (canvas (agent-ui-canvases))
       (let ((session (buffer-local-value 'agent-ui--session-buffer canvas)))
         (when (and (buffer-live-p session) (not (memq session sessions)))
           (push session sessions))))
+    (when (and frame agent-ui-pane-views-functions)
+      (dolist (window (window-list frame 'nomini))
+        (let ((buffer (window-buffer window)))
+          (unless (or (memq buffer sessions) (agent-ui-pane-window-p window))
+            (when (agent-ui--pane-more-views buffer)
+              (push buffer sessions))))))
     sessions))
+
+(defun agent-ui--pane-more-views (session)
+  "SESSION's views from `agent-ui-pane-views-functions': live canvases."
+  (seq-filter (lambda (view) (and (buffer-live-p view)
+                                  (eq (buffer-local-value 'major-mode view) 'agent-ui-canvas-mode)))
+              (mapcan (lambda (fn) (copy-sequence (funcall fn session))) agent-ui-pane-views-functions)))
 
 (defun agent-ui--pane-views (session)
   "SESSION's views: its canvases showing something and not dismissed (see
-above), its own first, its others by name; none while its Agent UI is
+above), its own first, its others by name, then its views from
+`agent-ui-pane-views-functions' (not dismissed); none while its Agent UI is
 hidden."
   (unless (buffer-local-value 'agent-ui--pane-hidden session)
-    (sort (seq-filter (lambda (canvas)
-                        (with-current-buffer canvas
-                          (not (or agent-ui--pane-dismissed (agent-ui--empty-p)))))
-                      (agent-ui-session-canvases session))
-          (lambda (a b)
-            (let ((first (buffer-local-value 'agent-ui--canvas-part a))
-                  (second (buffer-local-value 'agent-ui--canvas-part b)))
-              (cond ((null first) (and second t))
-                    ((null second) nil)
-                    (t (string< first second))))))))
+    (let ((shown (lambda (canvas)
+                   (with-current-buffer canvas
+                     (not (or agent-ui--pane-dismissed (agent-ui--empty-p)))))))
+      (append
+       (sort (seq-filter shown (agent-ui-session-canvases session))
+             (lambda (a b)
+               (let ((first (buffer-local-value 'agent-ui--canvas-part a))
+                     (second (buffer-local-value 'agent-ui--canvas-part b)))
+                 (cond ((null first) (and second t))
+                       ((null second) nil)
+                       (t (string< first second))))))
+       (seq-filter (lambda (view) (not (buffer-local-value 'agent-ui--pane-dismissed view)))
+                   (agent-ui--pane-more-views session))))))
 
 (defun agent-ui--pane-session-p (window)
   "Non-nil if WINDOW may hold Agent UI for the session it shows: a window
@@ -179,8 +211,13 @@ another visible frame's; nil if it's in none."
                     (get-buffer-window-list session 'nomini 'visible))))
 
 (defun agent-ui--pane-cell-session (window)
-  "The session of the view WINDOW shows (nil: none)."
-  (let ((session (buffer-local-value 'agent-ui--session-buffer (window-buffer window))))
+  "The session of the view WINDOW shows (nil: none): the one its window
+parameter names (a panel of an agent is no session's canvas), else its
+canvas's."
+  (let* ((named (window-parameter window 'agent-ui-pane))
+         (session (if (stringp named)
+                      (get-buffer named)
+                    (buffer-local-value 'agent-ui--session-buffer (window-buffer window)))))
     (and (buffer-live-p session) session)))
 
 (defun agent-ui--pane-cells (frame &optional session)
@@ -494,10 +531,18 @@ to bottom."
 
 ;; ====== ITS WINDOWS ======
 
+(defun agent-ui--pane-view-name (view)
+  "VIEW's name: its part's (\"tests\"), a panel's, else Agent UI (the
+session's own canvas)."
+  (or (buffer-local-value 'agent-ui--canvas-part view)
+      (and (boundp 'agent-ui-panels--state)
+           (when-let* ((panel (buffer-local-value 'agent-ui-panels--state view)))
+             (agent-ui-panels--name panel)))
+      "Agent UI"))
+
 (defun agent-ui--pane-bar (view)
-  "VIEW's bar, a header line: its name (the session's own canvas: Agent UI)."
-  (list (propertize (concat " " (string-replace "%" "%%" (or (buffer-local-value 'agent-ui--canvas-part view)
-                                                              "Agent UI")))
+  "VIEW's bar, a header line: its name (see `agent-ui--pane-view-name')."
+  (list (propertize (concat " " (string-replace "%" "%%" (agent-ui--pane-view-name view)))
                     'face 'agent-ui-pane-bar-name)))
 
 ;; THE BAR UNDER ITS VIEWS
@@ -554,13 +599,14 @@ start)."
                    (<= (count-lines (point-min) (point-max)) (window-body-height cell)))
           (set-window-start cell (point-min) t))))))
 
-(defun agent-ui--pane-show-in (cell view)
-  "VIEW, a canvas, in CELL, a window of the layout."
+(defun agent-ui--pane-show-in (cell view session)
+  "VIEW, a canvas, in CELL, a window of the layout of SESSION's views (its
+parameter names it: kept with a workspace's windows)."
   (set-window-dedicated-p cell nil)
   (set-window-buffer cell view)
   (set-window-prev-buffers cell nil)
   (set-window-next-buffers cell nil)
-  (set-window-parameter cell 'agent-ui-pane t))
+  (set-window-parameter cell 'agent-ui-pane (buffer-name session)))
 
 (defun agent-ui--pane-attach (window views)
   "VIEWS (canvases) in WINDOW's pane, a session's: WINDOW split, its bottom
@@ -568,7 +614,7 @@ part (as high as they need, see above) a grid of them, a group of their own. The
 windows; nil without room (WINDOW as it was)."
   (let* ((height (window-total-height window))
          (width (window-total-width window))
-         (most (agent-ui--pane-most height))
+         (most (agent-ui--pane-most height (window-buffer window)))
          (views (seq-take views 10))
          plan)
     ;; More views than room: the last ones not shown.
@@ -578,7 +624,9 @@ windows; nil without room (WINDOW as it was)."
                                                      (mapcar #'agent-ui--pane-view-width views)
                                                      width most))))
       (setq views (butlast views)))
-    (let ((lines (and plan (min most (max agent-ui-pane-min-lines (1+ (ceiling (nth 2 plan))))))))
+    (let ((lines (and plan (if (buffer-local-value 'agent-ui-pane-full (window-buffer window))
+                               most
+                             (min most (max agent-ui-pane-min-lines (1+ (ceiling (nth 2 plan)))))))))
       (when (and plan (>= (- height lines) agent-ui-pane-min-lines))
         (when-let* ((area (condition-case nil
                               (let ((window-combination-limit t))
@@ -598,7 +646,8 @@ windows; nil without room (WINDOW as it was)."
                   (when-let* ((made (window-next-sibling window)))
                     (delete-window made))
                   nil)
-              (cl-mapc #'agent-ui--pane-show-in cells (apply #'append columns))
+              (cl-mapc (lambda (cell view) (agent-ui--pane-show-in cell view session))
+                       cells (apply #'append columns))
               (agent-ui--pane-decorate window cells)
               (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
               (with-current-buffer session
@@ -613,11 +662,16 @@ windows; nil without room (WINDOW as it was)."
 
 ;; ====== ITS HEIGHT (see above) ======
 
-(defun agent-ui--pane-most (pane)
-  "The most lines Agent UI takes in a session's pane PANE lines high, the
-conversation keeping its fewest."
+(defun agent-ui--pane-share (&optional session)
+  "The most of its pane SESSION's Agent UI takes: all of it with
+`agent-ui-pane-full', else `agent-ui-pane-max-share'."
+  (if (and session (buffer-local-value 'agent-ui-pane-full session)) 1.0 agent-ui-pane-max-share))
+
+(defun agent-ui--pane-most (pane &optional session)
+  "The most lines Agent UI takes in a session's pane PANE lines high (of
+SESSION: `agent-ui--pane-share'), the conversation keeping its fewest."
   (max agent-ui-pane-min-lines
-       (min (round (* agent-ui-pane-max-share pane)) (- pane agent-ui-pane-min-lines))))
+       (min (round (* (agent-ui--pane-share session) pane)) (- pane agent-ui-pane-min-lines))))
 
 ;; Once shown, measured in pixels, as Emacs shows them: each view's text
 ;; (charts and images as high as they're drawn), its bars, its divider. Each
@@ -659,8 +713,10 @@ since it was last given its height."
            (pane (+ (window-pixel-height window) (window-pixel-height area)))
            (line (frame-char-height (window-frame window)))
            (least (* agent-ui-pane-min-lines line))
-           (most (max least (min (round (* agent-ui-pane-max-share pane)) (- pane least))))
-           (height (min most (max least (apply #'max (mapcar (lambda (n) (apply #'+ n)) needs)))))
+           (most (max least (min (round (* (agent-ui--pane-share session) pane)) (- pane least))))
+           (height (if (buffer-local-value 'agent-ui-pane-full session)
+                       most
+                     (min most (max least (apply #'max (mapcar (lambda (n) (apply #'+ n)) needs))))))
            (wanted (cons height needs)))
       (unless (equal wanted (buffer-local-value 'agent-ui--pane-height session))
         (with-current-buffer session
@@ -706,7 +762,8 @@ more than half a line; once."
                (area (window-next-sibling window))
                (width (window-total-width window))
                (most (agent-ui--pane-most (+ (window-total-height window)
-                                             (if area (window-total-height area) 0))))
+                                             (if area (window-total-height area) 0))
+                                          session))
                (current (agent-ui--pane-score now lines widths width most))
                (plan (agent-ui--pane-plan lines widths width most))
                (better (and plan (agent-ui--pane-score (car plan) lines widths width most))))
@@ -725,9 +782,12 @@ planned again once settled (`agent-ui--pane-settle')."
       (when-let* (((buffer-live-p session))
                   (window (agent-ui--pane-session-window session)))
         (with-demoted-errors "Agent UI, its height: %S"
-          (agent-ui--pane-settle window session)
-          (when (window-live-p window)
-            (agent-ui--pane-fit window session)))))))
+          (agent-ui--pane-changing
+           (window-frame window)
+           (lambda ()
+             (agent-ui--pane-settle window session)
+             (when (window-live-p window)
+               (agent-ui--pane-fit window session)))))))))
 
 (defun agent-ui--pane-fit-soon (session)
   "SESSION's Agent UI fitted to what it shows once its views are drawn
@@ -841,7 +901,7 @@ session shown, its views in its pane."
       ;; current: a canvas's new element was drawn there).
       (save-current-buffer
         (let ((view (and (agent-ui-pane-window-p (selected-window)) (window-buffer (selected-window)))))
-          (agent-ui--pane-sync-frame frame)
+          (agent-ui--pane-changing frame (lambda () (agent-ui--pane-sync-frame frame)))
           (when (and view (not (agent-ui-pane-window-p (selected-window))))
             (when-let* ((window (get-buffer-window view frame)))
               (when (agent-ui-pane-window-p window)
@@ -850,7 +910,7 @@ session shown, its views in its pane."
 (defun agent-ui--pane-sync-frame (frame)
   "FRAME's sessions' panes as they should be (see `agent-ui--pane-sync')."
   (let* ((agent-ui--pane-syncing t)
-         (shown (agent-ui--pane-session-windows frame (agent-ui--pane-sessions))))
+         (shown (agent-ui--pane-session-windows frame (agent-ui--pane-sessions frame))))
     (dolist (cell (agent-ui--pane-cells frame))
       (when (window-live-p cell)
         (let ((session (agent-ui--pane-cell-session cell)))
@@ -930,6 +990,43 @@ again): the view back if its window was closed (see above)."
       (agent-ui--pane-sync (window-frame window)))))
 
 (add-hook 'agent-ui-shown-functions #'agent-ui--pane-shown-h)
+
+;; ====== ITS OWN CHANGES, AND ANOTHER'S LAYOUT ======
+;; Agent UI's own changes of a frame's windows go through
+;; `agent-ui-pane-change-functions' (the agent workspace's stage takes them as
+;; its own); another's layout (the stage's) takes its windows out first
+;; (`agent-ui-pane-detach') and puts them in its pane after
+;; (`agent-ui-pane-attach-window').
+
+(defun agent-ui--pane-changing (frame change)
+  "CHANGE, a function of no argument, Agent UI's own change of FRAME's
+windows, through `agent-ui-pane-change-functions' (the first outermost); its
+value."
+  (funcall (seq-reduce (lambda (inner around)
+                         (if (functionp around) (lambda () (funcall around frame inner)) inner))
+                       (reverse agent-ui-pane-change-functions)
+                       change)))
+
+(defun agent-ui-pane-detach (frame)
+  "Agent UI's views' windows out of FRAME (another's layout coming)."
+  (let ((agent-ui--pane-syncing t))
+    (agent-ui--pane-detach frame)))
+
+(defun agent-ui-pane-attach-window (window session)
+  "SESSION's Agent UI laid out in WINDOW's pane now (another's layout
+showing SESSION in WINDOW); its views' windows."
+  (let ((agent-ui--pane-syncing t))
+    (save-current-buffer
+      (agent-ui--pane-sync-window window session)))
+  (agent-ui--pane-cells (window-frame window) session))
+
+(defun agent-ui-pane-cells (frame session)
+  "SESSION's views' windows in FRAME, in order."
+  (agent-ui--pane-cells frame session))
+
+(defun agent-ui-pane-window-session (window)
+  "The session whose view WINDOW shows, if it's one of Agent UI's views."
+  (and (window-live-p window) (agent-ui-pane-window-p window) (agent-ui--pane-cell-session window)))
 
 ;; ====== A WINDOW MANAGER LAYING PANES OUT ======
 

@@ -367,10 +367,11 @@ does."
 ;;   its first letter in a terminal); moving onto one in progress selects its
 ;;   agent;
 ;; - the stage (config/agent-workspace/stage.el): every agent a pane, in role
-;;   order; the selected one's open (its session; below it, beside it from
-;;   140 columns, its canvases (its own, ask...) and panels as tabs, one
-;;   shown: v the next, V it full size; a question there takes no focus, its
-;;   hand says it), the others folded to a bar (◫2: its panels). Its line (a
+;;   order; the selected one's open (its session; below it its Agent UI, as in
+;;   any session's pane (config/agent-ui/pane.el): its canvases (its own,
+;;   ask...) and panels laid out to use the room; v into them (again: the
+;;   next), V Agent UI taking the whole pane; a question there takes no focus,
+;;   its hand says it), the others folded to a bar (◫2: its panels). Its line (a
 ;;   bar, the open pane's header line) shows first on its right its context
 ;;   used, 20% (agent-shell's colours: yellow from 60%, red from 85%; its
 ;;   tokens and cost on hover), drawn again as agent-shell reports it. It
@@ -402,8 +403,8 @@ does."
 ;;                fresh, Z sleep or wake, e edit (name, colour, role, mode,
 ;;                model), d its branch's changes, M merge its branch, b the
 ;;                branches to merge (see ITS BRANCHES), v its
-;;                canvas and panels (the cursor there; again: the next one), V
-;;                the one there full size (again: back), I its issue, L its
+;;                Agent UI (the cursor there; again: the next view), V
+;;                Agent UI full size (again: back), I its issue, L its
 ;;                loop on or off, a the next raised hand, A answer it, f + a
 ;;                letter the agent whose name starts with it, gr lay the app
 ;;                out again, gR read crew.json again, q leave, Q close, ? the

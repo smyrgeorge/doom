@@ -81,8 +81,7 @@ session shown), or its question (its canvas's tab shown: its own, ask...)."
   (let* ((ask (agent-workspace-agent-ask agent))
          (canvas (plist-get ask :canvas))
          (canvas (and (buffer-live-p canvas) (memq canvas (agent-workspace-agent-tabs agent)) canvas)))
-    (if canvas
-        (agent-workspace--tab-pick agent canvas)
+    (unless canvas
       (agent-workspace--session-shown agent))
     (agent-workspace-select agent t)
     (if-let* ((window (and canvas (get-buffer-window canvas))))

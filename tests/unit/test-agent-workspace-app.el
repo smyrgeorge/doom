@@ -1136,8 +1136,25 @@ ended in her session, the canvas's keys typed into her prompt)."
      (string-replace "%%" "%" (eval (cadr (window-parameter window 'header-line-format)) t)))))
 
 (defun +test-awa--side ()
-  "The selected agent's side area's window."
-  (agent-workspace--side-window (agent-workspace--app-selected (agent-workspace--here))))
+  "The selected agent's Agent UI's first view's window."
+  (agent-workspace--views-window (agent-workspace--app-selected (agent-workspace--here))))
+
+(defun +test-awa--views ()
+  "The selected agent's Agent UI's views, in its pane: their buffers, in
+order."
+  (mapcar #'window-buffer (agent-workspace--views-windows (agent-workspace--app-selected (agent-workspace--here)))))
+
+(defun +test-awa--stage ()
+  "The frame's windows but the room's, as names, the selected agent's views
+as :views (in its pane, below its session)."
+  (let ((views (agent-workspace--views-windows (agent-workspace--app-selected (agent-workspace--here))))
+        names)
+    (dolist (window (seq-remove (lambda (w) (window-parameter w 'agent-workspace-room))
+                                (window-list nil 'nomini (frame-first-window))))
+      (if (memq window views)
+          (unless (eq (car names) :views) (push :views names))
+        (push (buffer-name (window-buffer window)) names)))
+    (nreverse names)))
 
 (defmacro +test-awa--in (window &rest body)
   "BODY in WINDOW, selected, its buffer current, as a key typed there (the
@@ -1158,16 +1175,16 @@ them, without waiting: a wait gives the batch frame its own size back."
       (when (and (memq timer timer-list) (time-less-p (timer--time timer) nil))
         (timer-event-handler timer)))))
 
-(ert-deftest agent-workspace-app/panels-as-tabs ()
-  "An agent with a canvas and two panels: below its session (under 140
-columns), its side area holds them as tabs, one shown (the canvas, its
-panels hidden: they fetch nothing); its header line counts its panels (◫2),
-a bar of an agent with none says nothing. v goes to the one shown, then
-shows the next, wrapping; a click on a tab shows it; something new on its
-canvas brings its tab back. The stage still arranged: one pane open, the
-other a row."
-  (+test-awa "tabs"
-    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-tabs-trust.eld")))
+(ert-deftest agent-workspace-app/its-agent-ui-in-its-pane ()
+  "An agent with a canvas and two panels: its Agent UI below its session in
+its open pane, as in any session's pane (config/agent-ui/pane.el): every
+view shown (its canvas first, then its panels), each a window with its
+name on its bar, the bar under them; its header line counts its panels
+(◫2), a bar of an agent with none says nothing. v goes to its first view,
+then the next, wrapping. The stage still arranged: one pane open, the other
+a row; Agent UI's own changes not taken for a border dragged."
+  (+test-awa "views"
+    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-views-trust.eld")))
       (+test-awa--panels project "logs" "tests")
       (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
@@ -1175,130 +1192,91 @@ other a row."
         (let* ((canvas (+test-awa--canvas-show ada '(:type "text" :id "hello" :text "Hello")))
                (logs (+test-awa--open-panel ada "logs"))
                (tests (+test-awa--open-panel ada "tests"))
-               (pane (get-buffer-window (agent-workspace-agent-buffer ada)))
-               (side (+test-awa--side)))
-          (should (equal (+test-awa--windows)
-                         `(("*issues · tabs*" 50 ,(+test-awa--height))
-                           ("ada · builder" 92 ,(window-total-height pane))
-                           ("Agent UI: ada · builder" 92 ,(- (+test-awa--height) 1 (window-total-height pane)))
-                           (" *bar · ken · tabs*" 92 1))))
-          (should (eq (window-buffer side) canvas))
-          (should-not (get-buffer-window logs))
-          (should-not (get-buffer-window tests))
-          (should (string-prefix-p " Canvas │ logs │ tests" (+test-awa--header side)))
-          (should (string-search "v: next · V: full size" (+test-awa--header side)))
+               (pane (get-buffer-window (agent-workspace-agent-buffer ada))))
+          (should (equal (+test-awa--stage)
+                         '("*issues · views*" "ada · builder" :views " *bar · ken · views*")))
+          (should (seq-set-equal-p (+test-awa--views) (list canvas logs tests)))
+          (should (eq (car (+test-awa--views)) canvas))
+          (dolist (view (list canvas logs tests))
+            (should (agent-ui-pane-window-p (get-buffer-window view))))
+          ;; Below its session, in its pane.
+          (dolist (window (agent-workspace--views-windows ada))
+            (should (> (window-top-line window) (window-top-line pane))))
+          (should (= (window-total-height (get-buffer-window (agent-workspace--bar-buffer ken))) 1))
           ;; Its badge, its panels counted; none on ken's bar.
           (should (string-search "◫2" (+test-awa--header pane)))
           (should-not (string-search "◫" (with-current-buffer (agent-workspace--bar-buffer ken) (buffer-string))))
-          ;; v and V in a canvas or panel there, not evil's visual state.
+          ;; v and V in a view, not evil's visual state.
           (with-current-buffer canvas
             (should (eq (key-binding "v") #'agent-workspace-panels-here))
             (should (eq (key-binding "V") #'agent-workspace-full-here)))
-          ;; v from the issue list: the cursor in the one shown.
+          ;; v from the issue list: the cursor in its first view (its
+          ;; canvas); v there: the next, each in turn.
           (with-current-buffer (agent-workspace--issues-buffer project)
             (agent-workspace-panels-here))
-          (should (eq (selected-window) (+test-awa--side)))
           (should (eq (window-buffer) canvas))
-          ;; v there: the next one, the cursor in it; the others hidden.
-          (+test-awa--in (selected-window) (agent-workspace-panels-here))
-          (should (eq (window-buffer) logs))
-          (should (eq (selected-window) (+test-awa--side)))
-          (should-not (get-buffer-window canvas))
-          (should (string-prefix-p " Canvas │ logs │ tests" (+test-awa--header (selected-window))))
-          (+test-awa--in (selected-window) (agent-workspace-panels-here))
-          (should (eq (window-buffer) tests))
-          (should-not (get-buffer-window logs))
-          ;; Wrapping.
-          (+test-awa--in (selected-window) (agent-workspace-panels-here))
-          (should (eq (window-buffer) canvas))
-          ;; Its header readable on its tint: the tabs not shown, the │s
-          ;; and v / V in the agent's line's text colour, none in shadow;
-          ;; the one shown bold in the agent's colour (doom-pbk.117).
-          (let* ((text (with-selected-window (selected-window) (agent-workspace--side-header)))
-                 (faces (lambda (part) (ensure-list (get-text-property (string-search part text) 'face text)))))
-            (dolist (part '("logs" "│" "v: next · V: full size"))
-              (should (memq 'agent-workspace-label (funcall faces part))))
-            (should (memq 'bold (funcall faces "Canvas")))
-            (should-not (memq 'agent-workspace-label (funcall faces "Canvas")))
-            (dotimes (i (length text))
-              (should-not (memq 'shadow (ensure-list (get-text-property i 'face text))))))
-          ;; A click on a tab shows it.
-          (let* ((side (selected-window))
-                 (text (with-selected-window side (agent-workspace--side-header)))
-                 (at (string-search "logs" text)))
-            (agent-workspace-tab-click `(mouse-1 (,side header-line (0 . 0) 0 (,text . ,at))))
-            (should (eq (window-buffer (+test-awa--side)) logs)))
-          ;; Something new on its canvas: its tab shown again.
-          (agent-ui-show '(:type "text" :id "news" :text "News") :canvas canvas)
-          (should (eq (window-buffer (+test-awa--side)) canvas))
-          ;; The stage as it was: ada's pane open, ken's a row.
-          (should (equal (mapcar #'car (+test-awa--windows))
-                         '("*issues · tabs*" "ada · builder" "Agent UI: ada · builder" " *bar · ken · tabs*")))
-          (should (= (window-total-height (get-buffer-window (agent-workspace--bar-buffer ken))) 1))
-          ;; Their code started (a timer, last: a wait gives the batch frame
-          ;; its own size back): the one shown fetches, a hidden one doesn't.
-          (+test-awa--in (+test-awa--side) (agent-workspace-panels-here))
-          (should (eq (window-buffer) logs))
-          (+test-awa--timers)
-          (should (agent-ui-panel-fetched (buffer-local-value 'agent-ui-panels--state logs)))
-          (should-not (agent-ui-panel-fetched (buffer-local-value 'agent-ui-panels--state tests)))
-          (should (agent-ui-panels--stale (buffer-local-value 'agent-ui-panels--state tests))))))))
+          (let ((visited (list (window-buffer))))
+            (dotimes (_ 2)
+              (+test-awa--in (selected-window) (agent-workspace-panels-here))
+              (should (agent-ui-pane-window-p (selected-window)))
+              (push (window-buffer) visited))
+            (should (seq-set-equal-p visited (list canvas logs tests))))
+          ;; Agent UI's own change: the stage takes its sizes as laid out.
+          (let ((app (agent-workspace--here)))
+            (agent-ui--pane-fit-now)
+            (should (equal (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame)))))
+          ;; Laid out again: the same.
+          (agent-workspace-layout)
+          (should (seq-set-equal-p (+test-awa--views) (list canvas logs tests)))
+          (should (equal (+test-awa--stage)
+                         '("*issues · views*" "ada · builder" :views " *bar · ken · views*"))))))))
 
-(ert-deftest agent-workspace-app/a-tab-full-size ()
-  "V: the tab shown takes its pane's whole room (its session hidden), the
-tabs at its line's right, the cursor in it; v there shows the next one; V
-again: back beside its session. Another agent selected, it's back too; a
-raised hand gone to shows its session."
+(ert-deftest agent-workspace-app/its-agent-ui-full-size ()
+  "V: its Agent UI takes its pane's whole room, its session keeping its last
+lines, the cursor in it; V again: back to what its views need. Another agent
+selected, it's back too; a raised hand gone to: back."
   (+test-awa "full"
     (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-full-trust.eld")))
       (+test-awa--panels project "logs")
       (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
         (agent-workspace-select ada)
-        (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "hello" :text "Hello")))
-              (logs (+test-awa--open-panel ada "logs"))
-              (session (agent-workspace-agent-buffer ada)))
+        (let* ((canvas (+test-awa--canvas-show ada '(:type "text" :id "hello" :text "Hello")))
+               (session (agent-workspace-agent-buffer ada))
+               (logs (+test-awa--open-panel ada "logs"))
+               (session-height (lambda () (window-total-height (get-buffer-window session))))
+               (shared (funcall session-height)))
+          (ignore logs)
           (with-current-buffer (agent-workspace--issues-buffer project)
             (agent-workspace-full-here))
-          (should (equal (+test-awa--windows)
-                         `(("*issues · full*" 50 ,(+test-awa--height))
-                           ("Agent UI: ada · builder" 92 ,(1- (+test-awa--height)))
-                           (" *bar · ken · full*" 92 1))))
+          (should (agent-ui-pane-window-p (selected-window)))
           (should (eq (window-buffer) canvas))
-          (should-not (get-buffer-window session))
-          (let ((header (+test-awa--header (selected-window))))
-            (should (string-prefix-p "▾ ▌A ada · builder · ○ at the desk" header))
-            (should (string-match-p "Canvas │ logs *\\'" header)))
-          ;; v: the next one, full size.
-          (+test-awa--in (selected-window) (agent-workspace-panels-here))
-          (should (eq (window-buffer) logs))
-          (should (= (window-total-height) (1- (+test-awa--height))))
-          ;; V again: back beside its session, the cursor in the side.
+          (should (= (funcall session-height) agent-ui-pane-min-lines))
+          (should (< (funcall session-height) shared))
+          ;; V again: back.
           (+test-awa--in (selected-window) (agent-workspace-full-here))
-          (should (equal (mapcar #'car (+test-awa--windows))
-                         '("*issues · full*" "ada · builder" "Agent UI: logs · ada" " *bar · ken · full*")))
-          (should (eq (window-buffer) logs))
-          ;; Full size, then ken selected and ada again: beside its session.
+          (should (= (funcall session-height) shared))
+          ;; Full size, then ken selected and ada again: back.
           (+test-awa--in (selected-window) (agent-workspace-full-here))
-          (should-not (get-buffer-window session))
+          (should (= (funcall session-height) agent-ui-pane-min-lines))
           (agent-workspace-select ken)
           (agent-workspace-select ada)
-          (should (get-buffer-window session))
-          ;; Full size, a raised hand gone to (a): its session shown.
+          (should (= (funcall session-height) shared))
+          ;; Full size, a raised hand gone to (a): back.
           (+test-awa--in (+test-awa--side) (agent-workspace-full-here))
-          (should-not (get-buffer-window session))
+          (should (= (funcall session-height) agent-ui-pane-min-lines))
           (setf (agent-workspace-agent-state ada) 'hand)
           (with-current-buffer (agent-workspace--issues-buffer project)
             (agent-workspace-next-hand))
-          (should (get-buffer-window session)))))))
+          (should (= (funcall session-height) shared)))))))
 
-(ert-deftest agent-workspace-app/other-canvases-as-tabs ()
-  "An agent's other canvases (--canvas NAME) showing something: tabs of its
-side area after its canvas, before its panels, named by their part, by
-name; one showing something new picks its tab; a question there takes no
-focus; v goes through them all, V shows one full size. Answered, the ask
-canvas emptied and killed: its tab gone, the one shown before shown; its
-last tab killed (q): the side area closes, nothing else shown there."
+(ert-deftest agent-workspace-app/its-other-canvases ()
+  "An agent's other canvases (--canvas NAME) showing something: views of its
+Agent UI after its canvas, before its panels, by name, each its name on its
+bar; a question there takes no focus; v goes through them all. Answered,
+the ask canvas emptied and killed: its view gone. Another agent's only
+view, an ask canvas, killed (q): its Agent UI gone, its session alone in
+its pane."
   (+test-awa "others"
     (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-others-trust.eld")))
       (+test-awa--panels project "logs")
@@ -1309,183 +1287,142 @@ last tab killed (q): the side area closes, nothing else shown there."
                (logs (+test-awa--open-panel ada "logs"))
                (tests (+test-awa--other-canvas-show ada "tests" '(:type "text" :id "t" :text "Tests")))
                (issues (get-buffer-window (agent-workspace--issues-buffer project))))
-          (should (eq (window-buffer (+test-awa--side)) tests))
-          (should (string-prefix-p " Canvas │ tests │ logs" (+test-awa--header (+test-awa--side))))
-          ;; A question on ask: its tab picked, before tests; the cursor
-          ;; stays where it was.
+          (should (seq-set-equal-p (+test-awa--views) (list canvas tests logs)))
+          (should (equal (mapconcat (lambda (part) (if (stringp part) part ""))
+                                    (window-parameter (get-buffer-window tests) 'header-line-format) "")
+                         " tests"))
+          ;; A question on ask: its view, before tests; the cursor stays.
           (select-window issues)
           (let ((ask (+test-awa--other-canvas-show ada "ask" '(:type "confirm" :id "q1" :question "Push?"))))
-            (should (eq (window-buffer (+test-awa--side)) ask))
-            (should (string-prefix-p " Canvas │ ask │ tests │ logs" (+test-awa--header (+test-awa--side))))
+            (should (seq-set-equal-p (+test-awa--views) (list canvas ask tests logs)))
             (should-not (buffer-local-value 'agent-ui-focus-questions ask))
             (+test-awa--due-timers)
             (should (eq (selected-window) issues))
-            (should (equal (mapcar #'car (+test-awa--windows))
-                           '("*issues · others*" "ada · builder" "Agent UI: ada · builder / ask" " *bar · ken · others*")))
-            ;; v: each in turn, wrapping.
-            (+test-awa--in (+test-awa--side) (agent-workspace-panels-here))
-            (should (eq (window-buffer) tests))
-            (+test-awa--in (selected-window) (agent-workspace-panels-here))
-            (should (eq (window-buffer) logs))
-            (+test-awa--in (selected-window) (agent-workspace-panels-here))
-            (should (eq (window-buffer) canvas))
-            (+test-awa--in (selected-window) (agent-workspace-panels-here))
-            (should (eq (window-buffer) ask))
-            ;; V: full size, the tabs at its line's right; V again: back.
-            (+test-awa--in (selected-window) (agent-workspace-full-here))
-            (should (eq (window-buffer) ask))
-            (should-not (get-buffer-window (agent-workspace-agent-buffer ada)))
-            (should (string-match-p "Canvas │ ask │ tests │ logs *\\'" (+test-awa--header (selected-window))))
-            (+test-awa--in (selected-window) (agent-workspace-full-here))
-            (should (get-buffer-window (agent-workspace-agent-buffer ada)))
-            ;; Something new on tests, hidden: its tab shown; then ask again.
-            (agent-ui-show '(:type "text" :id "t2" :text "More") :canvas tests)
-            (should (eq (window-buffer (+test-awa--side)) tests))
-            (agent-workspace--side-show ada ask)
-            (should (eq (window-buffer) ask))
+            ;; v: each in turn.
+            (select-window (+test-awa--side))
+            (let ((visited (list (window-buffer))))
+              (dotimes (_ 3)
+                (+test-awa--in (selected-window) (agent-workspace-panels-here))
+                (should (agent-ui-pane-window-p (selected-window)))
+                (push (window-buffer) visited))
+              (should (seq-set-equal-p visited (list canvas ask tests logs))))
             ;; Answered (its button's answer): the question leaves its canvas,
-            ;; emptied it's killed, its tab gone: the one shown before shown.
+            ;; emptied it's killed, its view gone.
             (agent-ui-update "q1" '(:answered "proceed") :canvas ask)
             (+test-awa--due-timers)
             (should-not (buffer-live-p ask))
-            (should (equal (mapcar #'car (+test-awa--windows))
-                           '("*issues · others*" "ada · builder" "Agent UI: ada · builder / tests" " *bar · ken · others*")))
-            (should (string-prefix-p " Canvas │ tests │ logs" (+test-awa--header (+test-awa--side))))))
-        ;; ken's only tab, an ask canvas: answered, its side area closes,
-        ;; its session alone in its pane.
+            (should (seq-set-equal-p (+test-awa--views) (list canvas tests logs)))))
+        ;; ken's only view, an ask canvas: killed, its Agent UI gone, its
+        ;; session alone in its pane.
         (agent-workspace-select ken)
         (let ((ask (+test-awa--other-canvas-show ken "ask" '(:type "confirm" :id "q2" :question "Deploy?"))))
-          (should (eq (window-buffer (+test-awa--side)) ask))
-          (should (string-prefix-p " ask" (+test-awa--header (+test-awa--side))))
-          ;; q in it, full size: the same.
-          (+test-awa--in (+test-awa--side) (agent-workspace-full-here))
-          (+test-awa--in (selected-window) (kill-current-buffer))
+          (should (equal (+test-awa--views) (list ask)))
+          (+test-awa--in (+test-awa--side) (kill-current-buffer))
           (+test-awa--due-timers)
-          (should (equal (mapcar #'car (+test-awa--windows))
+          (should (equal (+test-awa--stage)
                          '("*issues · others*" " *bar · ada · others*" "ken · builder"))))))))
 
 (ert-deftest agent-workspace-app/panels-coming-and-going ()
-  "A panel opened for the agent whose pane is open: its side area comes;
-for a folded one: its bar's badge only, the stage as it was. Closed: gone
-from its pane and its badge. With nothing to show, v and V say so. In a
-pane 140 columns wide or more, the side area is beside its session."
+  "A panel opened for the agent whose pane is open: its Agent UI comes, the
+panel in it; for a folded one: its bar's badge only, the stage as it was.
+Closed: gone from its pane and its badge. With nothing to show, v and V say
+so. In a wide stage, still below its session."
   (+test-awa "coming"
     (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-coming-trust.eld")))
       (+test-awa--panels project "logs")
       (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
         (agent-workspace-select ada)
-        (should (equal (mapcar #'car (+test-awa--windows))
-                       '("*issues · coming*" "ada · builder" " *bar · ken · coming*")))
+        (should (equal (+test-awa--stage) '("*issues · coming*" "ada · builder" " *bar · ken · coming*")))
         (with-current-buffer (agent-workspace--issues-buffer project)
           (should-error (agent-workspace-panels-here) :type 'user-error)
           (should-error (agent-workspace-full-here) :type 'user-error))
         (let ((logs (+test-awa--open-panel ada "logs")))
-          (should (equal (mapcar #'car (+test-awa--windows))
-                         '("*issues · coming*" "ada · builder" "Agent UI: logs · ada" " *bar · ken · coming*")))
+          (should (equal (+test-awa--stage) '("*issues · coming*" "ada · builder" :views " *bar · ken · coming*")))
+          (should (equal (+test-awa--views) (list logs)))
           ;; ken's: its bar says so, nothing else moves.
           (let ((theirs (+test-awa--open-panel ken "logs")))
-            (should (equal (mapcar #'car (+test-awa--windows))
-                           '("*issues · coming*" "ada · builder" "Agent UI: logs · ada" " *bar · ken · coming*")))
+            (should (equal (+test-awa--stage) '("*issues · coming*" "ada · builder" :views " *bar · ken · coming*")))
             (should (string-search "◫1" (with-current-buffer (agent-workspace--bar-buffer ken) (buffer-string))))
             (should-not (get-buffer-window theirs)))
-          ;; Wide: beside its session, as high as it.
+          ;; Wide: below its session all the same.
           (let ((agent-workspace-room-side 'bottom))
             (agent-workspace-layout)
             (let ((pane (get-buffer-window (agent-workspace-agent-buffer ada)))
-                  (side (get-buffer-window logs)))
+                  (view (get-buffer-window logs)))
               (should (= (window-total-width (frame-root-window)) 220))
-              (should (>= (+ (window-total-width pane) (window-total-width side)) 140))
-              (should (= (window-top-line pane) (window-top-line side)))
-              (should (= (window-total-height pane) (window-total-height side)))))
-          ;; Closed: its side area gone, its badge too.
+              (should (> (window-top-line view) (window-top-line pane)))))
+          ;; Closed: its Agent UI gone, its badge too.
           (kill-buffer logs)
           (+test-awa--timers)
-          (should (equal (mapcar #'car (+test-awa--windows))
-                         '("*issues · coming*" "ada · builder" " *bar · ken · coming*")))
+          (should (equal (+test-awa--stage) '("*issues · coming*" "ada · builder" " *bar · ken · coming*")))
           (should-not (string-search "◫" (+test-awa--header (get-buffer-window (agent-workspace-agent-buffer ada))))))))))
 
 (ert-deftest agent-workspace-app/its-canvas-closed ()
-  "q on an agent's canvas on the stage (it's killed): its side area closes
-at once, its session takes the whole pane, the cursor in it; with a panel,
-the panel shown there, the cursor in it, the canvas's tab gone. Full size:
-its pane back to its session. Its canvas emptied (cleared, its last element
-removed): the same. Never another buffer in its side area (Emacs's
-replacement for a killed buffer, Agent UI's for an emptied canvas's pane).
-Something new on it: its side area back."
+  "q on an agent's canvas on the stage (it's killed): its view gone at once;
+no view left, its session takes the whole pane, the cursor in it; with a
+panel, the panel left, the cursor in it. Full size: its session back to its
+share when nothing's left to show. Its canvas emptied (cleared, its last
+element removed): the same. Never another buffer in its views' windows
+\(Emacs's replacement for a killed buffer). Something new on it: back."
   (+test-awa "closed"
     (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-closed-trust.eld"))
-          ;; The room low, below the stage: room for a side area.
+          ;; The room low, below the stage: room for Agent UI.
           (agent-workspace-room-height 4))
       (+test-awa--panels project "logs")
       (pcase-let ((`(,ada ,_ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
         (agent-workspace-select ada)
         ;; The batch frame its own size again (a wait gives it back, the
-        ;; stage laid out again 0.2 s later), then laid out there: the waits
-        ;; below change nothing but what they're for.
+        ;; stage laid out again 0.2 s later), then laid out there.
         (accept-process-output nil 0.3)
         (agent-workspace-layout)
         (let ((session (agent-workspace-agent-buffer ada))
               (alone '("*issues · closed*" "ada · builder" " *bar · ken · closed*"))
-              (beside '("*issues · closed*" "ada · builder" "Agent UI: logs · ada" " *bar · ken · closed*")))
+              (with-views '("*issues · closed*" "ada · builder" :views " *bar · ken · closed*")))
           ;; q, no panel: its session alone, the cursor in it.
           (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "a" :text "A"))))
-            (should (eq (window-buffer (+test-awa--side)) canvas))
+            (should (equal (+test-awa--views) (list canvas)))
             (+test-awa--in (+test-awa--side) (kill-current-buffer))
             (+test-awa--timers)
-            (should (equal (mapcar #'car (+test-awa--windows)) alone))
+            (should (equal (+test-awa--stage) alone))
             (should (eq (window-buffer) session)))
           ;; Something new: back. Cleared, its last element removed: gone.
           (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "b" :text "B"))))
-            (should (equal (mapcar #'car (+test-awa--windows))
-                           '("*issues · closed*" "ada · builder" "Agent UI: ada · builder" " *bar · ken · closed*")))
+            (should (equal (+test-awa--stage) with-views))
             (agent-ui-clear :canvas canvas)
             (+test-awa--timers)
-            (should (equal (mapcar #'car (+test-awa--windows)) alone))
+            (should (equal (+test-awa--stage) alone))
             (+test-awa--canvas-show ada '(:type "text" :id "c" :text "C"))
-            (should (eq (window-buffer (+test-awa--side)) canvas))
+            (should (equal (+test-awa--views) (list canvas)))
             (agent-ui-remove "c" :canvas canvas)
             (+test-awa--timers)
-            (should (equal (mapcar #'car (+test-awa--windows)) alone)))
-          ;; With a panel: q shows it, the canvas's tab gone, the cursor in it.
+            (should (equal (+test-awa--stage) alone)))
+          ;; With a panel: q, the panel left, the cursor in it.
           (let* ((logs (+test-awa--open-panel ada "logs"))
                  (canvas (+test-awa--canvas-show ada '(:type "text" :id "d" :text "D"))))
-            (should (eq (window-buffer (+test-awa--side)) canvas))
+            (should (seq-set-equal-p (+test-awa--views) (list canvas logs)))
             (should (equal (agent-workspace-agent-tabs ada) (list canvas logs)))
-            (+test-awa--in (+test-awa--side) (kill-current-buffer))
+            (+test-awa--in (get-buffer-window canvas) (kill-current-buffer))
             (+test-awa--timers)
-            (should (equal (mapcar #'car (+test-awa--windows)) beside))
+            (should (equal (+test-awa--stage) with-views))
+            (should (equal (+test-awa--views) (list logs)))
             (should (eq (window-buffer) logs))
             (should (equal (agent-workspace-agent-tabs ada) (list logs)))
-            (should-not (string-search "Canvas" (+test-awa--header (+test-awa--side))))
-            ;; Full size: q, its pane back to its session, the panel beside it.
+            ;; Full size, its canvas closed: the panel still there, full size.
             (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "e" :text "E"))))
               (with-current-buffer (agent-workspace--issues-buffer project)
                 (agent-workspace-full-here))
-              (should (eq (window-buffer) canvas))
-              (should-not (get-buffer-window session))
-              (+test-awa--in (selected-window) (kill-current-buffer))
+              (should (= (window-total-height (get-buffer-window session)) agent-ui-pane-min-lines))
+              (+test-awa--in (get-buffer-window canvas) (kill-current-buffer))
               (+test-awa--timers)
-              (should (equal (mapcar #'car (+test-awa--windows)) beside))
-              (should (eq (window-buffer) logs)))
-            ;; Full size, cleared: the same.
-            (let ((canvas (+test-awa--canvas-show ada '(:type "text" :id "f" :text "F"))))
-              (with-current-buffer (agent-workspace--issues-buffer project)
-                (agent-workspace-full-here))
-              (should-not (get-buffer-window session))
-              (agent-ui-clear :canvas canvas)
-              (+test-awa--timers)
-              (should (equal (mapcar #'car (+test-awa--windows)) beside))
-              ;; Its panel shown, its canvas a hidden tab, emptied: its tab gone.
-              (+test-awa--canvas-show ada '(:type "text" :id "g" :text "G"))
-              (+test-awa--in (+test-awa--side) (agent-workspace-panels-here))
-              (should (eq (window-buffer (+test-awa--side)) logs))
-              (agent-ui-remove "g" :canvas canvas)
-              (+test-awa--timers)
-              (should (equal (mapcar #'car (+test-awa--windows)) beside))
-              (should (equal (agent-workspace-agent-tabs ada) (list logs)))
-              (should-not (string-search "Canvas" (+test-awa--header (+test-awa--side)))))))))))
+              (should (equal (+test-awa--views) (list logs))))
+            ;; Its panel closed too: nothing left, its session back to its
+            ;; whole pane, not full size any more.
+            (kill-buffer logs)
+            (+test-awa--timers)
+            (should (equal (+test-awa--stage) alone))
+            (should-not (agent-workspace--app-full (agent-workspace--here)))))))))
 
 ;; ====== THE ISSUES ======
 

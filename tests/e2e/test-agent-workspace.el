@@ -2,8 +2,8 @@
 ;; config/agent-workspace's app in a GUI Emacs: what needs real windows and
 ;; redisplay. Its agents' lines (a bar, the open pane's header line) drawn to
 ;; the window's right edge, their avatars images; the stage tiled again after
-;; a border dragged; closing it; an agent's canvas and panels as tabs, a panel
-;; fetching once its tab is shown; the minimap's lanes, even, their │ lined
+;; a border dragged; closing it; an agent's Agent UI in its open pane (its
+;; canvas and panels laid out, its own changes no border dragged); the minimap's lanes, even, their │ lined
 ;; up (each its role's icon) and no line past its edge in a font without ✎; a
 ;; napping loop's watch on its project's issues (file-notify's events, which
 ;; batch Emacs doesn't get). No agent runs: sessions are buffers.
@@ -311,12 +311,13 @@ refused, nothing made."
   (with-selected-window window
     (substring-no-properties (format-mode-line (window-parameter window 'header-line-format) nil window))))
 
-(ert-deftest e2e-agent-workspace/panels-as-tabs ()
-  "ada with a canvas and two panels (logs, tests): its side area's tabs drawn
-as its header line, the canvas shown; its badge on its pane's header line;
-a hidden panel fetches nothing until v shows it (then it does, as shown);
-V: the one shown full size, the tabs at its line's right edge; V again:
-back."
+(ert-deftest e2e-agent-workspace/its-agent-ui-in-its-pane ()
+  "ada with a canvas and two panels (logs, tests): its Agent UI below its
+session in its open pane, every view shown (laid out to use the room, its
+canvas first), each its name on its bar; its badge on its pane's header
+line; both panels fetch (shown); v goes into them, then the next; V: Agent UI
+taking the pane's room, the session keeping its last lines; V again: back.
+Agent UI's own changes not taken for a border dragged (no layout again)."
   (+test-e2e-aw
     (let ((agent-ui-panel-trust-file (+test-tmp-file "aw-e2e-trust.eld"))
           (worktree (agent-workspace-agent-worktree ada)))
@@ -330,36 +331,37 @@ back."
         (agent-ui-show '(:type "text" :id "hello" :text "Hello") :canvas canvas)
         (let* ((logs (agent-ui-open-panel "logs" worktree t))
                (tests (agent-ui-open-panel "tests" worktree t))
-               (state (lambda (panel) (buffer-local-value 'agent-ui-panels--state panel))))
-          (+test--pump 0.3)
-          (let ((side (agent-workspace--side-window ada))
-                (pane (get-buffer-window session)))
-            (should (eq (window-buffer side) canvas))
-            (should (string-prefix-p " Canvas │ logs │ tests" (+test-e2e-aw--header side)))
+               (state (lambda (panel) (buffer-local-value 'agent-ui-panels--state panel)))
+               (app (agent-workspace--app project)))
+          (+test--pump 0.5)
+          (let ((pane (get-buffer-window session))
+                (views (agent-workspace--views-windows ada)))
+            (should (seq-set-equal-p (mapcar #'window-buffer views) (list canvas logs tests)))
+            (should (eq (window-buffer (car views)) canvas))
+            (dolist (view views)
+              (should (> (window-top-line view) (window-top-line pane))))
             (should (string-search (substring-no-properties (agent-workspace-badge ada))
                                    (+test-e2e-aw--header pane)))
-            ;; Hidden, not fetched.
-            (should-not (agent-ui-panel-fetched (funcall state logs)))
-            (should-not (agent-ui-panel-fetched (funcall state tests)))
-            ;; v (from its session): in the canvas; again: logs, shown, fetched.
+            ;; Shown: both fetch.
+            (should (+test-wait-for (lambda () (and (agent-ui-panel-fetched (funcall state logs))
+                                                    (agent-ui-panel-fetched (funcall state tests))))
+                                    3))
+            ;; Agent UI's own changes: the sizes as laid out (no layout again).
+            (+test--pump 0.5)
+            (should (equal (agent-workspace--app-sizes app) (agent-workspace--sizes-now (selected-frame))))
+            ;; v (from its session): in its first view; again: the next.
             (with-current-buffer session (agent-workspace-panels-here))
+            (should (eq (window-buffer) canvas))
             (with-current-buffer (window-buffer) (agent-workspace-panels-here))
-            (should (eq (window-buffer) logs))
-            (should (+test-wait-for (lambda () (agent-ui-panel-fetched (funcall state logs))) 3))
-            (should-not (agent-ui-panel-fetched (funcall state tests)))
-            ;; V: logs full size, its pane's whole room, the tabs at the
-            ;; right of its line.
-            (with-current-buffer (window-buffer) (agent-workspace-full-here))
-            (+test--pump 0.3)
-            (should (eq (window-buffer) logs))
-            (should-not (get-buffer-window session))
-            (should (string-match-p "▾ .*ada · builder.*Canvas │ logs │ tests *\\'"
-                                    (+test-e2e-aw--header (selected-window))))
-            ;; V again: back beside its session.
-            (with-current-buffer (window-buffer) (agent-workspace-full-here))
-            (+test--pump 0.3)
-            (should (get-buffer-window session))
-            (should (eq (window-buffer (agent-workspace--side-window ada)) logs))))))))
+            (should (memq (window-buffer) (list logs tests)))
+            ;; V: the pane's room, the session its last lines; V again: back.
+            (let ((shared (window-total-height (get-buffer-window session))))
+              (with-current-buffer (window-buffer) (agent-workspace-full-here))
+              (+test--pump 0.3)
+              (should (= (window-total-height (get-buffer-window session)) agent-ui-pane-min-lines))
+              (with-current-buffer (window-buffer) (agent-workspace-full-here))
+              (+test--pump 0.3)
+              (should (= (window-total-height (get-buffer-window session)) shared)))))))))
 
 (+test-e2e-run)
 
