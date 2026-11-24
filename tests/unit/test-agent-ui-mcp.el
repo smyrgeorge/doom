@@ -78,6 +78,13 @@ recorded, its reply REPLY (a plist)."
         (should (eq (and (plist-get (plist-get (plist-get tool :inputSchema) :properties) :panel) t)
                     (not (member (plist-get tool :name) '("types" "define" "check" "panels" "open")))))))))
 
+(ert-deftest agent-ui-mcp/null-relayed-as-null ()
+  "cmd/agent-ui's reply relayed with its nulls null, not {} (doom-ht6.56)."
+  (cl-letf (((symbol-function 'call-process)
+             (lambda (&rest _) (insert "{\"ok\":true,\"a\":null,\"rows\":[[\"x\",null]],\"b\":false}") 0)))
+    (should (equal (agent-ui-mcp--json (agent-ui-mcp--run '("get")))
+                   "{\"ok\":true,\"a\":null,\"rows\":[[\"x\",null]],\"b\":false}"))))
+
 (ert-deftest agent-ui-mcp/each-tool-a-command-line ()
   (+test-aum '(:ok t :id "b")
     (cl-flet ((call (name arguments)

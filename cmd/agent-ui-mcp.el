@@ -144,7 +144,8 @@ an error reply if it said nothing readable)."
              (text (string-trim (buffer-string)))
              (text (if (multibyte-string-p text) text (decode-coding-string text 'utf-8))))
         (condition-case nil
-            (json-parse-string text :object-type 'plist :null-object nil :false-object :false)
+            ;; null kept null: written again, nil would be {}.
+            (json-parse-string text :object-type 'plist :null-object :null :false-object :false)
           (error (list :ok :false :error (format "cmd/agent-ui (exit %s): %s" status text))))))))
 
 (defun agent-ui-mcp--call (name arguments)
