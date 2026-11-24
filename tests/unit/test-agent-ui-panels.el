@@ -175,6 +175,17 @@ the same (doom-ht6.42)."
         (should (equal (plist-get reply :warnings) []))
         (should (= (length (plist-get reply :blocking)) 1))))))
 
+(ert-deftest agent-ui-panels/saved-with-a-title-of-two-lines ()
+  "A panel saved from an element whose title has a new line: its file read
+as one form, the title on its header's line (doom-ht6.73)."
+  (+test-aup nil
+    (let ((file (expand-file-name "ci.el" (expand-file-name agent-ui-panel-directory root))))
+      (with-temp-file file
+        (insert (agent-ui-panels--file-text "ci" '(:type "text" :id "t" :title "CI\n(status of main)" :text "x"))))
+      (should (equal (plist-get (plist-get (agent-ui-panel-read file) :ui) :title) "CI\n(status of main)"))
+      (should (string-prefix-p ";;; ci.el --- Agent UI panel: CI (status of main) -*-"
+                               (with-temp-buffer (insert-file-contents file) (buffer-string)))))))
+
 (ert-deftest agent-ui-panels/checked-as-asked ()
   "agent-ui check NAME, in the agent's directory: the reply; no name, the
 project's panels said."

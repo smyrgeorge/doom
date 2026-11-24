@@ -897,7 +897,10 @@ process."
   "A panel file's text: panel NAME showing UI, its code to write."
   (concat
    (format ";;; %s.el --- Agent UI panel%s -*- lexical-binding: t; -*-\n" name
-           (if-let* ((title (plist-get ui :title))) (concat ": " title) ""))
+           ;; On one line: a comment's (what follows a new line is code).
+           (if-let* ((title (plist-get ui :title)))
+               (concat ": " (replace-regexp-in-string "[\n\r]+" " " title))
+             ""))
    ";; Saved from a canvas (S): what it shows, its data left out. Its code fills it:\n"
    ";; see the agent-ui skill's references/panels.md (agent-ui check NAME checks it).\n"
    "(agent-ui-panel\n :version 1\n :ui "
