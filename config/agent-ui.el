@@ -33,14 +33,14 @@
 ;; each, up to the square root of their count, rows filled in turn. Each view
 ;; is a window of its own, with a bar naming it; a bar under them says what
 ;; Agent UI is and its keys; the session's mode line stays under the
-;; conversation. q closes a view (killed); a view's window closed
-;; (SPC w d) hides it until something new is shown in it; SPC m u, in the
+;; conversation. q closes a view (killed); a view's window closed (SPC w d)
+;; hides it until an element is shown in it (not updated); SPC m u, in the
 ;; session or a view, hides Agent UI for the session or shows it again (a
 ;; question shows it anyway). A session in no window (another workspace,
 ;; another buffer in its pane): Agent UI waits, shown with it. Tiling lays
 ;; the pane out as one, Agent UI's windows in it (config/tiling.el, WINDOWS
-;; ATTACHED TO A PANE). A pane too short for both halves
-;; (`agent-ui-pane-min-lines' each): the view in a pane of its own. A canvas
+;; ATTACHED TO A PANE). A pane too short for both (`agent-ui-pane-min-lines'
+;; each): the view in a pane of its own. A canvas
 ;; without a session (from a shell), a project panel: a tiled pane of its own
 ;; (one of tiling's applications).
 (setq agent-ui-pane-keys "q close a view · SPC m u hide Agent UI")

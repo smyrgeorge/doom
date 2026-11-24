@@ -24,7 +24,8 @@
 ;;   window, or in none (Agent UI waits, shown with the session), a workspace
 ;;   switched to.
 ;; - A view whose window is closed while it shows something stays hidden
-;;   until something new is shown in it; q kills it. Agent UI hidden for a
+;;   until an element is shown in it (a new one, or one again; an update
+;;   doesn't: a bar ticking would bring it back each second); q kills it. Agent UI hidden for a
 ;;   session (`agent-ui-pane-toggle') stays so until shown again, or until a
 ;;   question is to be answered.
 
@@ -594,6 +595,18 @@ other canvas as Agent UI shows it."
             (unless (get-buffer-window canvas 'visible)
               (agent-ui-display-canvas canvas)))
         (agent-ui-display-canvas canvas)))))
+
+(defun agent-ui--pane-shown-h (_key _element)
+  "An element shown in a view (`agent-ui-shown-functions': new, or shown
+again): the view back if its window was closed (see above)."
+  (when agent-ui--pane-dismissed
+    (setq agent-ui--pane-dismissed nil)
+    (when-let* ((session agent-ui--session-buffer)
+                ((buffer-live-p session))
+                (window (agent-ui--pane-session-window session)))
+      (agent-ui--pane-sync (window-frame window)))))
+
+(add-hook 'agent-ui-shown-functions #'agent-ui--pane-shown-h)
 
 ;; ====== A WINDOW MANAGER LAYING PANES OUT ======
 

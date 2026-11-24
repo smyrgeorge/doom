@@ -443,3 +443,21 @@ by the element); the view selected still, in its new window."
         (should (eq (marker-buffer (agent-ui--entry-end (gethash "x" agent-ui--entries))) (current-buffer))))
       (should (eq (window-buffer (selected-window)) (+test-aup-canvas name)))
       (should (agent-ui-pane-window-p (selected-window))))))
+
+(ert-deftest agent-ui-pane/a-hidden-view-back-when-shown-again ()
+  "A view hidden (its window closed): an update of its element leaves it
+hidden (a bar ticking would bring it back each second); the element shown
+again, the same id: back."
+  (+test-aup
+    (let ((tests (agent-ui-sub-canvas name "tests")))
+      (+test-aup-show name)
+      (+test-aup-show tests)
+      (delete-window (get-buffer-window (+test-aup-canvas name "tests")))
+      (agent-ui--pane-sync)
+      (should (= (length (+test-aup-cells)) 1))
+      (agent-ui-update "x" '(:text "changed") :canvas tests)
+      (agent-ui--pane-sync)
+      (should (= (length (+test-aup-cells)) 1))
+      (+test-aup-show tests)
+      (should (= (length (+test-aup-cells)) 2))
+      (should (get-buffer-window (+test-aup-canvas name "tests"))))))

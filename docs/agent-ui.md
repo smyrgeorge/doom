@@ -160,7 +160,7 @@ says how many views there are and their keys; the session's mode line stays unde
 | Key | Action |
 |---|---|
 | `q` (in a view) | Close it for good, the others laid out again |
-| `SPC w d` (in a view) | Hide it until something new is shown on it |
+| `SPC w d` (in a view) | Hide it until the agent shows something on it (an update doesn't) |
 | `SPC m u` (in the session or a view) | Hide Agent UI for the session, or show it again |
 
 - [Tiling](editor.md#tiling) lays the session's pane out as one pane: arranging, resizing, moving it to the main
