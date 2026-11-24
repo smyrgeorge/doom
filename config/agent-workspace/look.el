@@ -381,9 +381,8 @@ and branch."
                                             (agent-workspace-inbox-badge agent))))
                            (concat sep mail)
                          "")))
-         (role (agent-workspace-role agent))
          (mode (agent-workspace-mode-of agent))
-         (model (or (agent-workspace-agent-model agent) (plist-get role :model)))
+         (model (agent-workspace-model-of agent))
          (buttons (and hand (fboundp 'agent-workspace--hand-buttons)
                        (agent-workspace--hand-buttons
                         agent (agent-workspace--ask-key (agent-workspace-agent-ask agent)))))

@@ -92,6 +92,18 @@ dropped; one given, kept. crew.json says a kind given only (doom-pbk.167)."
     (should-not (plist-get (agent-workspace--crew-entry ada) :kind))
     (should (equal (plist-get (agent-workspace--crew-entry bob) :kind) "gemini-cli"))))
 
+(ert-deftest agent-workspace/inherit-over-its-role-s-model ()
+  "An agent's own model inherit, its role naming one: its agent's default,
+not its role's; none of its own: its role's (doom-pbk.175)."
+  (let* ((agent-workspace-role-function (lambda (_project _role) '(:name "triager" :model "haiku")))
+         (own (agent-workspace--make-agent :name "ada" :role "triager" :model "inherit" :project "/p/"))
+         (none (agent-workspace--make-agent :name "bob" :role "triager" :project "/p/"))
+         (sonnet (agent-workspace--make-agent :name "cy" :role "triager" :model "sonnet" :project "/p/")))
+    (should-not (agent-workspace-model-of own))
+    (should (equal (agent-workspace-model-of none) "haiku"))
+    (should (equal (agent-workspace-model-of sonnet) "sonnet"))
+    (should (equal (plist-get (agent-workspace--crew-entry own) :model) "inherit"))))
+
 (ert-deftest agent-workspace/a-free-colour ()
   "The first colour no agent has; all taken, the one fewest have."
   (let ((agent-workspace-colours '("blue" "green" "red")))

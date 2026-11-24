@@ -500,7 +500,10 @@ agent there already), else its role's."
                    (unless (string-empty-p mode) mode))))
          (colour (completing-read "Colour: " agent-workspace-colours nil t nil nil
                                   (agent-workspace-free-colour project (plist-get spec :colour)))))
-    (list :model (unless (member model '("" "inherit")) model)
+    ;; inherit over a role's model: kept, its agent's default then (nil
+    ;; would be the role's).
+    (list :model (cond ((not (member model '("" "inherit"))) model)
+                       ((plist-get spec :model) "inherit"))
           :mode mode
           :colour colour)))
 

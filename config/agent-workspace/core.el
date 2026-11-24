@@ -219,6 +219,15 @@ one: Claude Code's, `agent-workspace-mode' (auto); another's, its :mode
            (agent-workspace-agent-project agent)
            (agent-workspace-agent-role agent)))
 
+(defun agent-workspace-model-of (agent)
+  "The model AGENT runs: its own, else its role's; nil: its agent's
+default. Its own \"inherit\" (chosen over a role's model): that default,
+not its role's."
+  (let ((own (agent-workspace-agent-model agent)))
+    (cond ((equal own "inherit") nil)
+          (own)
+          (t (plist-get (agent-workspace-role agent) :model)))))
+
 (defun agent-workspace--follow-role-kind (agent)
   "AGENT's kind its role's (its kind:, else `agent-workspace-kind'), unless
 one was given it: after its role changed, or its role file's kind. A kind

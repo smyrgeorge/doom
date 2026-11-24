@@ -197,7 +197,7 @@ placeholders filled in (see ITS ROLE, FILLED IN)."
          (role (agent-workspace-role-filled agent))
          ;; Its model; a Claude Code one (a starter's haiku) only for Claude
          ;; Code: another agent keeps its own default.
-         (model (let ((model (or (agent-workspace-agent-model agent) (plist-get role :model))))
+         (model (let ((model (agent-workspace-model-of agent)))
                   (unless (and model (not (agent-workspace-kind-claude-code-p (agent-workspace-agent-kind agent)))
                                (agent-workspace--model-p model))
                     model)))
