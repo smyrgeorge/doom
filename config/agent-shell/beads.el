@@ -26,9 +26,10 @@ issues with Beads (a .beads/ folder there)."
 
 ;; Beads' guide once: a project whose Claude Code settings run bd prime as a
 ;; session starts (a SessionStart hook: `bd setup claude' adds one; this
-;; config's own .claude/settings.json has it) gives Claude the guide already,
-;; 7 KB: claude-agent-acp loads the user's, the project's and its local
-;; settings, as Claude Code in a terminal does.
+;; config's own .claude/settings.json has it) gives Claude Code the guide
+;; already, 7 KB: claude-agent-acp loads the user's, the project's and its
+;; local settings, as Claude Code in a terminal does. Another agent reads
+;; none of them: it's given the guide.
 (defun +my/agent-shell-beads--claude-settings (root)
   "Claude Code's settings files for a session in ROOT: the project's, its
 local ones, the user's."
@@ -56,15 +57,23 @@ starts (see above)."
                  (alist-get 'SessionStart (alist-get 'hooks settings)))))
    (+my/agent-shell-beads--claude-settings root)))
 
+(defun +my/agent-shell-beads--claude-code-p ()
+  "Non-nil if the session whose context is worked out is Claude Code's
+\(`+my/agent-shell-context-config'), or none is said (the default agent):
+only Claude Code reads Claude Code's settings."
+  (memq (map-elt +my/agent-shell-context-config :identifier) '(nil claude-code)))
+
 (defun +my/agent-shell-beads-context ()
-  "For a session in a project tracking its issues with Beads: what Claude is
-told of them, Beads' guide after (see ISSUES FOR CLAUDE), unless the
-project's Claude Code settings give it already (see above); else nil."
+  "For a session in a project tracking its issues with Beads: what its agent
+is told of them, Beads' guide after (see ISSUES FOR CLAUDE), unless it's
+Claude Code and the project's Claude Code settings give it already (see
+above); else nil."
   (when-let* ((root (+my/agent-shell-beads--root))
               ((executable-find "bd")))
     (string-join (delq nil (list +my/agent-shell-beads-context
                                  (and +my/agent-shell-beads-prime
-                                      (not (+my/agent-shell-beads--primed-p root))
+                                      (not (and (+my/agent-shell-beads--claude-code-p)
+                                                (+my/agent-shell-beads--primed-p root)))
                                       (+my/agent-shell-beads--bd root "prime"))))
                  "\n\n")))
 

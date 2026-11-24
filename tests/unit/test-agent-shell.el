@@ -573,7 +573,13 @@ already keeps it."
     ;; The config given isn't changed.
     (should-not (assq :+my/context config))
     (let ((given (list :config (cons (cons :+my/context "Told.") config))))
-      (should (equal (+my/agent-shell-context-start-a given) given)))))
+      (should (equal (+my/agent-shell-context-start-a given) given)))
+    ;; Its functions see whose session it is (`+my/agent-shell-context-config').
+    (let* ((seen nil)
+           (+my/agent-shell-context-functions
+            (list (lambda () (setq seen (map-elt +my/agent-shell-context-config :identifier)) nil))))
+      (+my/agent-shell-context-start-a (list :config config))
+      (should (eq seen 'codex)))))
 
 (ert-deftest agent-shell/context-as-the-system-prompt ()
   "An agent taking a system prompt from Emacs: what the session is told,

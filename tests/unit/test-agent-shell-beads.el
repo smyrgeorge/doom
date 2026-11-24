@@ -110,7 +110,7 @@ also `root'), with a temp HOME; skipped without bd."
   "A project whose Claude Code settings run bd prime as a session starts (a
 SessionStart hook, as this config's own) gets the paragraph alone: the
 guide comes from there; read from the project's settings, its local ones,
-the user's (doom-zoa)."
+the user's (doom-zoa). Claude Code's only: another agent gets the guide."
   ;; This config's own.
   (should (+my/agent-shell-beads--primed-p +test-root))
   (+test-asb-with-bd
@@ -143,6 +143,14 @@ the user's (doom-zoa)."
           (if before
               (with-temp-file file (insert before))
             (delete-file file))))
+      ;; Another agent reads none of them: the guide, primed or not.
+      (with-temp-file project (insert hook))
+      (let ((+my/agent-shell-context-config '((:identifier . codex))))
+        (should (> (length (+my/agent-shell-beads-context))
+                   (+ (length +my/agent-shell-beads-context) 500))))
+      (let ((+my/agent-shell-context-config '((:identifier . claude-code))))
+        (should (equal (+my/agent-shell-beads-context) +my/agent-shell-beads-context)))
+      (with-temp-file project (insert others))
       (should-not (+my/agent-shell-beads--primed-p root))
       ;; Settings that aren't JSON: as none.
       (with-temp-file (expand-file-name ".claude/settings.local.json" root)

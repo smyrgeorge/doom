@@ -69,7 +69,7 @@ In a project that tracks its [issues](issues.md) with Beads, Claude works with t
 there is told so, with Beads' own guide for agents (`bd prime`), and each `bd` command Claude runs refreshes the
 issue lists and issues you have open, so its changes show as it makes them. Where the project's Claude Code settings
 run `bd prime` as a session starts (a SessionStart hook, as this config's `.claude/settings.json`), the guide comes from
-there, not twice.
+there, not twice: Claude Code's sessions only, another agent reading none of them.
 
 | Key | Action |
 |---|---|

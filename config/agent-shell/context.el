@@ -42,12 +42,18 @@ project's issues (config/agent-shell/beads.el); Mermaid's diagrams
 a crew's agent (config/agent-workspace.el); a run's agent
 \(config/agent-workflow.el).")
 
-(defun +my/agent-shell-context-text ()
+(defvar +my/agent-shell-context-config nil
+  "While what a session is told is worked out: its config (agent-shell's:
+its :identifier, claude-code, codex...), for what is its agent's own.")
+
+(defun +my/agent-shell-context-text (&optional config)
   "What a session starting now is told: `+my/agent-shell-context', then
-what `+my/agent-shell-context-functions' return."
-  (string-join (delq nil (cons +my/agent-shell-context
-                               (mapcar #'funcall +my/agent-shell-context-functions)))
-               "\n\n"))
+what `+my/agent-shell-context-functions' return; CONFIG, the session's
+\(`+my/agent-shell-context-config' while they run)."
+  (let ((+my/agent-shell-context-config config))
+    (string-join (delq nil (cons +my/agent-shell-context
+                                 (mapcar #'funcall +my/agent-shell-context-functions)))
+                 "\n\n")))
 
 (defadvice! +my/agent-shell-context-start-a (args)
   "A session starting (`agent-shell--start''s ARGS): what it's told, worked
@@ -57,7 +63,7 @@ out now, kept in its config (:+my/context); one given it already keeps it."
     (if (or (null config) (assq :+my/context config))
         args
       (plist-put (copy-sequence args) :config
-                 (cons (cons :+my/context (+my/agent-shell-context-text)) config)))))
+                 (cons (cons :+my/context (+my/agent-shell-context-text config)) config)))))
 
 (defadvice! +my/agent-shell-system-prompt-a (fn)
   "agent-shell's system prompt (FN's: `agent-shell-system-prompt', its
