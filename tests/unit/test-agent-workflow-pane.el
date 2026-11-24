@@ -73,6 +73,20 @@ ending without its done makes it wait for you, a moment)."
       (let ((agent-ui-pressed "needs-you/ask"))
         (funcall agent-ui-action-function label t)))))
 
+(defun +test-awp--line (line)
+  "LINE of a run's Log as words: MARK JOB TEXT (RIGHT), its job · if it has
+none; a pause, ┊ and how long."
+  (if (plist-get line :gap)
+      (concat "┊ " (plist-get line :gap))
+    (let ((text (plist-get line :text)))
+      (concat (plist-get line :mark) " " (or (plist-get line :source) "·") " "
+              (if (stringp text) text (mapconcat (lambda (piece) (if (stringp piece) piece (plist-get piece :text))) text ""))
+              (if (plist-get line :right) (format " (%s)" (plist-get line :right)) "")))))
+
+(defun +test-awp--log (pane)
+  "PANE's Log's lines as words (`+test-awp--line')."
+  (mapcar #'+test-awp--line (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines)))
+
 (defun +test-awp--figure (header label)
   "HEADER's (a run pane's \"run\" element) tile LABEL: (VALUE CHANGE FACE)."
   (let ((figure (seq-find (lambda (f) (equal (plist-get f :label) label)) (plist-get header :figures))))
@@ -194,9 +208,7 @@ counting down, until closed (q)."
         (should (equal (mapcar (lambda (id) (plist-get (agent-ui-get id :canvas pane :section "run") :caption))
                                '("graph" "jobs" "rounds"))
                        '("flow" "3 jobs" "rounds"))))
-      (should (member "build   started"
-                      (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
-                              (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
+      (should (member "▸ build started" (+test-awp--log pane)))
       ;; Build done: its box gone. Its notes in Notes; no commit of its, said.
       (+test-awr--finish run "build" nil "Built it, with its tests.")
       (should (+test-awr--wait (lambda () (member "notes" (+test-awp--sections pane)))))
@@ -217,16 +229,16 @@ counting down, until closed (q)."
       (+test-awr--finish run "review" "approved")
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       ;; Its log: every event a line; the pane's shorter: no issue, a job's
-      ;; agent step's start and end left out, a job done how long it took.
+      ;; agent step's start and end left out, a job done how long it took
+      ;; at its end.
       (let ((lines (agent-workflow-log-lines run))
-            (pane-lines (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
-                                (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
+            (pane-lines (+test-awp--log pane)))
         (should (string-match-p "  ·  run done\\'" (car (last lines))))
         (should (seq-some (lambda (line) (string-match-p "  docs  skipped" line)) lines))
         (should (seq-some (lambda (line) (string-match-p "step 1 started" line)) lines))
-        (should (equal (car (last pane-lines)) "·       run done"))
-        (should (seq-some (lambda (line) (string-match-p "\\`review  done: approved ([0-9]+s)\\'" line)) pane-lines))
-        (should (member "docs    skipped (if: (eq (issue-type) 'bug))" pane-lines))
+        (should (string-match-p "\\`★ · run done ([0-9]+s)\\'" (car (last pane-lines))))
+        (should (seq-some (lambda (line) (string-match-p "\\`✓ review done · approved ([0-9]+s)\\'" line)) pane-lines))
+        (should (member "– docs skipped · if: (eq (issue-type) 'bug)" pane-lines))
         (should-not (seq-some (lambda (line) (string-match-p "step 1" line)) pane-lines))
         ;; log.txt gone: made again from the journal, the same.
         (delete-file (agent-workflow--log-path run))
@@ -1026,6 +1038,70 @@ after its files were shown (a run's first commit): still above them."
             (agent-workflow--pane-show-where nil pane)
             (should (equal (funcall ids) '("git" "commits" "changes")))))
       (kill-buffer pane))))
+
+(ert-deftest agent-workflow-pane/its-log-in-columns ()
+  "Its Log, an event a line in columns: its time, a mark (an error's or a
+warning's making its line one), its job (none for the run's), a step's
+named (else its script's file), its words in the same column as its job's
+(indented, they read as out of line), an agent's left out; how
+long a script, a fix, a job and the run took at its end; a pause of 5
+minutes or more between two lines said; its span, its first line to its
+last."
+  (let* ((workflow '(:name "github"
+                     :jobs (("green" :name "green"
+                             :steps ((:kind run :run "scripts/check.sh --all")
+                                     (:kind run :run "push.sh" :name "push")
+                                     (:kind agent :agent "docs"))))))
+         (run (agent-workflow-run--make :project "/p/" :issue "demo-1" :state 'running :workflow workflow
+                                        :spent '(:cost 0 :tokens 0)
+                                        :jobs (list (cons "green" (list :status 'running :step 0)))))
+         (t0 1795000000.0)
+         (events `((0 "run-started" :workflow "github" :by "you")
+                   (0 "job-started" :job "green" :round 1)
+                   (0 "step-started" :job "green" :step 0 :kind "run" :try 1)
+                   (1 "script-ended" :job "green" :step 0 :exit 0)
+                   (1 "step-started" :job "green" :step 1 :kind "run" :name "push" :try 1)
+                   (600 "script-ended" :job "green" :step 1 :exit 1 :name "push")
+                   (600 "fixing" :job "green" :step 1 :name "push")
+                   (700 "step-ended" :job "green" :step 1 :outcome "done" :name "push")
+                   (700 "step-started" :job "green" :step 2 :kind "agent")
+                   (790 "step-ended" :job "green" :step 2 :outcome "done")
+                   (800 "job-done" :job "green")
+                   (900 "cancelled" :by "you"))))
+    (with-temp-buffer
+      (setq-local agent-workflow--pane-times (make-hash-table :test #'equal))
+      (setq-local agent-workflow--pane-rounds nil)
+      (setq-local agent-workflow--pane-notes nil)
+      (setq-local agent-workflow--pane-doing nil)
+      (setq-local agent-workflow--pane-log-span nil)
+      (let ((lines (cl-loop for (at event . data) in events
+                            do (agent-workflow--pane-time event data (+ t0 at))
+                            append (agent-workflow--pane-log-lines run event data (+ t0 at)))))
+        (should (equal (mapcar #'+test-awp--line lines)
+                       '("▸ · started with github · by you"
+                         "▸ green started"
+                         "› green check.sh started"
+                         "✓ green check.sh exited 0 (1s)"
+                         "› green push started"
+                         "┊ 10m"
+                         "✗ green push exited 1 (9m 59s)"
+                         "↻ green push failed · its agent fixes it"
+                         "✓ green push fixed (1m 40s)"
+                         "✓ green done (13m 20s)"
+                         "⊘ · run cancelled, by you (15m)")))
+        (let ((real (seq-remove (lambda (line) (plist-get line :gap)) lines)))
+          (should (equal (mapcar (lambda (line) (plist-get line :level)) real)
+                         '(nil nil nil nil nil "error" "warning" nil nil "error")))
+          ;; Every one's words in one column: none indented.
+          (should-not (seq-some (lambda (line) (plist-get line :indent)) real))
+          (should (equal (plist-get (car real) :time) (format-time-string "%H:%M" t0)))
+          ;; Drawn: its time once a minute, its job in its column.
+          (should (string-match-p "\n +▸  green  started\n +›  green  check\\.sh started\n"
+                                  (substring-no-properties
+                                   (agent-ui-render (list :type "log" :sources '("green") :lines lines)
+                                                    (agent-ui-context :width 70))))))
+        (should (equal (agent-workflow--pane-log-span)
+                       (format "%s – %s · 15m" (format-time-string "%H:%M" t0) (format-time-string "%H:%M" (+ t0 900)))))))))
 
 (ert-deftest agent-workflow-pane/what-it-is-at ()
   "Running, its State tile says its state alone: not what it's at (each

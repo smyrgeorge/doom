@@ -87,6 +87,10 @@ at (fixing watch · try 2, its agent step's name), nil if not known.")
 notes: an alist of a job to WHAT (see `agent-workflow--pane-notes');
 its steps' tries, (JOB . INDEX) to the last one started.")
 
+(defvar-local agent-workflow--pane-log-span nil
+  "In a run's pane: when its Log's first and last lines came, (FIRST .
+LAST) in seconds; nil before its first.")
+
 (defvar-local agent-workflow--pane-asked nil
   "In a run's pane: the question its Needs you shows, (JOB KIND WHY).")
 
@@ -199,6 +203,7 @@ answering the other)."
             agent-workflow--pane-notes nil
             agent-workflow--pane-doing nil
             agent-workflow--pane-asked nil
+            agent-workflow--pane-log-span nil
             agent-workflow--pane-boxes nil)
       (setq-local agent-ui-answer-function #'agent-workflow--pane-answer
                   ;; An agent's elements finished (its plan done) stay: no
@@ -208,14 +213,18 @@ answering the other)."
       ;; Its times, rounds and Log's lines, event by event (a job done: how
       ;; long its round took, its round's start then).
       (dolist (event (agent-workflow--journal-events (agent-workflow-run-dir run)))
-        (let ((time (or (ignore-errors (date-to-time (plist-get event :t))) (current-time))))
-          (agent-workflow--pane-time (plist-get event :ev) event (float-time time))
-          (when-let* ((line (agent-workflow--pane-log-line run (plist-get event :ev) event time)))
+        (let ((time (float-time (or (ignore-errors (date-to-time (plist-get event :t))) (current-time)))))
+          (agent-workflow--pane-time (plist-get event :ev) event time)
+          (dolist (line (agent-workflow--pane-log-lines run (plist-get event :ev) event time))
             (push line lines)))))
     (agent-ui-section pane "run" :title "Run")
     (agent-ui-section pane "log" :title "Log")
-    (agent-ui-show (list :id "log" :type "log" :show 12 :keep agent-workflow-pane-log-lines
-                         :lines (last (nreverse lines) agent-workflow-pane-log-lines))
+    (agent-ui-show (append (list :id "log" :type "log" :show 12 :keep agent-workflow-pane-log-lines :unit "event"
+                                 ;; Each job its colour, by its place.
+                                 :sources (mapcar #'car (agent-workflow-run-jobs run))
+                                 :lines (last (nreverse lines) agent-workflow-pane-log-lines))
+                           (when-let* ((span (with-current-buffer pane (agent-workflow--pane-log-span))))
+                             (list :right span)))
                    :canvas pane :section "log")
     (agent-workflow--pane-draw run t)
     pane))
@@ -284,6 +293,8 @@ steps' times noted."
            (when-let* ((times (gethash name agent-workflow--pane-times)))
              (puthash name (plist-put times :cancelled time) agent-workflow--pane-times))))
         ("step-started" (when (numberp index) (step-set :started)))
+        ;; Its agent fixing it: how long it took, its Log's.
+        ("fixing" (when (numberp index) (step-set :fixing)))
         ;; Its on-fail script's start: its box's time from it.
         ("fix-script" (setq times (plist-put times :fix-started time)))
         ((or "step-ended" "script-ended" "step-skipped") (when (numberp index) (step-set :ended))))
@@ -291,21 +302,34 @@ steps' times noted."
         (puthash job times agent-workflow--pane-times)))))
 
 (defun agent-workflow--pane-journal (run event data)
-  "EVENT of RUN with DATA, in its journal: its pane's times noted, its line
-in its Log. In `agent-workflow-journal-functions'."
+  "EVENT of RUN with DATA, in its journal: its pane's times noted, its lines
+in its Log, its span at its counts' end. In
+`agent-workflow-journal-functions'."
   (when-let* ((pane (agent-workflow--pane-live run)))
     (with-current-buffer pane
-      (agent-workflow--pane-time event data (float-time))
-      (when-let* ((line (agent-workflow--pane-log-line run event data (current-time))))
-        (with-demoted-errors "agent workflow's pane: %S"
-          (agent-ui-append "log" (list :lines (list line)) :canvas pane :section "log"))))))
+      (let ((now (float-time)))
+        (agent-workflow--pane-time event data now)
+        (when-let* ((lines (agent-workflow--pane-log-lines run event data now)))
+          (with-demoted-errors "agent workflow's pane: %S"
+            (agent-ui-append "log" (list :lines lines :right (agent-workflow--pane-log-span))
+                             :canvas pane :section "log")))))))
 
 ;; THE LOG: the run's journal as log.el says it (log.txt, the shell's), but
-;; shorter, in its own pane: no issue on each line, its time HH:MM, its job's
-;; name in a column; a job's agent step starting and ending left out (its
-;; job's start and end say it), a job done saying how long it took; a wait
-;; saying what for (not how to answer from the shell), a warning; what went
-;; wrong, an error.
+;; in its own pane, each line in columns (Agent UI's log): its time (shown
+;; as it changes), a mark (▸ started, ✓ done, ✗ failed, ◆ waits for you...),
+;; its job in its colour, its words (a step's its name first, muted but
+;; what went wrong), how long it took at its end; a pause of 5 minutes or
+;; more said between two lines (┊ 17m). A job's agent step starting and
+;; ending left out (its job's start and end say it); a wait, a warning;
+;; what went wrong, an error.
+;;
+;;   ✗ 1 error · ◆ 1 warning · 9 events            16:22 – 16:41 · 19m
+;;   16:22  ▸         started with github · by you
+;;          ▸  green  started
+;;          ›  green  watch started
+;;          ┊  17m
+;;   16:39  ✗  green  watch exited 1                              16m 32s
+;;          ↻  green  watch failed · its agent fixes it
 
 (defconst agent-workflow--pane-log-errors
   '("cancelled" "failed" "budget-used-up" "interrupted" "branch-moved")
@@ -315,43 +339,200 @@ in its Log. In `agent-workflow-journal-functions'."
   '("waiting" "budget-near" "branch-kept")
   "The events a run's pane's Log says as warnings.")
 
+(defconst agent-workflow--pane-log-gap (* 5 60)
+  "A pause this long or more (seconds) between two lines of a run's Log:
+said between them (┊ 17m).")
+
+(defun agent-workflow--pane-log-mark (event data)
+  "EVENT's mark in a run's Log, with DATA: (GLYPH FACE), FACE a log's
+\(accent, success, warning, error, muted); the line an error or a warning
+with it."
+  (let ((exit (plist-get data :exit)))
+    (cond
+     ((member event agent-workflow--pane-log-errors)
+      (if (member event '("cancelled" "interrupted")) '("⊘" "error") '("✗" "error")))
+     ((member event '("waiting")) '("◆" "warning"))
+     (t (pcase event
+          ((or "run-started" "job-started" "continued" "restored") '("▸" "accent"))
+          ("step-started" '("›" "muted"))
+          ("script-ended" (if (memql exit '(0 nil)) '("✓" "success") '("✗" "error")))
+          ("fix-script-ended" (if (eql exit 0) '("✓" "success") '("✗" "error")))
+          ((or "step-ended" "job-done") '("✓" "success"))
+          ((or "step-skipped" "job-skipped") '("–" "muted"))
+          ((or "fixing" "fix-script") '("↻" "warning"))
+          ("retry-from" '("↺" "accent"))
+          ("answered" '("✎" "accent"))
+          ((or "went-back" "rerun") '("↶" "warning"))
+          ("merged" '("⎇" "success"))
+          ("rebased" '("⎇" "accent"))
+          ((or "main-moved" "branch-kept") '("⎇" "warning"))
+          ("branch-deleted" '("⎇" "muted"))
+          ("worktree-removed" '("⌫" "muted"))
+          ("run-done" '("★" "success"))
+          ("budget-near" '("$" "warning"))
+          ("budget-more" '("$" "accent"))
+          ("state" '("○" "muted"))
+          (_ '("·" "muted")))))))
+
+(defun agent-workflow--pane-log-step (run data)
+  "The step DATA (of an event of RUN) is about, as its Log names it: its
+name, else what it runs (its script's file, what it uses, its agent)."
+  (let* ((index (or (plist-get data :step) 0))
+         (step (nth index (plist-get (agent-workflow--job-spec run (plist-get data :job)) :steps))))
+    (or (plist-get data :name)
+        (plist-get step :name)
+        (pcase (plist-get step :kind)
+          ('run (when-let* ((command (car (split-string (string-trim (format "%s" (plist-get step :run)))))))
+                  (file-name-nondirectory command)))
+          ('uses (format "%s" (plist-get step :uses)))
+          ('agent (format "%s" (plist-get step :agent)))
+          ('elisp "elisp"))
+        (format "step %d" (1+ index)))))
+
+(defun agent-workflow--pane-log-words (run event data)
+  "EVENT of RUN with DATA in its Log: its text, pieces (text, or (:text
+TEXT :face FACE)), a step's its name first, every one's in the same column
+\(a step's indented under its job's read as out of line); nil if the Log
+leaves it out."
+  (let* ((muted (lambda (text) (list :text text :face "muted")))
+         (index (plist-get data :step))
+         (spec (and (plist-get data :job) (agent-workflow--job-spec run (plist-get data :job))))
+         (kind (and (numberp index) (plist-get (nth index (plist-get spec :steps)) :kind)))
+         (name (and (numberp index) (agent-workflow--pane-log-step run data)))
+         (by (format "%s" (or (plist-get data :by) "you"))))
+    (cl-flet ((step (&rest pieces) (cons name pieces))
+              (run-level (&rest pieces) pieces))
+      (pcase event
+        ;; Its job's start and end say an agent's step.
+        ((and (or "step-started" "step-ended") (guard (or (eq kind 'agent) (plist-get data :agent)
+                                                          (equal (plist-get data :kind) "agent"))))
+         nil)
+        ("step-started"
+         (let ((what (format "%s" (or (plist-get data :kind) kind "run")))
+               (try (plist-get data :try)))
+           (step (funcall muted (concat " started"
+                                        (if (member what (list "run" name)) "" (format " · %s" what))
+                                        (if (and (numberp try) (> try 1)) (format " · try %d" try) ""))))))
+        ("script-ended"
+         (let ((exit (plist-get data :exit)))
+           (if (memql exit '(0 nil))
+               (step (funcall muted (if exit " exited 0" " ended")))
+             (step (list :text (format " exited %s" exit) :face "error")))))
+        ("step-ended"
+         (let ((outcome (plist-get data :outcome)))
+           (step (funcall muted (if (member outcome '(nil "done")) " fixed" (format " %s" outcome))))))
+        ("step-skipped" (step (funcall muted " skipped")))
+        ("fixing" (step (list :text " failed · its agent fixes it" :face "warning")))
+        ("fix-script" (step (list :text " failed · its on-fail script fixes it" :face "warning")))
+        ("fix-script-ended"
+         (let ((exit (plist-get data :exit)))
+           (if (eql exit 0)
+               (step (funcall muted " fixed by its on-fail script"))
+             (step (list :text (format " not fixed: its on-fail script exited %s" exit) :face "error")))))
+        ("retry-from"
+         (step (funcall muted " · again from ")
+               (or (plist-get data :from-name) (format "step %d" (1+ (or (plist-get data :from) 0))))))
+        ("job-started"
+         (let ((round (plist-get data :round)))
+           (run-level "started" (if (and (numberp round) (> round 1)) (funcall muted (format " · round %d" round)) ""))))
+        ("job-skipped"
+         (run-level "skipped" (if (plist-get data :if)
+                                  (funcall muted (format " · if: %s" (string-trim (format "%s" (plist-get data :if)))))
+                                "")))
+        ("job-done"
+         (let ((outcome (plist-get data :outcome)))
+           (run-level "done"
+                      (if (and outcome (not (equal outcome "done"))) (funcall muted " · ") "")
+                      (if (and outcome (not (equal outcome "done"))) (format "%s" outcome) "")
+                      (if (plist-get data :accepted) (funcall muted " · accepted as it is") ""))))
+        ("run-started"
+         (run-level "started" (funcall muted " with ") (format "%s" (plist-get data :workflow))
+                    (funcall muted (format " · by %s" by))))
+        ("run-done" (run-level (list :text "run done" :face "success")))
+        ("merged"
+         (if (plist-get data :empty)
+             (run-level (funcall muted "nothing to merge: no commit"))
+           (run-level (funcall muted "merged into ") (format "%s" (plist-get data :into))
+                      (if (plist-get data :already) (funcall muted " · it was") ""))))
+        ("branch-deleted"
+         (run-level (funcall muted (if (plist-get data :empty)
+                                       "its branch deleted · no commit"
+                                     (format "its branch deleted · merged into %s" (plist-get data :into))))))
+        ((or "worktree-removed" "issue-changed")
+         (run-level (funcall muted (agent-workflow--log-what (agent-workflow-run-issue run) event data 'none))))
+        ("waiting"
+         (run-level (concat "waits for you: "
+                            (let ((why (or (plist-get data :why) ""))
+                                  (job (plist-get data :job)))
+                              (if (and job (string-prefix-p (concat job ": ") why))
+                                  (substring why (+ (length job) 2))
+                                why)))))
+        (_ (when-let* ((what (agent-workflow--log-what (agent-workflow-run-issue run) event data 'none)))
+             (run-level what)))))))
+
+(defun agent-workflow--pane-log-took (event data time job)
+  "How long what EVENT (with DATA, at TIME, of JOB) ends took, its Log's line
+says at its end: a script, since its step started; a fix, since its agent or
+script began it; a job, since it started; the run, since its Log's first
+line. Nil for one that ends nothing. In the pane's buffer."
+  (let* ((times (and job (gethash job agent-workflow--pane-times)))
+         (step (and (numberp (plist-get data :step)) (alist-get (plist-get data :step) (plist-get times :steps))))
+         (since (pcase event
+                  ("script-ended" (plist-get step :started))
+                  ("step-ended" (plist-get step :fixing))
+                  ("fix-script-ended" (plist-get times :fix-started))
+                  ("job-done" (plist-get times :started))
+                  ((or "run-done" "cancelled" "failed") (car agent-workflow--pane-log-span)))))
+    (and since (agent-workflow--duration-words (round (max 0 (- time since)))))))
+
 (defun agent-workflow--pane-log-line (run event data time)
-  "EVENT of RUN with DATA at TIME (a Lisp time) as a line of its pane's Log
-\(see above): text, or (:level LEVEL :text TEXT); nil if it says nothing
-there. In the pane's buffer: a job's times its `agent-workflow--pane-times'."
-  (let* ((job (if (equal event "rerun")
-                  ;; Sent back: the job it's sent to, by the one sending it.
-                  (or (cadr (split-string (or (plist-get data :edge) "") ">")) (plist-get data :job))
-                (plist-get data :job)))
-         (step (plist-get data :step))
-         (spec (and job (agent-workflow--job-spec run job)))
-         (kind (and (numberp step) (plist-get (nth step (plist-get spec :steps)) :kind)))
-         (what (cond
-                ;; Its job's start and end say it.
-                ((and (member event '("step-started" "step-ended")) (eq kind 'agent)) nil)
-                ((equal event "waiting")
-                 (concat "waits for you: "
-                         (let ((why (or (plist-get data :why) "")))
-                           (if (and job (string-prefix-p (concat job ": ") why))
-                               (substring why (+ (length job) 2))
-                             why))))
-                ((equal event "job-done")
-                 (let* ((times (and job (gethash job agent-workflow--pane-times)))
-                        (started (plist-get times :started))
-                        (ended (or (plist-get times :ended) (float-time time))))
-                   (concat (agent-workflow--log-what (agent-workflow-run-issue run) event data 'none)
-                           (if started
-                               (format " (%s)" (agent-workflow--duration-words (round (max 0 (- ended started)))))
-                             ""))))
-                (t (agent-workflow--log-what (agent-workflow-run-issue run) event data 'none))))
-         (width (apply #'max 1 (mapcar (lambda (job) (length (car job))) (agent-workflow-run-jobs run)))))
-    (when what
-      (let ((text (format "%s  %s  %s" (format-time-string "%H:%M" time)
-                          (string-pad (or job "·") width)
-                          (replace-regexp-in-string "[\n\r]+" " " what))))
-        (cond ((member event agent-workflow--pane-log-errors) (list :level "error" :text text))
-              ((member event agent-workflow--pane-log-warnings) (list :level "warn" :text text))
-              (t text))))))
+  "EVENT of RUN with DATA at TIME (seconds) as a line of its pane's Log, in
+columns (see above); nil if it says nothing there. In the pane's buffer:
+its jobs' times `agent-workflow--pane-times', its span
+`agent-workflow--pane-log-span'."
+  (when-let* ((words (agent-workflow--pane-log-words run event data)))
+    (pcase-let* ((`(,glyph ,face) (agent-workflow--pane-log-mark event data))
+                 (job (if (equal event "rerun")
+                          ;; Sent back: the job it's sent to, by the one sending it.
+                          (or (cadr (split-string (or (plist-get data :edge) "") ">")) (plist-get data :job))
+                        (plist-get data :job)))
+                 (took (agent-workflow--pane-log-took event data time job))
+                 ;; One line, its newlines spaces.
+                 (pieces (mapcar (lambda (piece)
+                                   (if (stringp piece)
+                                       (replace-regexp-in-string "[\n\r]+" " " piece)
+                                     (plist-put (copy-sequence piece) :text
+                                                (replace-regexp-in-string "[\n\r]+" " " (plist-get piece :text)))))
+                                 (seq-remove (lambda (piece) (equal piece "")) words))))
+      (append (list :time (format-time-string "%H:%M" time) :mark glyph :mark-face face
+                    ;; Text alone: in its level's colour (run cancelled, red).
+                    :text (if (and (= (length pieces) 1) (stringp (car pieces))) (car pieces) pieces))
+              (and job (list :source (format "%s" job)))
+              (and took (list :right took))
+              (pcase face ("error" (list :level "error")) ("warning" (list :level "warning")))))))
+
+(defun agent-workflow--pane-log-lines (run event data time)
+  "EVENT of RUN with DATA at TIME (seconds) as lines of its pane's Log: its
+line (`agent-workflow--pane-log-line'), after a pause if one came since the
+last (`agent-workflow--pane-log-gap'); none if it says nothing there. Its
+span noted. In the pane's buffer."
+  (when-let* ((line (agent-workflow--pane-log-line run event data time)))
+    (let ((last (cdr agent-workflow--pane-log-span)))
+      (setq agent-workflow--pane-log-span (cons (or (car agent-workflow--pane-log-span) time) time))
+      (append (and last (>= (- time last) agent-workflow--pane-log-gap)
+                   (list (list :gap (agent-workflow--duration-words (* 60 (round (- time last) 60))))))
+              (list line)))))
+
+(defun agent-workflow--pane-log-span ()
+  "The pane's Log's span, at its counts line's end: 16:22 – 17:24 · 1h 2m
+\(16:22 alone within a minute); nil before its first line. In the pane's
+buffer."
+  (when-let* ((span agent-workflow--pane-log-span))
+    (let ((first (format-time-string "%H:%M" (car span)))
+          (last (format-time-string "%H:%M" (cdr span))))
+      (if (equal first last)
+          first
+        (format "%s – %s · %s" first last (agent-workflow--duration-words (round (- (cdr span) (car span)))))))))
 
 (add-hook 'agent-workflow-journal-functions #'agent-workflow--pane-journal)
 

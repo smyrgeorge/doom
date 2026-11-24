@@ -360,8 +360,10 @@ review asks: Should the escape table also cover Unicode escapes?
  ⏵ Answer   ⏵ Go to it
 ▸ build ✓ 2m 34s · 2 hidden ──────────────────
 ▾ Log ────────────────────────────────────────
-13:10  build   done (2m 34s)
-13:13  review  waits for you: its agent asks you: Should the escape table …
+◆ 1 warning · 12 events          13:01 – 13:13 · 12m
+13:10  ✓  build   done                     2m 34s
+       ┊  3m
+13:13  ◆  review  waits for you: its agent asks you: Should the …
 ```
 
 - **Its state**, as tiles: State, coloured by it, its state alone: ● running, ◆ needs you, ○ queued, ✓ done,
@@ -395,8 +397,13 @@ review asks: Should the escape table also cover Unicode escapes?
 - **A section per agent:** its session's canvas, shown there: its plan, its progress, its questions; finished (its plan
   done), they stay (no countdown here); its notes whole, once it ended its step (each round's under its own). Its job
   over, it's folded (`▸ build ✓ 4m 12s`), what its agent showed kept there, its session gone. `RET` on its divider opens its session; `TAB` on any divider folds it.
-- **Log:** its last events, shorter than its log.txt: no issue on each line, its job in a column, a job's agent step
-  starting and ending left out, a job done how long it took; a wait a warning, what went wrong an error.
+- **Log:** its last 12 events, shorter than its log.txt, a line each in columns: its time (shown as it changes), a
+  mark (▸ started, › a step started, ✓ done, ✗ failed, ↻ an agent fixing it, ↺ run again from a step, ◆ waits for you,
+  ↶ sent back, ⎇ merged, ⊘ cancelled, ★ the run done), its job in its own colour (none for the run's), its words, all in
+  one column (a step's, its name first, muted but what went wrong: `push exited 1`), how long it took at its end (a script, a fix, a
+  job, the run). A pause of 5 minutes or more is said between two lines (`┊ 17m`); a job's agent step starting and
+  ending is left out (its job's start and end say it). Above them, its errors and warnings counted, its events, and
+  its span (`16:22 – 17:24 · 1h 2m`).
 
 Emacs draws the run's sections from its journal, never an agent. A run's pane stays, done or not (✓ done, its agents'
 sections folded), until you close it (`q`): nothing counts down to close it. Closing it stops nothing: it's made
