@@ -54,11 +54,16 @@ cut with … if too long."
 the rail, WIDTH wide: its mark, its text, cut with … (one line each: its
 whole elsewhere)."
   (let* ((parts (and (consp (cdr line)) (cdr line)))
-         (mark (and parts (plist-get parts :mark)))
-         (text (if parts
-                   (plist-get parts :text)
-                 (let ((face (nth 2 (assq (car line) agent-ui-log--levels))))
-                   (if face (propertize (cdr line) 'face face) (cdr line)))))
+         (gap (and (eq (car line) 'gap) (plist-get parts :gap)))
+         ;; A pause ({"gap": "17m"}): ┊ and its time, as in a log.
+         (mark (if gap "┊" (and parts (plist-get parts :mark))))
+         (parts (if gap (list :mark-face 'agent-ui-muted) parts))
+         (text (if gap
+                   (propertize gap 'face 'agent-ui-muted)
+                 (if parts
+                     (or (plist-get parts :text) "")
+                   (let ((face (nth 2 (assq (car line) agent-ui-log--levels))))
+                     (if face (propertize (cdr line) 'face face) (cdr line))))))
          (text (replace-regexp-in-string "[\n\r]+" " " (agent-ui-untabify text)))
          (head (concat (propertize agent-ui-activity--rail 'face 'agent-ui-muted)
                        (if mark (concat (propertize mark 'face (plist-get parts :mark-face)) " ") ""))))

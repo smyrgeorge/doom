@@ -4065,6 +4065,14 @@ them (text muted, or pieces); none, its empty said."
   (should (equal (+test-aue-draw '(:type "activity" :label "a-long-script-name.sh" :right "1h 2m") :width 12)
                  "●  a-long-s…")))
 
+(ert-deftest agent-ui-elements/activity-a-gap ()
+  "A log's gap line ({\"gap\": \"17m\"}) in an activity: ┊ and its time on the
+rail, as a log draws it, not the whole box failing (doom-ht6.68)."
+  (let ((drawn (+test-aue-draw '(:type "activity" :lines ("a" (:gap "17m") "b")))))
+    (should-not (string-search "⚠" drawn))
+    (should (string-match-p "┊ 17m" drawn))
+    (should (string-match-p "a" drawn))))
+
 (ert-deftest agent-ui-elements/activity-wrong ()
   (should (string-match-p "activity: mark-face \"pink\" is none of plain, muted"
                           (+test-aue-error '(:type "activity" :mark-face "pink"))))
