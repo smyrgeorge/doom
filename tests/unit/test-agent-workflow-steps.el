@@ -487,7 +487,26 @@ jobs:
       (write-region "x" nil (expand-file-name "new.txt" (agent-workflow-worktree-directory project three)))
       (agent-workflow--cancel run)
       (should-not (agent-workflow-worktree-removal-time run))
-      (should (agent-workflow--worktree-left-p run)))))
+      (should (agent-workflow--worktree-left-p run)))
+    ;; A new run on its issue before its time: its removal called off, the
+    ;; worktree the new run's (doom-38o.70).
+    (let* ((agent-workflow-worktree-removal-delay 1)
+           (four (+test-awr--issue project "Again"))
+           (run (agent-workflow-start-run project four)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "build") 'running))))
+      (agent-workflow--cancel run)
+      (should (agent-workflow-worktree-removal-time run))
+      (let ((again (agent-workflow-start-run project four)))
+        (should-not (agent-workflow-worktree-removal-time run))
+        (should (+test-awr--wait (lambda () (eq (+test-awr--job again "build") 'running))))
+        (sleep-for 1.5)
+        (should (file-exists-p (expand-file-name ".git" (agent-workflow-worktree-directory project four))))
+        (should (eq (+test-awr--job again "build") 'running))
+        (should-not (agent-workflow-run-branch-end again))
+        ;; Nor the old run's to remove, even once the new one's over.
+        (should-not (agent-workflow--worktree-left-p run))
+        (agent-workflow--cancel again)
+        (should-not (agent-workflow--worktree-left-p run))))))
 
 (ert-deftest agent-workflow-steps/sent-back-to-a-step-once ()
   "A job sent back to its step 2: that round starts there; a later round of

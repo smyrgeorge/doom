@@ -328,11 +328,19 @@ pane not drawn again."
       (agent-workflow--changed run)
       (message "%s: its worktree kept" (agent-workflow-run-name run)))))
 
+(defun agent-workflow--newest-run-p (run)
+  "Whether RUN is its issue's newest run in its project: the issue's
+worktree (one folder, each run on it reusing it) is its."
+  (not (seq-some (lambda (other) (and (equal (agent-workflow-run-issue other) (agent-workflow-run-issue run))
+                                      (> (agent-workflow-run-n other) (agent-workflow-run-n run))))
+                 (agent-workflow-runs-of (agent-workflow-run-project run)))))
+
 (defun agent-workflow--worktree-left-p (run)
   "Whether RUN is over and has a worktree of its own still (not one in your
-checkout)."
+checkout, nor a newer run's on its issue)."
   (and (memq (agent-workflow-run-state run) agent-workflow--ended)
        (not (agent-workflow-run-checkout-p run))
+       (agent-workflow--newest-run-p run)
        (file-exists-p (expand-file-name ".git" (agent-workflow-worktree-directory
                                                 (agent-workflow-run-project run) (agent-workflow-run-issue run))))))
 

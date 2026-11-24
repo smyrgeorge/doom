@@ -86,6 +86,12 @@ run is queued until its blockers close."
   "A new run of PROJECT on ID (an issue's id; a workflow's own run: its
 name) with the workflow SPEC, INFO its issue (a plist), started BY: made,
 journaled, queued. Its issue in progress, if it's on one."
+  ;; An older run's worktree removal waiting: not this one's, which
+  ;; reuses its folder.
+  (dolist (old (agent-workflow-runs-of project))
+    (when (and (equal (agent-workflow-run-issue old) id) (agent-workflow-worktree-removal-time old))
+      (agent-workflow-keep-worktree old t)
+      (agent-workflow--changed old)))
   (let* ((n (agent-workflow--next-run-number project id))
          (dir (file-name-as-directory (expand-file-name (format "%s/%d" id n) (agent-workflow--runs-directory project))))
          (run (agent-workflow-run--make
