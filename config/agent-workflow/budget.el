@@ -162,10 +162,8 @@ running steps stopped and you asked."
           (when running
             (agent-workflow--journal run "budget-used-up" :spent words)
             (dolist (job running)
-              (agent-workflow--interrupt run job)
-              (agent-workflow--job-set run job :ask (list :kind 'budget :step (or (plist-get (agent-workflow--job run job) :step) 0)))
-              (agent-workflow--wait run job (format "%s: its run's budget is used up (%s): go on with more, or stop?"
-                                                    job words))))))
+              (agent-workflow--interrupt run job 'budget
+                                         (format "its run's budget is used up (%s): go on with more, or stop?" words))))))
        ((and (>= share 0.8) (not (agent-workflow-run-warned run)))
         (setf (agent-workflow-run-warned run) t)
         (agent-workflow--journal run "budget-near" :spent words)

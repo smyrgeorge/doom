@@ -830,10 +830,19 @@ stopped, asked; go on with more: continued; kept with the run."
         (should (equal (agent-workflow-run-why run)
                        "review: its run's budget is used up ($10.50 of $10): go on with more, or stop?"))
         (should-not (buffer-live-p (agent-workflow-agent-buffer review))))
-      ;; More: on again, its session resumed.
+      ;; Said once, as what it is: never "interrupted (paused)" first
+      ;; (doom-38o.83).
+      (should-not (string-search "interrupted (paused)"
+                                 (with-temp-buffer
+                                   (insert-file-contents (expand-file-name "journal.jsonl" (agent-workflow-run-dir run)))
+                                   (buffer-string))))
+      ;; More: on again, its session resumed, told why it stopped.
       (agent-workflow--confirm run "go" :more '(:cost 5))
       (should (equal (agent-workflow-run-budget run) '(:cost 15 :tokens nil :time nil)))
       (should (equal (agent-workflow-agent-resumed (+test-awr--agent run "review")) "mock-session"))
+      (should (+test-awr--wait
+               (lambda () (seq-some (lambda (prompt) (string-match-p "\\`Your job, review, was interrupted (its run's budget was used up" prompt))
+                                    (+test-awr--prompts "budget")))))
       ;; Its time: counted while it ran, not while it waited for you.
       (should (> (plist-get (agent-workflow-run-spent-now run) :time) 0))
       ;; Kept with it.

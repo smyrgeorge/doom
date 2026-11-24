@@ -30,9 +30,7 @@
 \(KIND), saying WHY. A job waiting for you already keeps its question."
   (let ((running (mapcar #'car (agent-workflow--status-of run 'running))))
     (dolist (job running)
-      (agent-workflow--interrupt run job)
-      (agent-workflow--job-set run job :ask (list :kind kind :step (or (plist-get (agent-workflow--job run job) :step) 0)))
-      (agent-workflow--wait run job (format "%s: %s" job why)))
+      (agent-workflow--interrupt run job kind why))
     ;; None running: its next job holds the question, not started.
     (unless running
       (when-let* ((next (car (car (agent-workflow--status-of run 'pending)))))

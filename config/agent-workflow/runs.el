@@ -548,8 +548,9 @@ branch has now first."
     (cond
      ((not back) prompt)
      ((plist-get back :interrupted)
-      (format "Your job, %s, was interrupted (Emacs stopped) and goes on now.\n\nWhat the branch has now:\n%s\n\nThen, as before:\n\n%s"
-              job (agent-workflow--branch-now run job) prompt))
+      (format "Your job, %s, was interrupted (%s) and goes on now.\n\nWhat the branch has now:\n%s\n\nThen, as before:\n\n%s"
+              job (if (stringp (plist-get back :interrupted)) (plist-get back :interrupted) "Emacs stopped")
+              (agent-workflow--branch-now run job) prompt))
      (t
       (format "%s sent the work back to you, %s (round %d)%s.\n\nWhat the branch has now:\n%s\n\nThen, as before:\n\n%s"
               (if (equal (plist-get back :by) "you") "The user" (plist-get back :by))

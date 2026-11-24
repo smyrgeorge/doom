@@ -135,7 +135,8 @@ that were running interrupted, waiting for you; the others looked at
                               (and (eq (plist-get (cdr job) :status) 'waiting)
                                    (plist-get (cdr job) :agent-asks)))
                       (agent-workflow--job-set run (car job) :status 'waiting :agent-asks nil
-                                               :ask (list :kind 'interrupted :step (or (plist-get (cdr job) :step) 0))
+                                               :ask (list :kind 'interrupted :step (or (plist-get (cdr job) :step) 0)
+                                                          :reason "Emacs stopped")
                                                :why (format "%s: interrupted (Emacs stopped): continue it, skip its step, or stop?"
                                                             (car job)))))
                   (setq agent-workflow--runs (append agent-workflow--runs (list run)))
@@ -196,6 +197,14 @@ workflow as it is now. Return the jobs continued."
     (agent-workflow--tick-soon)
     jobs))
 
+(defun agent-workflow--interrupted-why (ask)
+  "Why a job was stopped, its question ASK: words its agent is told."
+  (pcase (plist-get ask :kind)
+    ('budget "its run's budget was used up, and the user gave it more")
+    ('closed "its issue was closed by hand, and opened again")
+    ('moved "commits of the branch went missing (a reset, a force-push?)")
+    (_ (or (plist-get ask :reason) "Emacs stopped"))))
+
 (defun agent-workflow--continue-job (run job by)
   "JOB of RUN, interrupted, continued BY: its step again, an agent's
 session resumed, told so; an agent step its agent was done with already
@@ -214,13 +223,17 @@ again."
           (agent-workflow--step-finished run job))
       (agent-workflow--job-set run job :ask nil :status 'running :why nil :finished nil
                                :back (and (eq (plist-get step :kind) 'agent)
-                                          (list :step index :interrupted t :by by :session (plist-get state :session))))
+                                          (list :step index :by by :session (plist-get state :session)
+                                                ;; Why, for its agent.
+                                                :interrupted (agent-workflow--interrupted-why
+                                                              (plist-get state :ask)))))
       (agent-workflow--refresh run)
       (agent-workflow--step-start run job index))))
 
-(defun agent-workflow--interrupt (run job)
+(defun agent-workflow--interrupt (run job &optional kind why)
   "JOB of RUN stopped at once: its agent stopped (its session kept), its
-script killed; interrupted, waiting for you."
+script killed; interrupted (paused now), waiting for you. KIND and WHY:
+the question it waits on instead (budget, closed...), said so, once."
   (let ((state (agent-workflow--job run job)))
     (when-let* ((agent (plist-get state :agent)))
       (agent-workflow--job-set run job :session (or (agent-workflow-agent-session agent) (plist-get state :session)))
@@ -233,9 +246,12 @@ script killed; interrupted, waiting for you."
     ;; a fix under way (a failed step's, a merge's conflicts) dropped:
     ;; continued, its step runs afresh, once (skipped, it's skipped).
     (agent-workflow--job-set run job :agent nil :process nil :pool nil :retry nil :resolving nil :fix-script nil
-                             :ask (list :kind 'interrupted :step (or (plist-get state :step) 0)))
-    (agent-workflow--journal run "interrupted" :job job)
-    (agent-workflow--wait run job (format "%s: interrupted (paused): continue it, skip its step, or stop?" job))))
+                             :ask (list :kind (or kind 'interrupted) :step (or (plist-get state :step) 0)
+                                        :reason (if kind nil "paused")))
+    (agent-workflow--journal run "interrupted" :job job :kind (symbol-name (or kind 'interrupted)))
+    (agent-workflow--wait run job (if why
+                                      (format "%s: %s" job why)
+                                    (format "%s: interrupted (paused): continue it, skip its step, or stop?" job)))))
 
 ;; ====== CANCELLING ======
 
