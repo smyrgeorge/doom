@@ -601,12 +601,16 @@ Kept as its sort and descending (the agent sees it)."
 
 (defun agent-ui-table--append (element patch)
   "ELEMENT with PATCH's rows: with a key column, a row whose key is there
-replaces that row; the others after."
+replaces that row; the others after. The rows the user picked (select)
+still picked, as they answer now (a first cell another row now has too:
+its cells)."
   (cl-loop for (k _) on patch by #'cddr
            unless (memq k '(:id :rows))
            do (agent-ui--fail "table: only rows can be appended to"))
   (let* ((key (agent-ui-table--key-index (plist-get element :key) (plist-get element :columns)))
-         (rows (copy-sequence (plist-get element :rows))))
+         (old-rows (plist-get element :rows))
+         (rows (copy-sequence old-rows))
+         (selected (plist-get element :selected)))
     (dolist (row (plist-get patch :rows))
       (let ((at (and key (listp row)
                      (cl-position (agent-ui-cell (nth key row)) rows
@@ -615,7 +619,17 @@ replaces that row; the others after."
         (if at
             (setf (nth at rows) row)
           (setq rows (append rows (list row))))))
-    (plist-put (copy-sequence element) :rows rows)))
+    (let ((element (plist-put (copy-sequence element) :rows rows)))
+      (if (not (and selected (proper-list-p selected)))
+          element
+        ;; Rows keep their places (replaced in place, or added after).
+        (let* ((answers (lambda (rows) (agent-ui-table--answers (list :rows rows :key (or key 0)))))
+               (before (funcall answers old-rows))
+               (now (funcall answers rows))
+               (picked (delq nil (mapcar (lambda (answer) (cl-position (agent-ui-table--cell answer) before
+                                                                      :test #'equal))
+                                         selected))))
+          (plist-put element :selected (mapcar (lambda (i) (nth i now)) picked)))))))
 
 (agent-ui-define table
   "A table: COLUMNS (their names) and ROWS (arrays of cells: text, numbers,

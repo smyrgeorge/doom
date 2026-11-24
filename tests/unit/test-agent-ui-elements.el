@@ -3309,6 +3309,16 @@ given (doom-ht6.66)."
     (should (string-search "(•)  2" drawn))
     (should (string-search "( )  1" drawn))))
 
+(ert-deftest agent-ui-elements/table-select-a-row-appended-like-a-picked-one ()
+  "Without a key, a row appended with the first cell of one picked: taken,
+the picked one still picked, as it answers now (its cells) (doom-ht6.65)."
+  (+test-aue-canvas
+    (agent-ui-show '(:id "t" :type "table" :columns ("Test" "Result") :rows (("lexer" "a") ("parser" "b"))
+                     :select (:question "Which?" :multiple t) :selected ("lexer")))
+    (agent-ui-append "t" '(:rows (("lexer" "c"))))
+    (should (= (length (plist-get (agent-ui-get "t") :rows)) 3))
+    (should (equal (plist-get (agent-ui-get "t") :selected) '("lexer · a")))))
+
 (ert-deftest agent-ui-elements/table-select-rows-sharing-a-key ()
   "Two rows with the same key cell: picking one marks only it, the answer
 naming that row by its cells (both were marked, the answer their key);
