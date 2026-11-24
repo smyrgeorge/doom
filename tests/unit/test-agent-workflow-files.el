@@ -475,6 +475,32 @@ jobs:
                    (list '(error 5 "kind: only for an agent: step")
                          (list 'error 8 (concat "kind chatgpt: not one of " (agent-workflow--kinds-said))))))))
 
+(ert-deftest agent-workflow-files/runs-in-checkout-claude-code-only ()
+  "A workflow that runs in your checkout: its agents (their steps' kinds,
+their files', its on-fail agents') Claude Code only: another, an error
+naming the job and the kind, the workflow left out."
+  (let* ((dir (+test-awf--dir "checkout-kinds"))
+         (project (file-name-as-directory dir))
+         (agent-workflow-starters-directory (+test-tmp-file "awf/no-starters/"))
+         (agent-workflow--definitions-cache (make-hash-table :test #'equal))
+         (agent-workflow--workflows-cache (make-hash-table :test #'equal)))
+    (+test-awf--file dir ".agent-workflow/agents/build.md" "---\ndescription: x\n---\nDo.\n")
+    (+test-awf--file dir ".agent-workflow/agents/fixer.md" "---\ndescription: x\nkind: codex\n---\nFix.\n")
+    (+test-awf--file dir ".agent-workflow/workflows/here.yml"
+                     "description: x\nticket: false\nruns-in: checkout\njobs:\n  build:\n    agent: build\n")
+    (+test-awf--file dir ".agent-workflow/workflows/other.yml"
+                     "description: x\nticket: false\nruns-in: checkout\njobs:\n  build:\n    agent: build\n    kind: gemini-cli\n")
+    (+test-awf--file dir ".agent-workflow/workflows/fixed.yml"
+                     "description: x\nticket: false\nruns-in: checkout\njobs:\n  check:\n    run: x\n    on-fail: fixer\n")
+    (pcase-let ((`(,workflows . ,problems) (agent-workflow--workflows-read project)))
+      (should (equal (mapcar #'car workflows) '("here")))
+      (should (equal (sort (mapcar (lambda (problem) (nth 1 problem)) problems) #'string<)
+                     (sort (list (format "%s:3: runs-in checkout: build's agent runs on gemini-cli, not Claude Code: in your checkout, nothing keeps it from editing .agent-workflow/ (what runs it)"
+                                         (abbreviate-file-name (expand-file-name ".agent-workflow/workflows/other.yml" dir)))
+                                 (format "%s:3: runs-in checkout: check's agent runs on codex, not Claude Code: in your checkout, nothing keeps it from editing .agent-workflow/ (what runs it)"
+                                         (abbreviate-file-name (expand-file-name ".agent-workflow/workflows/fixed.yml" dir))))
+                           #'string<))))))
+
 (ert-deftest agent-workflow-files/a-job-s-approve-beside-its-steps ()
   "A job's approve: true beside its steps: read, its last step's result
 waiting for your OK; one step's keys on the job, approve among them: the

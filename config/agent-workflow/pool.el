@@ -44,6 +44,7 @@
 (defvar agent-workflow-kind)
 (defvar agent-workflow-kinds)
 (defvar agent-workflow-exit-timeout)
+(defvar +my/agent-shell-permission-rules)
 
 ;; ====== AN AGENT ======
 
@@ -234,19 +235,26 @@ main checkout (absolute, //...: a worktree's agent reaching it there)."
     (cl-loop for tool in '("Edit" "Write" "NotebookEdit")
              append (mapcar (lambda (pattern) (format "%s(%s)" tool pattern)) patterns))))
 
+(defun agent-workflow--rules (definition &optional project)
+  "DEFINITION's rules as Claude Code's syntax has them: (:tools RULES :deny
+RULES), its tools and ending its step (`agent-workflow-command' done)
+allowed, its deny and editing what runs it (PROJECT's
+`agent-workflow--protected-rules') denied."
+  (list :tools (append (plist-get definition :tools)
+                       (list (format "Bash(%s done:*)" agent-workflow-command)))
+        :deny (append (plist-get definition :deny) (agent-workflow--protected-rules project))))
+
 (defun agent-workflow--claude-options (meta definition &optional project)
   "META, Claude Code's session meta, with DEFINITION's tools in Claude Code's
 options (allowedTools, disallowedTools); ending its step
 \(`agent-workflow-command' done) always allowed, editing what runs it
 never (`agent-workflow--protected-rules', PROJECT's)."
   (let* ((claude (alist-get 'claudeCode meta))
-         (options (alist-get 'options claude)))
-    (setf (alist-get 'allowedTools options)
-          (vconcat (plist-get definition :tools)
-                   (list (format "Bash(%s done:*)" agent-workflow-command))))
+         (options (alist-get 'options claude))
+         (rules (agent-workflow--rules definition project)))
+    (setf (alist-get 'allowedTools options) (vconcat (plist-get rules :tools)))
     ;; What runs it (.agent-workflow/) never changed by it (trust.el).
-    (setf (alist-get 'disallowedTools options)
-          (vconcat (plist-get definition :deny) (agent-workflow--protected-rules project)))
+    (setf (alist-get 'disallowedTools options) (vconcat (plist-get rules :deny)))
     (when options
       (setf (alist-get 'options claude) options
             (alist-get 'claudeCode meta) claude))
@@ -342,7 +350,13 @@ DEFINITION isn't one."
               (remove-hook 'kill-buffer-query-functions #'agent-shell--prompt-queue-confirm-kill-buffer t)
               (setq-local shell-maker-prompt-before-killing-buffer nil)
               (when-let* ((process (ignore-errors (shell-maker--process))))
-                (set-process-query-on-exit-flag process nil)))
+                (set-process-query-on-exit-flag process nil))
+              ;; An agent other than Claude Code (which takes them as its
+              ;; options): the same rules answer its permission requests
+              ;; (config/agent-shell/permissions.el).
+              (let ((definition (agent-workflow-definition-filled agent)))
+                (unless (plist-get (alist-get (plist-get definition :kind) agent-workflow-kinds) :claude-code)
+                  (setq-local +my/agent-shell-permission-rules (agent-workflow--rules definition project)))))
             (setf (agent-workflow-agent-buffer agent) buffer)
             (push agent agent-workflow--agents)
             (agent-shell-subscribe-to

@@ -84,6 +84,7 @@
 (defvar agent-workflow-models)
 (defvar agent-workflow-efforts)
 (defvar agent-workflow-kinds)
+(defvar agent-workflow-kind)
 (declare-function agent-workflow--kinds-said "agent-workflow/agents")
 
 ;; ====== VARIABLES ======
@@ -444,6 +445,34 @@ file). NEEDS: every job's needs (an alist), DEFINITIONS the agents' names
             (agent-workflow--steps-session (plist-get read :steps) paths problem)))))
     read))
 
+(defun agent-workflow--step-kind (step definitions &optional fixer)
+  "The kind STEP's agent runs on (its FIXER's, its on-fail agent's): its
+kind:, else its agent file's (DEFINITIONS), else `agent-workflow-kind'."
+  (or (and (not fixer) (plist-get step :agent-kind))
+      (plist-get (alist-get (plist-get step (if fixer :on-fail :agent)) definitions nil nil #'equal) :kind)
+      agent-workflow-kind))
+
+(defun agent-workflow--other-kinds (workflow definitions)
+  "WORKFLOW's agents that aren't Claude Code: ((JOB . KIND)...), its agent
+steps' and its on-fail agents', DEFINITIONS the project's agents."
+  (cl-loop for (job . spec) in (plist-get workflow :jobs)
+           append (cl-loop for step in (plist-get spec :steps)
+                           append (delq nil
+                                        (list (and (eq (plist-get step :kind) 'agent)
+                                                   (let ((kind (agent-workflow--step-kind step definitions)))
+                                                     (unless (plist-get (alist-get kind agent-workflow-kinds) :claude-code)
+                                                       (cons job kind))))
+                                              (and (plist-get step :on-fail)
+                                                   (let ((kind (agent-workflow--step-kind step definitions t)))
+                                                     (unless (plist-get (alist-get kind agent-workflow-kinds) :claude-code)
+                                                       (cons job kind)))))))))
+
+(defun agent-workflow--key-line (file key)
+  "The line of FILE's top-level KEY (KEY: ...), else 1."
+  (with-temp-buffer
+    (let ((coding-system-for-read 'utf-8)) (insert-file-contents file))
+    (if (re-search-forward (concat "^" (regexp-quote key) ":") nil t) (line-number-at-pos) 1)))
+
 (defun agent-workflow--steps-session (steps paths problem)
   "Say with PROBLEM a kind:, model: or effort: on an agent step of a job's
 STEPS (each at its path in PATHS) after its first: the job's agent goes on
@@ -672,6 +701,18 @@ of its name it replaced."
         (dolist (file files)
           (pcase-let ((`(,workflow . ,found) (agent-workflow-workflow-read (cdr file) names)))
             (setq problems (append problems found))
+            ;; One that runs in your checkout: its agents Claude Code (it
+            ;; alone kept from editing what runs them there).
+            (when-let* ((workflow)
+                        ((plist-get workflow :checkout))
+                        (other (car (agent-workflow--other-kinds workflow definitions))))
+              (setq problems
+                    (append problems
+                            (list (agent-workflow--problem
+                                   'error (cdr file) (agent-workflow--key-line (cdr file) "runs-in")
+                                   "runs-in checkout: %s's agent runs on %s, not Claude Code: in your checkout, nothing keeps it from editing .agent-workflow/ (what runs it)"
+                                   (car other) (cdr other))))
+                    workflow nil))
             (when workflow
               (let* ((name (plist-get workflow :name))
                      (replaced (alist-get name workflows nil nil #'equal)))

@@ -255,6 +255,11 @@ Its permissions, its questions and its usage are agent-shell's, as in any sessio
   runs on a different model in another workflow. They're set as its session starts, its effort once its model is: an
   effort its model doesn't offer is skipped, its session saying so. A job keeps its agent from its first agent step to
   its end: a later agent step goes on in that session, as it started (a `model` or `effort` on it: a warning).
+- **Another agent than Claude Code** (`kind:`): its tools, `deny`, ending its step and what runs it
+  (`.agent-workflow/`) answer its permission requests instead of Claude Code's options: a `deny` rule matching,
+  refused; a `tools` one, allowed; neither, it asks you. Weaker: nothing is hidden from it, and in a mode that asks
+  nothing, nothing is refused. A branch changing `.agent-workflow/` still merges only once you say so; a workflow that
+  runs in your checkout (`runs-in: checkout`) runs Claude Code only, another agent an error.
 - **It's told** the job it does and where, that it never switches branches, pushes, or changes the issue, and how it
   ends its job: `cmd/agent-workflow done OUTCOME "notes"`. Then its agent's instructions.
 - **Its `bd` commands** run as `ISSUE/JOB` (`doom-a1b/review`): Beads' history says which job did what.

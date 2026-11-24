@@ -53,8 +53,9 @@ agent if it couldn't: scripts.md), `approve`.
 An error leaves the workflow out: YAML that doesn't parse; no jobs; a job's name that isn't one; `needs` naming no job,
 or its own; needs going round (`a → b → a`); a step with no kind, or two; `agent` or `on-fail` naming no agent of the
 project's; `uses` naming no built-in; `shell` without `run`; a step's `name` that isn't one, or another's of its job;
-`retry-from` naming no step of its job, or one after it; `prompt`, `model` or `effort` on a step that isn't an agent's;
-an `if` that isn't one Lisp form; `elisp` that isn't Lisp; a variable that isn't one; `jobs.X.notes` of no job; an
+`retry-from` naming no step of its job, or one after it; `prompt`, `kind`, `model` or `effort` on a step that isn't an
+agent's; a `kind` not one there is; an agent other than Claude Code in a workflow that runs in the user's checkout; an
+`if` that isn't one Lisp form; `elisp` that isn't Lisp; a variable that isn't one; `jobs.X.notes` of no job; an
 outcome's `rerun` naming no job; a number, duration or `true`/`false` that isn't one.
 
 A warning keeps it: an unknown key; a `for` type Beads doesn't have; `{jobs.X.notes}` of a job not before it (empty

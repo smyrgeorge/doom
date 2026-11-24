@@ -305,6 +305,36 @@ Claude Code."
       ;; One that isn't: an error, nothing started.
       (should-error (+test-awp--start project "demo-3" "build" :kind 'nothing)))))
 
+(ert-deftest agent-workflow-pool/another-kind-s-rules ()
+  "An agent other than Claude Code: its tools, ending its step, its deny and
+what runs it answer its permission requests (Claude Code's: in its
+options, none here): done allowed, a denied command or an edit of
+.agent-workflow/ refused, there or in the main checkout."
+  (+test-awp--with-project "rules"
+    (let ((agent-workflow-kinds (append agent-workflow-kinds
+                                        '((other :config agent-shell-mock-agent-make-agent-config)))))
+      (let* ((claude (+test-awp--start project "demo-1" "build"))
+             (other (+test-awp--start project "demo-2" "build" :kind 'other))
+             (rules (buffer-local-value '+my/agent-shell-permission-rules (agent-workflow-agent-buffer other)))
+             (dir (agent-workflow-agent-worktree other))
+             (verdict (lambda (kind &rest more)
+                        (+my/agent-shell-permission-by-rules
+                         rules (append (list (cons :kind kind))
+                                       (cl-loop for (key value) on more by #'cddr collect (cons key value)))
+                         dir))))
+        (should-not (buffer-local-value '+my/agent-shell-permission-rules (agent-workflow-agent-buffer claude)))
+        (should (member (format "Bash(%s done:*)" agent-workflow-command) (plist-get rules :tools)))
+        (should (eq (funcall verdict "execute" :raw-input `((command . ,(concat agent-workflow-command " done approved \"ok\""))))
+                    'allow))
+        (should (eq (funcall verdict "execute" :raw-input '((command . "git push origin"))) 'reject))
+        (should (eq (funcall verdict "read") 'allow))
+        (should (eq (funcall verdict "edit" :raw-input `((file_path . ,(expand-file-name ".agent-workflow/workflows/x.yml" dir))))
+                    'reject))
+        (should (eq (funcall verdict "edit" :raw-input `((file_path . ,(expand-file-name ".agent-workflow/scripts/a.sh" project))))
+                    'reject))
+        ;; Its own files: not decided here (asked, or its mode's).
+        (should-not (funcall verdict "edit" :raw-input `((file_path . ,(expand-file-name "src/a.el" dir)))))))))
+
 (ert-deftest agent-workflow-pool/the-pool-is-full ()
   "As many agents at once as the pool says, in every project; one stopped
 makes room."
