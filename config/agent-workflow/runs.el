@@ -700,7 +700,9 @@ In `agent-workflow-agent-event-functions'."
     ('clean-up
      (when-let* ((found (agent-workflow--agent-run agent)))
        (unless (plist-get (agent-workflow--job (car found) (cdr found)) :finished)
-         (agent-workflow--wait (car found) (cdr found) (format "%s: its agent's session ended" (cdr found))))))))
+         (agent-workflow--wait (car found) (cdr found) (format "%s: its agent's session ended" (cdr found)))))
+     ;; Its place in the pool free: a run waiting for an agent gets it.
+     (agent-workflow--tick-soon))))
 
 (defun agent-workflow--agent-at-work-p (run job)
   "Whether JOB of RUN has its agent at work: fixing a failed step (not

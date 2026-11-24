@@ -466,6 +466,8 @@ used again starts later)."
 (defvar agent-workflow-agent-stop-functions nil
   "Called with an agent about to be stopped, its session still there.")
 
+(declare-function agent-workflow--tick-soon "agent-workflow/queue")
+
 (defun agent-workflow-stop-agent (agent)
   "Stop AGENT's session without asking, its processes killed
 `agent-workflow-exit-timeout' seconds later if they're still running; it
@@ -487,7 +489,10 @@ leaves the pool. Its session's id is kept, to resume it."
             (run-at-time agent-workflow-exit-timeout nil #'agent-workflow--reap processes)))
       (setf (agent-workflow-agent-stopping agent) nil
             (agent-workflow-agent-buffer agent) nil)
-      (setq agent-workflow--agents (delq agent agent-workflow--agents)))
+      (setq agent-workflow--agents (delq agent agent-workflow--agents))
+      ;; Its place free, its session gone already too (its hook not run
+      ;; then): a run waiting for an agent gets it.
+      (agent-workflow--tick-soon))
     processes))
 
 (defvar agent-workflow-quit-hook nil

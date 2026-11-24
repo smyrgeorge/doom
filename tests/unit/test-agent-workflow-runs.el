@@ -143,6 +143,19 @@ priority first, then the one started first."
           (agent-workflow-tick)
           (should (equal (agent-workflow-run-why b) "build: waiting for an agent: 1 of 1 work")))))))
 
+(ert-deftest agent-workflow-runs/a-session-ending-frees-its-place ()
+  "An agent's session ending on its own (its buffer killed): its place in
+the pool goes at once to a run waiting for one (doom-38o.77)."
+  (+test-awr "freed"
+    (let* ((agent-workflow-pool 1)
+           (a (agent-workflow-start-run project (+test-awr--issue project "First" "--type" "feature")))
+           (build (+test-awr--agent a "build"))
+           (c (agent-workflow-start-run project (+test-awr--issue project "Second" "--type" "feature"))))
+      (should (+test-awr--wait (lambda () (equal (agent-workflow-run-why c) "build: waiting for an agent: 1 of 1 work"))))
+      (let ((kill-buffer-query-functions nil))
+        (kill-buffer (agent-workflow-agent-buffer build)))
+      (should (+test-awr--wait (lambda () (plist-get (agent-workflow--job c "build") :agent)) 8)))))
+
 (ert-deftest agent-workflow-runs/from-the-shell ()
   "run: an epic's open issues started, the rest refused; done: only from an
 agent's session."
