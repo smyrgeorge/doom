@@ -17,13 +17,18 @@ about (in SPC t N). Defining it again replaces it."
   "Kinds renamed: (OLD . NEW), an old one in `+my/notify-off' still turning
 its new one off.")
 
+(defun +my/notify--kind-off-p (kind)
+  "Non-nil if KIND is turned off: it, or its old name (`+my/notify-renamed'),
+in `+my/notify-off'."
+  (or (memq kind +my/notify-off)
+      (seq-some (lambda (old) (eq (alist-get old +my/notify-renamed) kind)) +my/notify-off)))
+
 (defun +my/notify-on-p (kind)
-  "Non-nil if notifications are on, and KIND (defined) too: neither it nor
-its old name (`+my/notify-renamed') in `+my/notify-off'."
+  "Non-nil if notifications are on, and KIND (defined) too: not turned off
+\(`+my/notify--kind-off-p')."
   (and +my/notify-enabled
        (assq kind +my/notify-kinds)
-       (not (memq kind +my/notify-off))
-       (not (seq-some (lambda (old) (eq (alist-get old +my/notify-renamed) kind)) +my/notify-off))))
+       (not (+my/notify--kind-off-p kind))))
 
 ;; EMACS IN FRONT
 (defun +my/notify-emacs-in-front-p ()
@@ -76,7 +81,7 @@ Emacs's? (See config/notify.el.)"
   "ENTRY of `+my/notify-kinds' as SPC t N lists it: its description, on or
 off, its name."
   (pcase-let ((`(,kind ,_title ,description) entry))
-    (format "%s (%s, %s)" description (if (memq kind +my/notify-off) "off" "on") kind)))
+    (format "%s (%s, %s)" description (if (+my/notify--kind-off-p kind) "off" "on") kind)))
 
 (defun +my/notify-toggle-kind (kind)
   "Turn notification KIND on or off (SPC t N: picked from them)."
@@ -89,8 +94,10 @@ off, its name."
                (user-error "No notification picked")))))
   (unless (assq kind +my/notify-kinds)
     (user-error "No notification %s" kind))
-  (setq +my/notify-off (if (memq kind +my/notify-off)
-                           (remq kind +my/notify-off)
+  ;; Off by its old name too: on again, that one dropped as well.
+  (setq +my/notify-off (if (+my/notify--kind-off-p kind)
+                           (seq-remove (lambda (off) (or (eq off kind) (eq (alist-get off +my/notify-renamed) kind)))
+                                       +my/notify-off)
                          (cons kind +my/notify-off)))
   (message "%s: %s" (nth 1 (alist-get kind +my/notify-kinds))
-           (if (memq kind +my/notify-off) "off" "on")))
+           (if (+my/notify--kind-off-p kind) "off" "on")))

@@ -57,7 +57,17 @@ none off, what's shown recorded in `+test-notify--shown'."
       (should-not (+my/notify-on-p 'agent-workspace-hand))
       (should (+my/notify-on-p 'agent-shell-permission)))
     (let ((+my/notify-off '(agent-shell-turn-done)))
-      (should-not (+my/notify-on-p 'agent-shell-turn-done)))))
+      (should-not (+my/notify-on-p 'agent-shell-turn-done)))
+    ;; SPC t N says it off, and turns it on, its old name dropped too
+    ;; (doom-djc.29).
+    (let ((+my/notify-off '(claude)))
+      (should (string-match-p "(off, agent-shell-message)"
+                              (+my/notify--kind-label (assq 'agent-shell-message +my/notify-kinds))))
+      (+my/notify-toggle-kind 'agent-shell-message)
+      (should-not +my/notify-off)
+      (should (+my/notify-on-p 'agent-shell-message))
+      (+my/notify-toggle-kind 'agent-shell-message)
+      (should-not (+my/notify-on-p 'agent-shell-message)))))
 
 (ert-deftest notify/keys ()
   (should (eq (lookup-key doom-leader-map (kbd "t n")) #'+my/notify-toggle))
