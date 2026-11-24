@@ -67,7 +67,7 @@ at with it."
         :actions (mapcar (lambda (option) (list :label option :prompt option)) options)))
 
 ;; AN AGENT'S QUESTION, ANSWERED HERE: its form in its session (agent-shell's
-;; elicitation: AskUserQuestion's), as Agent UI's own: one question with
+;; elicitation: Claude Code's AskUserQuestion's, any agent's), as Agent UI's own: one question with
 ;; options a choice (several, a multi-select; a note, its free answer), more
 ;; a form (selects, text, numbers, yes or no); answered as its form's Submit
 ;; does (agent-shell's own: its required answers checked). One it can't draw

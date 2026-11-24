@@ -191,7 +191,7 @@ first of *Beads: NAME*, *Beads: PARENT/NAME* and *Beads: PATH* no buffer has."
 
 ;; An issue's buffer notes its issue (`beads-detail-open'), then turns to vui's
 ;; mode to draw it: a mode change forgets a buffer's variables, so it forgot
-;; which issue it shows (gr: "No issue to refresh"; Claude's bd commands
+;; which issue it shows (gr: "No issue to refresh"; an agent's bd commands
 ;; didn't refresh it; C-c C-a found no issue). Kept across it.
 (put 'beads-detail--current-issue-id 'permanent-local t)
 (put 'beads-detail--current-issue 'permanent-local t)

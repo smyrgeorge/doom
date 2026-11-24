@@ -2,7 +2,7 @@
 ;; Git colours kept up to date. Loaded from config/treemacs.el.
 
 ;; Refresh git colors when a repo changes outside a save in Emacs, e.g. a commit
-;; from the CLI or Claude Code. Watch each project's .git directory: git updates
+;; from the CLI or an agent. Watch each project's .git directory: git updates
 ;; its index/HEAD via lock-file renames, which kqueue does report. Also refresh
 ;; when Emacs regains focus, and re-check a file after it is reverted (edited
 ;; outside Emacs). Debounced; a short cooldown avoids a loop when `git status'

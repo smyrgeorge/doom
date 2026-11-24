@@ -2069,7 +2069,7 @@ selected; to fullscreen, the pane used last in front."
   (should (memq #'+my/tiling-close-pane-h (default-value 'kill-buffer-hook)))
   ;; The applications, by name; all of them chosen.
   (should (equal (mapcar #'car +my/tiling-known-apps)
-                 '(claude terminal preview drawings magit issues agent-ui html)))
+                 '(agent-shell terminal preview drawings magit issues agent-ui html)))
   (should (eq (default-value '+my/tiling-apps) 'all))
   (let ((+my/tiling-apps 'all))
     (should (equal (mapcar (lambda (app) (if (consp app) (car app) app)) (+my/tiling--apps))
@@ -2081,6 +2081,9 @@ selected; to fullscreen, the pane used last in front."
 (ert-deftest tiling/apps-chosen-by-name ()
   "A list of names: those applications only, their modes as known (a
 predicate kept); all: every one."
+  (let ((+my/tiling-apps '(agent-shell magit)))
+    (should (equal (+my/tiling--apps) '(agent-shell-mode (magit-mode . +my/tiling-magit-new-pane-p)))))
+  ;; Its old name (claude): still agent-shell.
   (let ((+my/tiling-apps '(claude magit)))
     (should (equal (+my/tiling--apps) '(agent-shell-mode (magit-mode . +my/tiling-magit-new-pane-p)))))
   (let ((+my/tiling-apps '(issues)))
@@ -2116,23 +2119,24 @@ window...), and isn't one otherwise: not Doom's real buffer for it."
 ones it knows; all, or known names: none."
   (let (warned)
     (cl-letf (((symbol-function 'display-warning) (lambda (type message &rest _) (push (list type message) warned))))
-      (let ((+my/tiling-apps '(claude termnal)))
+      (let ((+my/tiling-apps '(agent-shell termnal)))
         (+my/tiling--check-apps))
       (should (equal (car warned)
-                     '(tiling "+my/tiling-apps: no application termnal; it's all, or a list of: claude, terminal, preview, drawings, magit, issues, agent-ui, html")))
+                     '(tiling "+my/tiling-apps: no application termnal; it's all, or a list of: agent-shell, terminal, preview, drawings, magit, issues, agent-ui, html")))
       (let ((+my/tiling-apps 'default))
         (+my/tiling--check-apps))
       (should (string-match-p "no application default;" (cadr (car warned))))
       (setq warned nil)
       (let ((+my/tiling-apps 'all)) (+my/tiling--check-apps))
       (let ((+my/tiling-apps '(claude magit))) (+my/tiling--check-apps))
+      (let ((+my/tiling-apps '(agent-shell magit))) (+my/tiling--check-apps))
       (should-not warned))))
 
 (ert-deftest tiling/apps-in-customize ()
   "M-x customize-variable +my/tiling-apps: all, or the names ticked."
   (should (equal (get '+my/tiling-apps 'custom-type)
                  '(choice (const :tag "All of them" all)
-                          (set :tag "These" (const claude) (const terminal) (const preview) (const drawings)
+                          (set :tag "These" (const agent-shell) (const terminal) (const preview) (const drawings)
                                (const magit) (const issues) (const agent-ui) (const html)))))
   (should (custom-variable-p '+my/tiling-apps)))
 

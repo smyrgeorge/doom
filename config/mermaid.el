@@ -13,7 +13,7 @@
 ;; Doom's cache), SPC m f a file you pick. SPC m o opens the buffer (or the region) in Mermaid's Live Editor,
 ;; in the browser; SPC m d Mermaid's docs. Org's #+begin_src mermaid :file
 ;; x.svg blocks draw with C-c C-c. ```mermaid blocks are coloured by
-;; mermaid-mode in Markdown files and Claude Code's replies (as any language
+;; mermaid-mode in Markdown files and agents' replies (as any language
 ;; whose mode is there).
 (add-to-list 'auto-mode-alist '("\\.mermaid\\'" . mermaid-mode))
 

@@ -35,7 +35,7 @@
 ;;                  goes into the menu of its ⋯ button
 ;;   Option+Enter   the actions menu (config/editor/actions.el): for the selected
 ;;                  text, copy, search the PDF or the web, explain it with
-;;                  Claude or add it to Claude's prompt (with the file and
+;;                  your agent or add it to its prompt (with the file and
 ;;                  page); Preview, print
 ;;   SPC m p        open it in macOS's Preview (to sign, annotate...)
 ;;   Cmd+P          print it, in Preview's print dialog

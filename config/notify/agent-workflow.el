@@ -17,12 +17,12 @@ click opening its pane."
 (add-hook 'agent-workflow-needs-you-functions #'+my/notify-agent-workflow--needs-you)
 
 ;; A run's agent asking in its session (a permission, a question), its turn
-;; over, an error: its run says what needs you (above), Claude Code's kinds
+;; over, an error: its run says what needs you (above), agent-shell's kinds
 ;; don't say it again.
 (defun +my/notify-agent-workflow--own-p (buffer)
   "Non-nil if BUFFER is a run's agent's session. In
-`+my/notify-claude-own-functions'."
+`+my/notify-agent-shell-own-functions'."
   (and (boundp 'agent-workflow--agent)
        (buffer-local-value 'agent-workflow--agent buffer)))
 
-(add-hook '+my/notify-claude-own-functions #'+my/notify-agent-workflow--own-p)
+(add-hook '+my/notify-agent-shell-own-functions #'+my/notify-agent-workflow--own-p)

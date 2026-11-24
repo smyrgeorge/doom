@@ -8,11 +8,22 @@
 about (in SPC t N). Defining it again replaces it."
   (setf (alist-get kind +my/notify-kinds) (list title description)))
 
+(defconst +my/notify-renamed
+  '((claude . agent-shell-message) (claude-turn-done . agent-shell-turn-done)
+    (claude-permission . agent-shell-permission) (claude-question . agent-shell-question)
+    (agent-hand . agent-workspace-hand) (agent-done . agent-workspace-done)
+    (agent-stuck . agent-workspace-stuck) (agent-message . agent-workspace-message)
+    (agent-napping . agent-workspace-napping))
+  "Kinds renamed: (OLD . NEW), an old one in `+my/notify-off' still turning
+its new one off.")
+
 (defun +my/notify-on-p (kind)
-  "Non-nil if notifications are on, and KIND (defined) too."
+  "Non-nil if notifications are on, and KIND (defined) too: neither it nor
+its old name (`+my/notify-renamed') in `+my/notify-off'."
   (and +my/notify-enabled
        (assq kind +my/notify-kinds)
-       (not (memq kind +my/notify-off))))
+       (not (memq kind +my/notify-off))
+       (not (seq-some (lambda (old) (eq (alist-get old +my/notify-renamed) kind)) +my/notify-off))))
 
 ;; EMACS IN FRONT
 (defun +my/notify-emacs-in-front-p ()
@@ -32,14 +43,15 @@ frame (it's no window: its focus is never known)."
     (cond (window (select-window window))
           ((buffer-live-p buffer) (pop-to-buffer buffer)))))
 
-(cl-defun +my/notify (kind text &key buffer action)
+(cl-defun +my/notify (kind text &key buffer action title)
   "Notify of KIND, TEXT, if notifications and KIND are on and Emacs isn't in
 front (see config/notify.el). BUFFER: what it's about, shown on a click;
-ACTION: a function called on a click instead (Emacs brought forward first).
+ACTION: a function called on a click instead (Emacs brought forward first);
+TITLE: its title instead of KIND's (a session's agent: Claude, Codex).
 Non-nil if it was shown."
   (when (and (+my/notify-on-p kind)
              (not (+my/notify-emacs-in-front-p)))
-    (+my/os-notify (car (alist-get kind +my/notify-kinds)) text
+    (+my/os-notify (or title (car (alist-get kind +my/notify-kinds))) text
                    (cond (action (lambda ()
                                    (select-frame-set-input-focus (selected-frame))
                                    (funcall action)))

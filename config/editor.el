@@ -53,7 +53,7 @@ three times this.")
 ;; Each window has its own tabs: the buffers
 ;; shown in it, in the order they first were (Emacs's tab line, instead of
 ;; Doom's centaur-tabs, whose tab groups were per project and shared by every
-;; window). A split starts with one tab, the buffer it shows. Files, Claude
+;; window). A split starts with one tab, the buffer it shows. Files, agent
 ;; sessions, dired, magit, new buffers (SPC b N) and the buffer list (SPC b i)
 ;; get tabs; other buffers only while shown. With
 ;; Doom's workspaces, a window's tabs are the current workspace's buffers only
@@ -62,8 +62,8 @@ three times this.")
 ;; back to the tab it showed before; closing its last tab closes the window
 ;; (the frame's only one, beside side panels, shows Doom's dashboard instead).
 ;; A file is closed too once no window has it as a tab any more (asking first
-;; if it has unsaved changes); so is the buffer list (SPC b i), q too. A
-;; Claude session only leaves the tab line: close it with its own commands.
+;; if it has unsaved changes); so is the buffer list (SPC b i), q too. An
+;; agent's session only leaves the tab line: close it with its own commands.
 ;; Tabs look as they did: an icon, a bar on the current one, • when unsaved.
 ;; Right-clicking a tab: Emacs's Close and Close other tabs, and
 ;; Split Vertically (a pane on the right) and Split Horizontally (below): the
@@ -103,7 +103,7 @@ a tab (q too). The buffer list (SPC b i).")
 
 ;; THE BUFFER LIST (SPC b i)
 ;; Grouped by workspace: each buffer under the one it's in, Beads' issues and
-;; Claude Code's sessions too; one in none under Default. Without workspaces,
+;; agents' sessions too; one in none under Default. Without workspaces,
 ;; by project (Doom's).
 
 ;; The tab line drawn and closed as above (config/editor/tabs.el); none in the
@@ -128,11 +128,12 @@ a tab (q too). The buffer list (SPC b i).")
 ;;   word at point.
 ;; - Code actions: the LSP server's quick fixes and refactors for the point or
 ;;   the active region (same list as SPC c a).
-;; - Claude: send the error at point or the selection to Claude Code
-;;   (agent-shell), either as a ready prompt (fix / explain) or into the prompt
-;;   for you to finish.
+;; - Your agent (named for it: the project's session's, else yours, Claude
+;;   Code): send the error at point or the selection to it (agent-shell),
+;;   either as a ready prompt (fix / explain) or into the prompt for you to
+;;   finish.
 ;; - PDF: in a PDF (config/pdf.el, which adds its provider first), for
-;;   the selected text: copy, search the PDF or the web, Claude; Preview, print.
+;;   the selected text: copy, search the PDF or the web, the agent; Preview, print.
 ;;
 ;; Each section comes from a provider: a function that returns a list of
 ;; (GROUP LABEL FUNCTION). To add more, write a provider and
@@ -140,7 +141,7 @@ a tab (q too). The buffer list (SPC b i).")
 (defvar +my/context-action-providers
   '(+my/context-actions-spelling
     +my/context-actions-lsp
-    +my/context-actions-claude)
+    +my/context-actions-agent-shell)
   "Functions returning the actions available at point, as (GROUP LABEL FUNCTION).
 The menu shows groups in this order.")
 
@@ -298,7 +299,7 @@ An entry overrides a mode's own (set in config.el).")
   (keymap-set tab-line-tab-close-map "<tab-line> <down-mouse-1>" #'ignore))
 
 ;; OPTION+ENTER
-;; Visual state too: code actions and Claude actions work on the selection.
+;; Visual state too: code actions and the agent's actions work on the selection.
 (map! :nvi "M-RET" #'+my/context-actions)
 
 ;; Org keeps M-RET for "new heading/item".

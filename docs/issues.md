@@ -15,7 +15,7 @@ installs `bd` (Homebrew on macOS, npm on Linux). Try it: `M-x +my/example-issues
 In a project that doesn't track its issues yet, `SPC o i` and `SPC o I` offer a terminal at its root with
 `bd init --skip-agents` typed, not run: read it, run it with `RET`, then `SPC o i` again. It adds `.beads/` and
 `.gitignore` and commits them (with what's staged), and no files for AI tools (`CLAUDE.md`, `AGENTS.md`, `.codex/`,
-`.cursor/`...). Claude Code in Emacs is told about the issues anyway ([more](claude-code.md#issues-for-claude)); run
+`.cursor/`...). Claude Code in Emacs is told about the issues anyway ([more](agent-shell.md#issues-for-claude)); run
 from a terminal, after `bd setup claude`. Add `--skip-hooks` before running it to install no git hooks. The command
 typed is `+my/beads-init-command` in `config/beads.el`.
 
@@ -79,7 +79,7 @@ issues depending on it (an epic's issues, what a blocker holds up) and its comme
 ## With Claude
 
 Claude Code works with the same issues: a session in the project is told about them, your open lists follow its
-changes, and `C-c C-a` on an issue hands it to the project's session ([more](claude-code.md#issues-for-claude)).
+changes, and `C-c C-a` on an issue hands it to the project's session ([more](agent-shell.md#issues-for-claude)).
 
 ## With bd 1.x
 

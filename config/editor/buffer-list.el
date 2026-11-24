@@ -4,7 +4,7 @@
 
 ;; BY WORKSPACE
 ;; Doom's groups were projects (ibuffer-projectile), and only for buffers with
-;; a file or a folder: Beads' issues, Claude Code's sessions, Agent UI's
+;; a file or a folder: Beads' issues, agents' sessions, Agent UI's
 ;; canvases were under Default, with *Messages*, though their workspace's.
 ;; Now a group per workspace (persp-mode's: Doom's workspaces), in their
 ;; order: each buffer under the one it's in (the first, if several); a buffer

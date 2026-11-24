@@ -1349,7 +1349,7 @@ place), the page written for views to come."
           (setq-local +my/pdf--selection "some text")
           (should (equal (mapcar #'butlast (+my/context-actions-pdf))
                          '(("PDF" "Copy") ("PDF" "Search the PDF for it") ("PDF" "Search the web for it")
-                           ("Claude" "Explain selection with Claude") ("Claude" "Add selection to Claude prompt")
+                           ("Agent" "Explain selection with the agent") ("Agent" "Add selection to the agent's prompt")
                            ("PDF" "Open in Preview") ("PDF" "Print...")))))
         (should (seq-every-p (lambda (action) (functionp (nth 2 action))) (+my/context-actions-pdf)))
         (setq-local +my/pdf--selection nil)
@@ -1375,7 +1375,7 @@ place), the page written for views to come."
            (inserted nil)
            (require-fn (symbol-function 'require)))
       (+test-pdf--say (+test-pdf--xw buffer) "{\"page\":3,\"pages\":9}")
-      (cl-letf (((symbol-function '+my/claude-ask)
+      (cl-letf (((symbol-function '+my/agent-shell-ask)
                  (lambda (instruction context-fn)
                    (push (list instruction (funcall context-fn root) (current-buffer)) asked)))
                 ((symbol-function 'require)
@@ -1395,11 +1395,11 @@ place), the page written for views to come."
           (should (buffer-local-value '+my/pdf--searching buffer))
           (+test-pdf--choose buffer (concat "  " text "\n") "Search the web for it")
           (should (equal (car +test-browsed) "https://www.google.com/search?q=two%20words%20%26%20%C3%BC"))
-          (+test-pdf--choose buffer text "Explain selection with Claude")
+          (+test-pdf--choose buffer text "Explain selection with the agent")
           (should (equal asked (list (list "Explain this passage. Don't change any files."
                                            "From docs/paper.pdf, page 3:\n\n> two words & ü"
                                            buffer))))
-          (+test-pdf--choose buffer text "Add selection to Claude prompt")
+          (+test-pdf--choose buffer text "Add selection to the agent's prompt")
           (should (equal inserted (list (list :text "From docs/paper.pdf, page 3:\n\n> two words & ü"
                                               :shell-buffer 'the-shell))))
           (+test-pdf--choose buffer text "Open in Preview")
@@ -1415,7 +1415,7 @@ place), the page written for views to come."
            (xw (+test-pdf--xw buffer)))
       (+test-pdf--say xw "{\"page\":12}")
       (with-current-buffer buffer
-        (let ((context (+my/pdf--claude-context "  first line\nsecond line \n\n")))
+        (let ((context (+my/pdf--agent-context "  first line\nsecond line \n\n")))
           ;; The page when asked, not later.
           (+test-pdf--say xw "{\"page\":1}")
           (should (equal (funcall context root) "From docs/notes ü.pdf, page 12:\n\n> first line\n> second line"))
@@ -1426,13 +1426,13 @@ place), the page written for views to come."
                          (format "From %s, page 12:\n\n> first line\n> second line" (abbreviate-file-name file)))))
         ;; No page said.
         (+test-pdf--say xw "{}")
-        (should (equal (funcall (+my/pdf--claude-context "x") root) "From docs/notes ü.pdf:\n\n> x"))
+        (should (equal (funcall (+my/pdf--agent-context "x") root) "From docs/notes ü.pdf:\n\n> x"))
         (+test-pdf--say xw "{\"page\":null}")
-        (should (equal (funcall (+my/pdf--claude-context "x\n\ny") root)
+        (should (equal (funcall (+my/pdf--agent-context "x\n\ny") root)
                        "From docs/notes ü.pdf:\n\n> x\n> \n> y")))
       (with-temp-buffer
         (rename-buffer "not a file" t)
-        (should (equal (funcall (+my/pdf--claude-context "x") root)
+        (should (equal (funcall (+my/pdf--agent-context "x") root)
                        (format "From %s:\n\n> x" (buffer-name))))))))
 
 ;; ====== THE OUTLINE (o) ======

@@ -8,7 +8,7 @@
 
 ;; List project files fresh on every SPC SPC (fd / git ls-files are fast) instead
 ;; of Doom's persistent cache, which misses files created outside Emacs (CLI,
-;; Claude Code, git checkout) until `SPC p i'.
+;; an agent, git checkout) until `SPC p i'.
 (setq projectile-enable-caching nil)
 
 ;; Picking a project (SPC p p) opens its README (config/projectile/readme.el):

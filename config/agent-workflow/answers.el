@@ -13,7 +13,7 @@
 ;; ====== ITS AGENT ASKS ======
 ;; An agent asking you in its session (agent-shell's permission-request: a
 ;; tool its agent doesn't allow without asking; its elicitation-request: a
-;; question, AskUserQuestion's form) holds its turn until you answer: its
+;; question, its form: Claude Code's AskUserQuestion's) holds its turn until you answer: its
 ;; job waits for you, saying what it asks, as any wait does (the run's
 ;; state, status, its pane's Needs you, a notification). Answered, wherever
 ;; (its session, its pane), the job runs again. Its turn ending, or its

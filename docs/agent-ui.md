@@ -6,7 +6,7 @@
 > you), elements in the conversation, canvases kept with their sessions, and what the agent is told. `M-x
 > +my/example-agent-ui` shows it ([Examples](examples.md)).
 
-A coding agent (Claude Code in [agent-shell](claude-code.md)) shows you things in Emacs beyond its replies: a progress
+A coding agent (Claude Code in [agent-shell](agent-shell.md)) shows you things in Emacs beyond its replies: a progress
 bar that moves while a build runs, a table of test results filling in, a chart. It draws them on a **canvas**, a pane
 beside its session, through a small command line. Everything works in a terminal (`emacs -nw`); the GUI draws some
 elements better (charts as SVG) and has elements of its own (images, drawings, web pages).

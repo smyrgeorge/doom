@@ -142,7 +142,7 @@ CSS, JSON, YAML...), else its outline (Markdown, Dockerfile). A mode declaring n
 |---|---|---|
 | `Cmd+B` | `Ctrl+Shift+B` | Go to the declaration; on the declaration, list the usages |
 | `Cmd+[` / `Cmd+]` | `Alt+←` / `Alt+→` | Back / forward (`C-o` / `C-i` on both) |
-| `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and [Claude](claude-code.md), in one menu |
+| `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and [Claude](agent-shell.md), in one menu |
 | `SPC c ~` | `SPC c ~` | Cycle the word through snake_case, UPPER_CASE, PascalCase, camelCase and kebab-case |
 
 Spelling knows ~40k programming words and checks camelCase words part by part.

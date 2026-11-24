@@ -8,7 +8,7 @@
 ;; with two projects' lists open, the one refreshed last won, and the other
 ;; read that project's issues: its sections' separators, its P0 rows' tint,
 ;; t (toggle marks), * m, the filter by type, the preview, the issue at point
-;; sent to Claude. Each list keeps its own now (doom-o5t.5).
+;; sent to the agent. Each list keeps its own now (doom-o5t.5).
 (after! beads-list
   (make-variable-buffer-local 'beads-list--issues))
 
@@ -16,7 +16,7 @@
 ;; bd takes ~0.5 s to answer (bd list 0.35 s, bd stats 0.16 s: its database
 ;; started each time), and beads.el waits for it: Emacs froze that long every
 ;; 30 s for each open list (beads-autoupdate's timer), shown or not, after
-;; each of Claude's bd commands, and for each list after an issue's edit.
+;; each of an agent's bd commands, and for each list after an issue's edit.
 ;; Those refreshes now ask bd in the background, and redraw the list (or the
 ;; issue) once its answers came, with beads.el's own code (given them instead
 ;; of asking bd again). A buffer not shown in a window isn't refreshed: it is

@@ -23,7 +23,7 @@
   (treemacs-follow-mode +1)             ; highlight the current file (Doom: off)
   (treemacs-project-follow-mode +1))    ; show the current buffer's project
 
-;; Edits to files from outside Emacs (Claude Code, a terminal...) don't touch
+;; Edits to files from outside Emacs (an agent, a terminal...) don't touch
 ;; .git, and macOS's file notifications don't report changes to a file's
 ;; contents: treemacs only caught up when Emacs lost and regained focus. So
 ;; while Emacs has focus and treemacs is shown, check each of its projects'

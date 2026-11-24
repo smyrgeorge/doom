@@ -5,7 +5,7 @@
 ;; THE PLACE KEPT
 ;; beads.el redraws a list and puts back where it was by the buffer's
 ;; positions, and the selected window's: a refresh (the timer's, after
-;; Claude's bd commands, gr) scrolled the list when an issue came or went
+;; an agent's bd commands, gr) scrolled the list when an issue came or went
 ;; above what's in view, to another pane's place when it wasn't the selected
 ;; window, and only one window showing it got its place back. Each window
 ;; showing the list keeps it now by its issues: the one at its top, the one

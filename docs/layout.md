@@ -4,7 +4,7 @@
 |---|---|
 | `init.el`, `packages.el` | Doom modules and extra packages |
 | `config.el` | The main config; loads `config/` |
-| `config/agent-shell.el`, `agent-shell/` | [Claude Code](claude-code.md), drawing for it, its issues |
+| `config/agent-shell.el`, `agent-shell/` | [Claude Code](agent-shell.md), drawing for it, its issues |
 | `config/agent-ui.el`, `agent-ui/` | [Agent UI](agent-ui.md): what the agent shows beyond its replies (being built) |
 | `config/agent-workspace.el`, `agent-workspace/` | [Agent workspace](agent-workspace.md): a crew of agents on one project, each in its own worktree (being built) |
 | `config/agent-workflow.el`, `agent-workflow/` | [Agent workflow](agent-workflow.md): the work on an issue in jobs and steps, some an LLM (being built) |
@@ -13,7 +13,7 @@
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
 | `config/childframe.el` | Frames laid over a window: notices, the error stripe |
 | `config/editor.el`, `editor/` | [The editor](editor.md): tabs, `Option+Enter`, `Cmd+B`, the sticky header, spelling |
-| `config/emacs.el`, `emacs/` | Emacs itself: what differs between macOS and Linux ([the keys](keybindings.md), other apps, the clipboard's images, notifications), garbage collection, [profiling](claude-code.md#profiling-emacs), this config byte-compiled when Emacs is idle |
+| `config/emacs.el`, `emacs/` | Emacs itself: what differs between macOS and Linux ([the keys](keybindings.md), other apps, the clipboard's images, notifications), garbage collection, [profiling](agent-shell.md#profiling-emacs), this config byte-compiled when Emacs is idle |
 | `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
 | `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |

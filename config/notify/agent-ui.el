@@ -21,11 +21,11 @@ a similar open one."
 showing the canvas (`agent-ui-question-waiting-functions')."
   (let ((question (and (buffer-live-p canvas)
                        (agent-ui-ask-question (agent-ui-get id :canvas canvas)))))
-    ;; A crew's agent's: its raised hand says it (config/notify/crew.el).
-    (unless (and (buffer-live-p session) (+my/notify-claude--own-p session))
+    ;; A crew's agent's: its raised hand says it (config/notify/agent-workspace.el).
+    (unless (and (buffer-live-p session) (+my/notify-agent-shell--own-p session))
       (+my/notify 'agent-ui-question
                   (format "%s asks: %s"
-                          (if (buffer-live-p session) (+my/notify-claude--name session) "Claude Code")
+                          (if (buffer-live-p session) (+my/notify-agent-shell--name session) "The agent")
                           (or question "a question"))
                   :buffer canvas))))
 
@@ -39,4 +39,4 @@ its own notification (on): the turn's not said too."
        (agent-ui-questions-new session event)
        t))
 
-(add-hook '+my/notify-claude-turn-said-functions #'+my/notify-agent-ui--question-said-p)
+(add-hook '+my/notify-agent-shell-turn-said-functions #'+my/notify-agent-ui--question-said-p)

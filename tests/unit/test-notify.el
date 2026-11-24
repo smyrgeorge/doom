@@ -3,7 +3,7 @@
 ;; defined and fired, only when on and Emacs isn't in front (each frame's
 ;; focus: in front, away, not known), a click bringing Emacs forward on the
 ;; buffer, the toggles (SPC t n, SPC t N), the test notification; and Claude
-;; Code's (config/notify/claude.el): agent-shell's events, stood in for. What
+;; Code's (config/notify/agent-shell.el): agent-shell's events, stood in for. What
 ;; the desktop would show is recorded (`+my/os-notify' here,
 ;; config/emacs/os.el's own posting in tests/helper.el).
 
@@ -41,10 +41,23 @@ none off, what's shown recorded in `+test-notify--shown'."
 (ert-deftest notify/settings ()
   (should (eq (default-value '+my/notify-enabled) t))
   (should-not (default-value '+my/notify-off))
-  ;; Claude Code's, Agent UI's, an agent crew's, agent workflows', so far.
+  ;; agent-shell's, Agent UI's, an agent crew's, agent workflows', so far.
   (should (equal (mapcar #'car +my/notify-kinds)
-                 '(agent-workflow-needs-you agent-napping agent-message agent-stuck agent-done agent-hand
-                   agent-ui-question agent-ui-bug claude-question claude-permission claude-turn-done claude))))
+                 '(agent-workflow-needs-you agent-workspace-napping agent-workspace-message
+                   agent-workspace-stuck agent-workspace-done agent-workspace-hand
+                   agent-ui-question agent-ui-bug agent-shell-question agent-shell-permission
+                   agent-shell-turn-done agent-shell-message))))
+
+(ert-deftest notify/old-kinds-still-turn-them-off ()
+  "A kind renamed (claude-turn-done, agent-hand...): its old name in
+`+my/notify-off' still turns its new one off."
+  (let ((+my/notify-enabled t))
+    (let ((+my/notify-off '(claude-turn-done agent-hand)))
+      (should-not (+my/notify-on-p 'agent-shell-turn-done))
+      (should-not (+my/notify-on-p 'agent-workspace-hand))
+      (should (+my/notify-on-p 'agent-shell-permission)))
+    (let ((+my/notify-off '(agent-shell-turn-done)))
+      (should-not (+my/notify-on-p 'agent-shell-turn-done)))))
 
 (ert-deftest notify/keys ()
   (should (eq (lookup-key doom-leader-map (kbd "t n")) #'+my/notify-toggle))
@@ -198,16 +211,20 @@ subscriptions recorded in `subscribed' ((EVENT . FUNCTION)...)."
                    ((symbol-function 'agent-shell-cwd)
                     (lambda () (concat "/home/me/dev/" ,name "/"))))
            (with-current-buffer session
-             (+my/notify-claude--watch-h))
+             ;; Its agent's name, as agent-shell keeps its config: its
+             ;; notifications' title.
+             (setq-local agent-shell--state
+                         (list (cons :agent-config (list (cons :mode-line-name "Claude")))))
+             (+my/notify-agent-shell--watch-h))
            ,@body)
        (kill-buffer session))))
 
 (ert-deftest notify/claude-kinds-and-hook ()
-  (should (equal (alist-get 'claude-turn-done +my/notify-kinds)
-                 '("Claude Code" "A session finished its turn, or stopped on an error")))
-  (should (equal (alist-get 'claude-permission +my/notify-kinds)
-                 '("Claude Code" "A session asks for your permission")))
-  (should (memq #'+my/notify-claude--watch-h (default-value 'agent-shell-mode-hook))))
+  (should (equal (alist-get 'agent-shell-turn-done +my/notify-kinds)
+                 '("Agent shell" "A session finished its turn, or stopped on an error")))
+  (should (equal (alist-get 'agent-shell-permission +my/notify-kinds)
+                 '("Agent shell" "A session asks for your permission")))
+  (should (memq #'+my/notify-agent-shell--watch-h (default-value 'agent-shell-mode-hook))))
 
 (ert-deftest notify/agent-ui-bug-filed ()
   "A bug filed in Agent UI's own issues (config/notify/agent-ui.el): said while
@@ -247,11 +264,11 @@ while Emacs is away, its name and why; a click opening its pane."
         (should-not +test-notify--shown))))
   ;; A run's agent's session: its run says what needs you, not Claude
   ;; Code's kinds.
-  (should (memq #'+my/notify-agent-workflow--own-p (default-value '+my/notify-claude-own-functions)))
+  (should (memq #'+my/notify-agent-workflow--own-p (default-value '+my/notify-agent-shell-own-functions)))
   (with-temp-buffer
-    (should-not (+my/notify-claude--own-p (current-buffer)))
+    (should-not (+my/notify-agent-shell--own-p (current-buffer)))
     (setq-local agent-workflow--agent 'an-agent)
-    (should (+my/notify-claude--own-p (current-buffer)))))
+    (should (+my/notify-agent-shell--own-p (current-buffer)))))
 
 (ert-deftest notify/claude-finished-its-turn ()
   "A session's turn complete: named by its project, why it stopped; a click
@@ -268,7 +285,7 @@ shows the session."
                          ("odd" . "doom: stopped (odd)")))
           (setq +test-notify--shown nil)
           (funcall done `((:event . turn-complete) (:data (:stop-reason . ,reason))))
-          (should (equal (mapcar #'butlast +test-notify--shown) `(("Claude Code" ,text)))))
+          (should (equal (mapcar #'butlast +test-notify--shown) `(("Claude" ,text)))))
         (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
           (funcall (nth 2 (car +test-notify--shown)))
           (should (eq (window-buffer (selected-window)) session)))))))
@@ -286,9 +303,9 @@ nothing."
         (funcall failed '((:event . error) (:data (:code . -32603) (:message . " Rate limit reached\nTry later "))))
         (funcall failed '((:event . error) (:data (:code . -32603) (:message))))
         (should (equal (mapcar #'butlast +test-notify--shown)
-                       '(("Claude Code" "doom: stopped on an error")
-                         ("Claude Code" "doom: stopped: Rate limit reached")
-                         ("Claude Code" "doom: stopped: Overloaded"))))
+                       '(("Claude" "doom: stopped on an error")
+                         ("Claude" "doom: stopped: Rate limit reached")
+                         ("Claude" "doom: stopped: Overloaded"))))
         (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
           (funcall (nth 2 (car +test-notify--shown)))
           (should (eq (window-buffer (selected-window)) session))))))
@@ -312,15 +329,15 @@ nothing."
                         (:data (:tool-call (:title . "Run npm test")))))
         (funcall asks '((:event . permission-request) (:data (:tool-call (:title . ""))))))
       (should (equal (mapcar #'butlast +test-notify--shown)
-                     '(("Claude Code" "rskit needs your permission")
-                       ("Claude Code" "rskit needs your permission: Run npm test")))))))
+                     '(("Claude" "rskit needs your permission")
+                       ("Claude" "rskit needs your permission: Run npm test")))))))
 
 (ert-deftest notify/claude-asks-a-question ()
   "A session asking you a question in its conversation (agent-shell's
 elicitation-request, a form; its turn waits for the answer, no turn-complete
 coming): the question, its first line; a click shows the session (doom-4zw)."
-  (should (equal (alist-get 'claude-question +my/notify-kinds)
-                 '("Claude Code" "A session asks you a question")))
+  (should (equal (alist-get 'agent-shell-question +my/notify-kinds)
+                 '("Agent shell" "A session asks you a question")))
   (+test-notify nil
     (+test-notify--session "rskit"
       (let ((asks (alist-get 'elicitation-request subscribed)))
@@ -329,8 +346,8 @@ coming): the question, its first line; a click shows the session (doom-4zw)."
                         (:data (:request-id . 7) (:message . "  Which approach?\nA or B.  "))))
         (funcall asks '((:event . elicitation-request) (:data (:request-id . 8) (:message))))
         (should (equal (mapcar #'butlast +test-notify--shown)
-                       '(("Claude Code" "rskit asks you a question")
-                         ("Claude Code" "rskit asks: Which approach?"))))
+                       '(("Claude" "rskit asks you a question")
+                         ("Claude" "rskit asks: Which approach?"))))
         (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
           (funcall (nth 2 (car +test-notify--shown)))
           (should (eq (window-buffer (selected-window)) session))))))
@@ -364,7 +381,7 @@ showing the canvas; said instead of the turn's end, not with it."
   (should (equal (alist-get 'agent-ui-question +my/notify-kinds)
                  '("Agent UI" "A question waits for you on a canvas")))
   (should (memq #'+my/notify-agent-ui--question (default-value 'agent-ui-question-waiting-functions)))
-  (should (memq #'+my/notify-agent-ui--question-said-p (default-value '+my/notify-claude-turn-said-functions)))
+  (should (memq #'+my/notify-agent-ui--question-said-p (default-value '+my/notify-agent-shell-turn-said-functions)))
   (let* ((agent-ui-display-function #'ignore)
          ;; A canvas of its own, not the default one.
          (name (make-temp-name "notify-"))
@@ -412,7 +429,9 @@ showing the canvas; said instead of the turn's end, not with it."
   `(let ((sessions (mapcar (lambda (dir)
                              (with-current-buffer (generate-new-buffer "*claude-code @ test*")
                                (setq-local major-mode 'agent-shell-mode
-                                           +test-notify--cwd dir)
+                                           +test-notify--cwd dir
+                                           agent-shell--state
+                                           (list (cons :agent-config (list (cons :mode-line-name "Claude")))))
                                (current-buffer)))
                            ,dirs)))
      (unwind-protect
@@ -427,21 +446,22 @@ session (the one working in the directory given)."
     (+test-notify nil
       (+test-notify--sessions (list (+test-tmp-file "dev/doom/") (+test-tmp-file "dev/rskit/"))
         (mapc (lambda (dir) (make-directory dir t)) (list (+test-tmp-file "dev/doom/") (+test-tmp-file "dev/rskit/")))
-        (should (+my/notify-claude "The tests pass" (+test-tmp-file "dev/rskit")))
-        (should (equal (mapcar #'butlast +test-notify--shown) '(("Claude Code" "rskit: The tests pass"))))
+        (should (+my/notify-agent-shell "The tests pass" (+test-tmp-file "dev/rskit")))
+        (should (equal (mapcar #'butlast +test-notify--shown) '(("Claude" "rskit: The tests pass"))))
         (cl-letf (((symbol-function 'select-frame-set-input-focus) #'ignore))
           (funcall (nth 2 (car +test-notify--shown)))
           (should (eq (window-buffer (selected-window)) (nth 1 sessions))))))))
 
 (ert-deftest notify/claude-s-message-without-a-session ()
   "A directory no session works in: named by its folder, nothing to show on
-a click; no directory, or the root (no folder's name): the message alone."
+a click; no directory, or the root (no folder's name): the message alone;
+no session, its kind's title (Agent shell)."
   (+test-notify nil
-    (+my/notify-claude "Deployed" "/home/me/dev/pas-workspace/")
-    (+my/notify-claude "Hello")
-    (+my/notify-claude "x" "/")
+    (+my/notify-agent-shell "Deployed" "/home/me/dev/pas-workspace/")
+    (+my/notify-agent-shell "Hello")
+    (+my/notify-agent-shell "x" "/")
     (should (equal (mapcar #'butlast +test-notify--shown)
-                   '(("Claude Code" "x") ("Claude Code" "Hello") ("Claude Code" "pas-workspace: Deployed"))))
+                   '(("Agent shell" "x") ("Agent shell" "Hello") ("Agent shell" "pas-workspace: Deployed"))))
     (should-not (seq-some (lambda (shown) (nth 2 shown)) +test-notify--shown))))
 
 (ert-deftest notify/claude-two-sessions-in-one-folder ()
@@ -459,53 +479,53 @@ the last used; a click shows it."
           (with-current-buffer (nth 1 sessions) (rename-buffer "Claude<2>"))
           (cl-letf (((symbol-function 'shell-maker-busy) (lambda () (eq (current-buffer) busy)))
                     ((symbol-function 'select-frame-set-input-focus) #'ignore))
-            (should (equal (mapcar #'+my/notify-claude--name sessions) '("doom · Claude" "doom · Claude<2>")))
+            (should (equal (mapcar #'+my/notify-agent-shell--name sessions) '("doom · Claude" "doom · Claude<2>")))
             ;; The first used last; the second's turn running: its message.
             (switch-to-buffer (nth 0 sessions))
             (setq busy (nth 1 sessions))
-            (should (+my/notify-claude "b's tests pass" dir))
+            (should (+my/notify-agent-shell "b's tests pass" dir))
             (should (equal (cadr (car +test-notify--shown)) "doom · Claude<2>: b's tests pass"))
             (switch-to-buffer "*scratch*")
             (funcall (nth 2 (car +test-notify--shown)))
             (should (eq (window-buffer (selected-window)) (nth 1 sessions)))
             ;; Named by the caller, as a buffer or its name.
-            (should (+my/notify-claude "a's done" dir (nth 0 sessions)))
+            (should (+my/notify-agent-shell "a's done" dir (nth 0 sessions)))
             (should (equal (cadr (car +test-notify--shown)) "doom · Claude: a's done"))
-            (should (+my/notify-claude "b's done" dir "Claude<2>"))
+            (should (+my/notify-agent-shell "b's done" dir "Claude<2>"))
             (should (equal (cadr (car +test-notify--shown)) "doom · Claude<2>: b's done"))
             ;; One left: its folder again.
             (kill-buffer (nth 1 sessions))
-            (should (equal (+my/notify-claude--name (nth 0 sessions)) "doom"))))))))
+            (should (equal (+my/notify-agent-shell--name (nth 0 sessions)) "doom"))))))))
 
 (ert-deftest notify/claude-s-message-as-every-notification ()
   "Emacs in front, or its kind off: not shown (nil, what emacsclient prints);
 no message: an error."
   (+test-notify t
-    (should-not (+my/notify-claude "x")))
+    (should-not (+my/notify-agent-shell "x")))
   (+test-notify nil
     (let ((+my/notify-off '(claude)))
-      (should-not (+my/notify-claude "x")))
+      (should-not (+my/notify-agent-shell "x")))
     (should-not +test-notify--shown)
-    (should-error (+my/notify-claude "  ") :type 'user-error)
-    (should-error (+my/notify-claude nil) :type 'user-error)))
+    (should-error (+my/notify-agent-shell "  ") :type 'user-error)
+    (should-error (+my/notify-agent-shell nil) :type 'user-error)))
 
 (ert-deftest notify/claude-is-told-how-to-notify ()
   "What Claude Code is told about Emacs gets how to notify, once (loaded
 again: not twice)."
   (let ((+my/agent-shell-context "About Emacs."))
-    (+test-load "config/notify/claude")
-    (+test-load "config/notify/claude")
+    (+test-load "config/notify/agent-shell")
+    (+test-load "config/notify/agent-shell")
     (should (string-prefix-p "About Emacs.\n\nNotifications: " +my/agent-shell-context))
     (should (= (with-temp-buffer
                  (insert +my/agent-shell-context)
                  (count-matches "Notifications: " (point-min) (point-max)))
                1))
-    (should (string-search "emacsclient --eval '(+my/notify-claude " +my/agent-shell-context))
+    (should (string-search "emacsclient --eval '(+my/notify-agent-shell " +my/agent-shell-context))
     ;; Not those it gets already: a turn's end, a permission, a question.
     (should (string-search "when you finish a turn, when you ask for permission and when you ask a question in the conversation: don't send those again"
                            +my/agent-shell-context))))
 
-;; ====== AN AGENT CREW'S (config/notify/crew.el) ======
+;; ====== AN AGENT CREW'S (config/notify/agent-workspace.el) ======
 
 (+test-load "config/agent-workspace")
 
@@ -528,12 +548,13 @@ forgotten; a click's selection recorded in `selected'."
          (kill-buffer session)))))
 
 (ert-deftest notify/crew-kinds ()
-  (dolist (kind '(agent-hand agent-done agent-stuck agent-message agent-napping))
+  (dolist (kind '(agent-workspace-hand agent-workspace-done agent-workspace-stuck agent-workspace-message
+                  agent-workspace-napping))
     (should (assq kind +my/notify-kinds)))
   (should (memq #'+my/notify-crew--state-h agent-workspace-state-change-functions))
   (should (memq #'+my/notify-crew--nap-h agent-workspace-nap-functions))
   (should (memq #'+my/notify-crew--watch agent-workspace-session-functions))
-  (should (memq #'+my/notify-crew--own-p +my/notify-claude-own-functions)))
+  (should (memq #'+my/notify-crew--own-p +my/notify-agent-shell-own-functions)))
 
 (ert-deftest notify/crew-a-hand-raised ()
   "A hand raised: named by the agent, saying what it wants; a click opens its
@@ -593,10 +614,10 @@ within `+my/notify-crew-quiet' seconds."
   "A crew's agent's session: Claude Code's kinds leave it (no notification
 twice); its own message named by the agent."
   (+test-notify-crew
-    (should (+my/notify-claude--own-p session))
+    (should (+my/notify-agent-shell--own-p session))
     (with-temp-buffer
-      (should-not (+my/notify-claude--own-p (current-buffer))))
-    (should (+my/notify-claude "The tests pass" "/tmp/project/.agent-shell/worktrees/ada/" session))
+      (should-not (+my/notify-agent-shell--own-p (current-buffer))))
+    (should (+my/notify-agent-shell "The tests pass" "/tmp/project/.agent-shell/worktrees/ada/" session))
     (should (equal (mapcar #'butlast +test-notify--shown) '(("Agent crew" "ada (builder): The tests pass"))))))
 
 (ert-deftest notify/crew-off-or-in-front ()

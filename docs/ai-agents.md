@@ -48,4 +48,4 @@ file as Claude Code's own agents are) and its own worktree: the [agent workspace
 ## Without installing
 
 The message `SPC h T` shows when it stops, also copied, says where the profile and the skill are. Paste it to any
-agent, and it reads the skill first (see [Profiling Emacs](claude-code.md#profiling-emacs)).
+agent, and it reads the skill first (see [Profiling Emacs](agent-shell.md#profiling-emacs)).

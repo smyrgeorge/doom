@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/agent-ui.el -*- lexical-binding: t; -*-
-;; Agent UI: what a coding agent (Claude Code in agent-shell) shows you in
+;; Agent UI: what a coding agent (yours, in agent-shell) shows you in
 ;; Emacs beyond its replies: progress bars, tables, charts, on a canvas beside
 ;; its session, updated as things change (docs/agent-ui.md). Loaded from
 ;; config.el; its code is in config/agent-ui/.
@@ -98,7 +98,7 @@
         (+my/beads-file-bug title description :from library :labels '("agent-ui") :new new)))
 
 ;; WHAT THE AGENT IS TOLD
-;; Claude Code's system prompt in agent-shell (config/agent-shell/context.el)
+;; What every session in agent-shell is told (config/agent-shell/context.el)
 ;; gets a paragraph on the canvas (`agent-ui-agent-context'): what it's for, the
 ;; command, and the skill to read before using it (skills/agent-ui/SKILL.md:
 ;; its types, with examples). Only while Emacs runs a server.

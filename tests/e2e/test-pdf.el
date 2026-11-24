@@ -568,8 +568,11 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
       (should (member '("PDF" "Copy") actions))
       (should (member '("PDF" "Search the PDF for it") actions))
       (should (member '("PDF" "Search the web for it") actions))
-      (should (member '("Claude" "Explain selection with Claude") actions))
-      (should (member '("Claude" "Add selection to Claude prompt") actions))
+      ;; Named for the agent (Claude, Codex; agent-shell not loaded: the agent).
+      (let* ((name (+my/context-actions--agent))
+             (group (if (equal name "the agent") "Agent" name)))
+        (should (member (list group (format "Explain selection with %s" name)) actions))
+        (should (member (list group (format "Add selection to %s's prompt" name)) actions)))
       (should (member (list "PDF" (concat "Open in " (+my/os-app-name 'viewer))) actions))
       (should (member '("PDF" "Print...") actions)))
     ;; The provider comes first in the menu (config/editor.el's list).
@@ -586,7 +589,7 @@ var s = getSelection(); s.removeAllRanges(); s.addRange(r); String(s).trim()"
     (+test-pdf--open +test-pdf--book)
     (+my/pdf-next-page)
     (should (+test-pdf--wait-page 2))
-    (let ((text (funcall (+my/pdf--claude-context "Some  quoted\ntext ")
+    (let ((text (funcall (+my/pdf--agent-context "Some  quoted\ntext ")
                          (file-name-directory +test-pdf--book))))
       (should (equal text "From book.pdf, page 2:\n\n> Some  quoted\n> text")))))
 

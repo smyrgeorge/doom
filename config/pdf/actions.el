@@ -33,8 +33,8 @@ not inside it."
       (unwind-protect (+my/context-actions)
         (setq +my/pdf--selection nil)))))
 
-(defun +my/pdf--claude-context (text)
-  "For `+my/claude-ask': TEXT quoted, after the PDF's file and page."
+(defun +my/pdf--agent-context (text)
+  "For `+my/agent-shell-ask': TEXT quoted, after the PDF's file and page."
   (let ((file buffer-file-name)
         (page (plist-get (+my/pdf--state) :page)))
     (lambda (cwd)
@@ -47,11 +47,13 @@ not inside it."
                 (replace-regexp-in-string "^" "> " (string-trim text)))))))
 
 (defun +my/context-actions-pdf ()
-  "In a PDF: for its selected text, copy, search the PDF or the web, Claude;
-always Preview and print."
+  "In a PDF: for its selected text, copy, search the PDF or the web, the
+agent (named for it: `+my/context-actions--agent'); always Preview and print."
   (when (derived-mode-p '+my/pdf-mode)
-    (let ((text +my/pdf--selection)
-          (buffer (current-buffer)))
+    (let* ((text +my/pdf--selection)
+           (buffer (current-buffer))
+           (name (+my/context-actions--agent))
+           (group (if (equal name "the agent") "Agent" name)))
       (append
        (when text
          (list (list "PDF" "Copy" (lambda () (+my/webkit-copied text)))
@@ -62,17 +64,17 @@ always Preview and print."
                        (require 'url-util)
                        (browse-url (concat "https://www.google.com/search?q="
                                            (url-hexify-string (string-trim text))))))
-               (list "Claude" "Explain selection with Claude"
+               (list group (format "Explain selection with %s" name)
                      (lambda ()
                        (with-current-buffer buffer
-                         (+my/claude-ask "Explain this passage. Don't change any files."
-                                         (+my/pdf--claude-context text)))))
-               (list "Claude" "Add selection to Claude prompt"
+                         (+my/agent-shell-ask "Explain this passage. Don't change any files."
+                                              (+my/pdf--agent-context text)))))
+               (list group (format "Add selection to %s's prompt" name)
                      (lambda ()
                        (with-current-buffer buffer
                          (require 'agent-shell)
                          (agent-shell-insert
-                          :text (funcall (+my/pdf--claude-context text) (agent-shell-cwd))
+                          :text (funcall (+my/pdf--agent-context text) (agent-shell-cwd))
                           :shell-buffer (agent-shell-shell-buffer)))))))
        (list (list "PDF" (concat "Open in " (+my/os-app-name 'viewer))
                    (lambda () (with-current-buffer buffer (+my/pdf-open-in-preview))))

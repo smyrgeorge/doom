@@ -22,7 +22,7 @@ issues with Beads (a .beads/ folder there)."
         (when (eql 0 (ignore-errors (apply #'call-process "bd" nil '(t nil) nil args)))
           (string-trim (buffer-string)))))))
 
-;; WHAT CLAUDE IS TOLD (a session's system prompt, config/agent-shell/context.el)
+;; WHAT THE AGENT IS TOLD (config/agent-shell/context.el)
 
 ;; Beads' guide once: a project whose Claude Code settings run bd prime as a
 ;; session starts (a SessionStart hook: `bd setup claude' adds one; this
@@ -79,8 +79,8 @@ above); else nil."
 
 (add-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context t)
 
-;; EMACS FOLLOWS CLAUDE'S CHANGES
-;; Each of Claude's shell commands running bd, once done: the project's issue
+;; EMACS FOLLOWS THE AGENT'S CHANGES
+;; Each of the agent's shell commands running bd, once done: the project's issue
 ;; lists and issues open in Emacs refreshed (once for a burst of them in that
 ;; project, each project its own: one for all refreshed only the last one's),
 ;; in the background (config/beads/refresh.el: those not shown, once shown
@@ -129,7 +129,7 @@ refreshes ROOT's issues soon."
 
 (defun +my/agent-shell-beads--watch-h ()
   "In a new session in a project tracking its issues with Beads: follow
-Claude's bd commands (see above)."
+the agent's bd commands (see above)."
   (when-let* ((root (+my/agent-shell-beads--root)))
     (agent-shell-subscribe-to
      :shell-buffer (current-buffer)

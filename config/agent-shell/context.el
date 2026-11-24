@@ -115,7 +115,7 @@ no system prompt, what it's told first (`+my/agent-shell--context-pending')."
 ;; SVG's source, its selection replaced by the whole file. In dired, those of
 ;; the region, else the marked ones: with none marked, dired gives the file at
 ;; point (even . or .., the folder itself or its parent), which went into
-;; every session started there. Sending a file to Claude
+;; every session started there. Sending a file to the agent
 ;; (agent-shell-send-file) is as agent-shell has it: the file at point too.
 (defun +my/agent-shell--dired-files ()
   "Dired's files for a session: the region's, else the marked ones; nil with

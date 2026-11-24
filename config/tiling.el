@@ -48,7 +48,7 @@
 ;; but one resized with SPC w } / {; Emacs gave the closed one's rows to its
 ;; neighbour).
 ;; TILING FIRST (config/tiling/apps.el)
-;; - Applications (`+my/tiling-known-apps': Claude Code, the terminal, the
+;; - Applications (`+my/tiling-known-apps': your agent's sessions, the terminal, the
 ;;   Markdown and Mermaid previews, magit, drawings, issues, Agent UI's canvas, a page in
 ;;   WebKit; those chosen in config.el, `+my/tiling-apps') open in a new pane where the strategy
 ;;   puts it, whatever their own setting or Doom's popup rules say; one shown
@@ -64,7 +64,7 @@
 ;; - Applications then behave as any buffer: a file opened in their pane is a
 ;;   tab there, they keep theirs (shown again when its tab closes).
 ;; - Files open as a tab in the current pane, always: an application's too (a
-;;   link in Claude Code, RET in magit or SPC g d's diff, SPC SPC there), one
+;;   link in a session, RET in magit or SPC g d's diff, SPC SPC there), one
 ;;   asked for in another window too, Doom's terminal's pane too. From a popup
 ;;   or a side panel (the sidebar, *Help*), in the pane used last (a new pane
 ;;   without one). Git's own (a commit message, the rebase todo: in .git/,
@@ -72,9 +72,9 @@
 ;; - A pane closes with its last tab: its tab closed (config/editor/tabs.el)
 ;;   or its buffer killed (SPC b k, a terminal's shell ending), but the
 ;;   frame's last pane.
-;; Without this file (config.el not loading it), each opens as it did: Claude
-;; Code in the current window, the terminal as Doom's popup, the preview and
-;; the diff on the right, a drawing for Claude on its shell's left.
+;; Without this file (config.el not loading it), each opens as it did: a
+;; session in the current window, the terminal as Doom's popup, the preview and
+;; the diff on the right, a drawing for the agent on its shell's left.
 ;; Strategies:
 ;; - tall: the first pane is the main one, on the left (`+my/tiling-tall-ratio'
 ;;   of the width), the others stacked on the right at equal heights. The
@@ -138,12 +138,13 @@ ALONE above).")
 
 ;; APPLICATIONS, by name (see TILING FIRST above). Which are is chosen in
 ;; config.el: (setq +my/tiling-apps 'all), every one of them (the default), or
-;; a list of names, '(claude magit); M-x customize-variable +my/tiling-apps
+;; a list of names, '(agent-shell magit); M-x customize-variable +my/tiling-apps
 ;; ticks them. One left out opens as it would without tiling (the terminal as
 ;; Doom's popup...) and isn't one otherwise either (no tab kept under a file,
-;; not added to the workspace). A name unknown: a warning at startup.
+;; not added to the workspace). A name unknown: a warning at startup; an old
+;; one (claude: agent-shell) is still its application's (`+my/tiling-renamed-apps').
 (defvar +my/tiling-known-apps
-  '((claude agent-shell-mode)                       ; Claude Code (SPC o c, SPC o C)
+  '((agent-shell agent-shell-mode)                  ; your agent's sessions (SPC o c, SPC o C)
     (terminal ghostel-mode)                         ; the terminal (SPC o t)
     (preview +md-preview-page-mode                  ; the Markdown preview (SPC m p)
              +my/mermaid-preview-page-mode          ; a Mermaid file's (SPC m p)
@@ -161,6 +162,9 @@ each MODE a major mode (and the modes derived from it), whose buffers open in
 a new pane; or (MODE . PREDICATE), MODE's buffers an application's, opening
 in a new pane when PREDICATE, called in the buffer being shown, says so
 \(else as they ask).")
+
+(defconst +my/tiling-renamed-apps '((claude . agent-shell))
+  "Applications renamed: (OLD . NEW), OLD in `+my/tiling-apps' still NEW.")
 
 (defcustom +my/tiling-apps 'all
   "The applications (see APPLICATIONS above): all, every one of

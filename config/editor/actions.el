@@ -56,12 +56,24 @@
     (activate-mark)
     (funcall fn)))
 
-(defun +my/claude-ask (instruction context-fn)
-  "Submit INSTRUCTION plus the context from CONTEXT-FN to Claude Code.
-CONTEXT-FN runs in the current buffer with the project directory as argument
-and returns agent-shell's context text (a file:line link plus the code or the
-diagnostic). Starts a Claude shell if the project has none; if Claude is busy,
-the prompt is queued and sent when it finishes."
+(defun +my/context-actions--agent ()
+  "The agent a prompt sent from here goes to, as the actions name it: the
+project's session's (its config's name: Claude, Codex), else your agent's
+\(`agent-shell-preferred-agent-config'); \"the agent\" when not known
+\(agent-shell not loaded yet)."
+  (or (and (featurep 'agent-shell)
+           (or (when-let* ((shell (car (ignore-errors (agent-shell-project-buffers)))))
+                 (map-nested-elt (buffer-local-value 'agent-shell--state shell) '(:agent-config :mode-line-name)))
+               (map-elt (ignore-errors (agent-shell--resolve-preferred-config)) :mode-line-name)))
+      "the agent"))
+
+(defun +my/agent-shell-ask (instruction context-fn)
+  "Submit INSTRUCTION plus the context from CONTEXT-FN to the project's
+session, whatever its agent. CONTEXT-FN runs in the current buffer with the
+project directory as argument and returns agent-shell's context text (a
+file:line link plus the code or the diagnostic). Starts a session with your
+agent if the project has none; if it's busy, the prompt is queued and sent
+when it finishes."
   (require 'agent-shell)
   ;; The project's true name, as the buffer's file has (Doom's
   ;; `find-file-visit-truename'): through a link, the file's path relative to
@@ -70,26 +82,32 @@ the prompt is queued and sent when it finishes."
          (context (or (funcall context-fn (and cwd (file-truename cwd)))
                       (user-error "Nothing to send")))
          (text (concat instruction "\n\n" context))
+         (name (+my/context-actions--agent))
          (shell (agent-shell-shell-buffer)))
     (if (with-current-buffer shell (shell-maker-busy))
         (with-current-buffer shell
           (agent-shell-prompt-queue text)
-          (message "Claude is busy: prompt queued"))
+          (message "%s is busy: prompt queued" (concat (upcase (substring name 0 1)) (substring name 1))))
       (agent-shell-insert :text text :submit t :shell-buffer shell))))
 
-(defun +my/context-actions-claude ()
-  "Claude Code (agent-shell) actions for the error or selection at point."
+(define-obsolete-function-alias '+my/claude-ask #'+my/agent-shell-ask "2026-11-24")
+
+(defun +my/context-actions-agent-shell ()
+  "The agent's actions (agent-shell's) for the error or selection at point,
+named for it (`+my/context-actions--agent')."
   (when (fboundp 'agent-shell)
-    (let ((region (and (region-active-p) (cons (region-beginning) (region-end))))
-          (error-context (lambda (_cwd) (agent-shell--get-error-context)))
-          (items nil))
+    (let* ((region (and (region-active-p) (cons (region-beginning) (region-end))))
+           (error-context (lambda (_cwd) (agent-shell--get-error-context)))
+           (name (+my/context-actions--agent))
+           (group (if (equal name "the agent") "Agent" name))
+           (items nil))
       (when (+my/context-actions--error-at-point-p)
-        (push (list "Claude" "Fix error with Claude"
-                    (lambda () (+my/claude-ask "Fix this error:" error-context)))
+        (push (list group (format "Fix error with %s" name)
+                    (lambda () (+my/agent-shell-ask "Fix this error:" error-context)))
               items)
-        (push (list "Claude" "Explain error with Claude"
-                    (lambda () (+my/claude-ask "Explain this error and how to fix it. Don't change any files."
-                                               error-context)))
+        (push (list group (format "Explain error with %s" name)
+                    (lambda () (+my/agent-shell-ask "Explain this error and how to fix it. Don't change any files."
+                                                    error-context)))
               items))
       (if region
           (let ((region-context
@@ -97,18 +115,20 @@ the prompt is queued and sent when it finishes."
                    (+my/context-actions--with-region
                     region (lambda () (agent-shell--get-region-context
                                        :deactivate t :no-error t :agent-cwd cwd))))))
-            (push (list "Claude" "Explain selection with Claude"
-                        (lambda () (+my/claude-ask "Explain this code. Don't change any files."
-                                                   region-context)))
+            (push (list group (format "Explain selection with %s" name)
+                        (lambda () (+my/agent-shell-ask "Explain this code. Don't change any files."
+                                                        region-context)))
                   items)
-            (push (list "Claude" "Add selection to Claude prompt"
+            (push (list group (format "Add selection to %s's prompt" name)
                         (lambda () (+my/context-actions--with-region
                                     region #'agent-shell-send-region)))
                   items))
         (when buffer-file-name
-          (push (list "Claude" "Add file to Claude prompt" #'agent-shell-send-file)
+          (push (list group (format "Add file to %s's prompt" name) #'agent-shell-send-file)
                 items)))
       (nreverse items))))
+
+(define-obsolete-function-alias '+my/context-actions-claude #'+my/context-actions-agent-shell "2026-11-24")
 
 (defun +my/context-actions--collect ()
   "Return all actions at point, from `+my/context-action-providers'."

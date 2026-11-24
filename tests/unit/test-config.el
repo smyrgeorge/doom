@@ -354,7 +354,7 @@ puts its last."
              (+test-config--load-position "config/excalidraw")))
   (should (eq (car +my/context-action-providers) '+my/context-actions-pdf))
   (should (equal (cdr +my/context-action-providers)
-                 '(+my/context-actions-spelling +my/context-actions-lsp +my/context-actions-claude
+                 '(+my/context-actions-spelling +my/context-actions-lsp +my/context-actions-agent-shell
                    +my/context-actions-excalidraw))))
 
 (ert-deftest config/order-window-before-tiling ()

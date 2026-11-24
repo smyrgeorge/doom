@@ -36,7 +36,7 @@
 ;;   couldn't do (save it, show the file, add a library), no actions;
 ;; - Excalidraw's libraries (info, config/excalidraw/libraries.el): over their
 ;;   site, opened from a drawing, "Back to the drawing";
-;; - a drawing for Claude (info, config/agent-shell/excalidraw.el): its keys,
+;; - a drawing for the agent (info, config/agent-shell/excalidraw.el): its keys,
 ;;   "Insert" (into the prompt) and "Discard";
 ;; - an issue list's filter and closed issues (info, config/beads/hidden.el):
 ;;   "Filtered: ..." with "Clear filter"; "N closed issues hidden" (or

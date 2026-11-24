@@ -20,24 +20,26 @@ away is told, not guessed."
               (and (seq-some (lambda (frame) (eq (frame-focus-state frame) t)) (frame-list)) t))))
 
 (ert-deftest e2e-notify/away-shown-in-front-not ()
-  "Claude Code finished its turn: posted to the desktop while Emacs is away,
-nothing while it's in front."
+  "A session finished its turn: posted to the desktop while Emacs is away,
+titled by its agent; nothing while it's in front."
   (let ((+test-notifications nil)
         (+my/notify-enabled t)
         (+my/notify-off nil)
         (buffer (generate-new-buffer "*claude-code @ e2e*")))
+    (with-current-buffer buffer
+      (setq-local agent-shell--state (list (cons :agent-config (list (cons :mode-line-name "Claude"))))))
     (unwind-protect
         (cl-letf (((symbol-function '+my/os--dbus-notifications-p) (lambda () t))
                   ((symbol-function 'agent-shell-cwd) (lambda () "/home/me/dev/doom/")))
-          (+my/notify-claude--turn-done buffer '((:data (:stop-reason . "end_turn"))))
+          (+my/notify-agent-shell--turn-done buffer '((:data (:stop-reason . "end_turn"))))
           (if (+my/notify-emacs-in-front-p)
               (should-not (+test-notify--posted))
             (let ((posted (car (+test-notify--posted))))
               (should posted)
               (if (+my/macos-p)
-                  (should (equal posted '(applescript "display notification \"doom: finished\" with title \"Claude Code\"")))
+                  (should (equal posted '(applescript "display notification \"doom: finished\" with title \"Claude\"")))
                 (should (eq (car posted) 'dbus))
-                (should (equal (plist-get (cdr posted) :title) "Claude Code"))
+                (should (equal (plist-get (cdr posted) :title) "Claude"))
                 (should (equal (plist-get (cdr posted) :body) "doom: finished"))))))
       (kill-buffer buffer))))
 
@@ -47,9 +49,10 @@ nothing while it's in front."
     (if (file-executable-p beside) beside (executable-find "emacsclient"))))
 
 (ert-deftest e2e-notify/claude-notifies-through-emacsclient ()
-  "Claude Code's way: emacsclient --eval '(+my/notify-claude ...)' to this
-Emacs's server: the message (named by the folder given) posted to the
-desktop while Emacs is away, t printed back; in front, nil."
+  "An agent's way: emacsclient --eval '(+my/notify-agent-shell ...)' to this
+Emacs's server: the message (named by the folder given; no session there:
+titled Agent shell) posted to the desktop while Emacs is away, t printed
+back; in front, nil."
   (let* ((client (or (+test-notify--emacsclient) (ert-skip "No emacsclient")))
          ;; In /tmp: a socket's path is short (the tests' folder's was too long).
          (server-socket-dir (make-temp-file "/tmp/e2e-notify-" t))
@@ -68,7 +71,7 @@ desktop while Emacs is away, t printed back; in front, nil."
                           ;; machine, read after it exited).
                           :sentinel #'+test-process-sentinel
                           :command (list client "-s" (expand-file-name server-name server-socket-dir)
-                                         "--eval" "(+my/notify-claude \"The tests pass\" \"/home/me/dev/rskit/\")"))))
+                                         "--eval" "(+my/notify-agent-shell \"The tests pass\" \"/home/me/dev/rskit/\")"))))
             (should (+test-wait-for (lambda () (+test-process-ended-p process)) 10))
             (should (zerop (process-exit-status process))))
           (let ((printed (string-trim (with-current-buffer output (buffer-string)))))
@@ -78,7 +81,7 @@ desktop while Emacs is away, t printed back; in front, nil."
               (should (equal printed "t"))
               (let ((posted (car +test-notifications)))
                 (if (+my/macos-p)
-                    (should (equal posted '(applescript "display notification \"rskit: The tests pass\" with title \"Claude Code\"")))
+                    (should (equal posted '(applescript "display notification \"rskit: The tests pass\" with title \"Agent shell\"")))
                   (should (equal (plist-get (cdr posted) :body) "rskit: The tests pass")))))))
       (server-force-delete)
       (kill-buffer output)

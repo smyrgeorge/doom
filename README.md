@@ -184,7 +184,7 @@ After changing `init.el` or `packages.el`, run `~/.config/emacs/bin/doom sync` a
 - [Git](docs/git.md): Magit additions, a file's diff, resolving conflicts in three panes
 - [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md),
   [Mermaid](docs/mermaid.md)
-- [Your agent](docs/claude-code.md): its sessions, drawing for it, profiling Emacs
+- [Your agent](docs/agent-shell.md): its sessions, drawing for it, profiling Emacs
 - [Agent UI](docs/agent-ui.md): what your agent shows on a canvas beside its session, and `cmd/agent-ui`
 - [Agent workspace](docs/agent-workspace.md): a crew of agents on one project, each in its own worktree (being built)
 - [Agent workflow](docs/agent-workflow.md): the work on an issue as GitHub Actions describes it, some steps an LLM (being

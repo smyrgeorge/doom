@@ -104,7 +104,7 @@
 ;; `make-cursor-line-fully-visible' off everywhere: otherwise redisplay undoes a
 ;; scroll that leaves the cursor's line cut by the window's edge (Emacs's
 ;; bug#65214), and slows down while scrolling (ultra-scroll's #32). But then a
-;; cut line counts as shown: typing at a window's bottom (Claude Code's prompt
+;; cut line counts as shown: typing at a window's bottom (an agent's prompt
 ;; is always there) went on in the sliver of a row the window doesn't fit, and
 ;; Emacs scrolled only as far as that sliver, line after line. Now redisplay
 ;; shows the cursor's line whole again in the selected window after anything

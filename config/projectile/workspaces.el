@@ -71,7 +71,7 @@ shown is still the previous workspace's."
 ;; Doom adds a buffer to the current workspace once a window shows it
 ;; (`+workspaces-add-current-buffer-h'), but takes the current buffer for it:
 ;; the one just shown only after a command. One shown later, from a timer or
-;; a process's callback (Claude Code's session once picked: agent-shell shows
+;; a process's callback (an agent's session once picked: agent-shell shows
 ;; it after its prompt; SPC o C), finds the previous buffer current again:
 ;; Doom added that one, or nothing (its hook skipped when that was the
 ;; window's), and the buffer shown joined no workspace (persp-mode's hidden

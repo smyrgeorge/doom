@@ -13,6 +13,9 @@
 (+test-load "config/editor")
 
 (require 'agent-shell)
+
+;; Your agent, as config.el chooses it: the actions named for it (Claude).
+(setq agent-shell-preferred-agent-config 'claude-code)
 (require 'lsp-mode)
 (require 'flymake)
 
@@ -114,7 +117,7 @@ the candidates (in the menu's order) returning the choice. `menu' gets
   (should (equal (default-value '+my/context-action-providers)
                  '(+my/context-actions-spelling
                    +my/context-actions-lsp
-                   +my/context-actions-claude)))
+                   +my/context-actions-agent-shell)))
   (dolist (provider +my/context-action-providers)
     (should (functionp provider))))
 
@@ -511,7 +514,7 @@ shell; the context made with the project's folder."
   (+test-actions--in "code"
     (+test-actions--with-claude
       (let (got-cwd)
-        (+my/claude-ask "Fix this error:"
+        (+my/agent-shell-ask "Fix this error:"
                         (lambda (dir) (setq got-cwd dir) "code.el:1: error: bad"))
         ;; The project's true name, as the buffer's file has (a link in its
         ;; path made its file ../../private/var/... relative to it).
@@ -525,7 +528,7 @@ shell; the context made with the project's folder."
   (+test-actions--in "code"
     (+test-actions--with-claude
       (let ((buffer (current-buffer)) in)
-        (+my/claude-ask "Explain:" (lambda (_) (setq in (current-buffer)) "x"))
+        (+my/agent-shell-ask "Explain:" (lambda (_) (setq in (current-buffer)) "x"))
         (should (eq in buffer))))))
 
 (ert-deftest actions/claude-ask-busy-queues ()
@@ -534,7 +537,7 @@ shell; the context made with the project's folder."
     (+test-actions--with-claude
       (setq busy t)
       (+test-clear-messages)
-      (+my/claude-ask "Fix this error:" (lambda (_) "ctx"))
+      (+my/agent-shell-ask "Fix this error:" (lambda (_) "ctx"))
       (should-not sent)
       (should (equal queued (list (cons shell "Fix this error:\n\nctx"))))
       (should (= (+test-messages "^Claude is busy: prompt queued$") 1)))))
@@ -546,14 +549,14 @@ shell; the context made with the project's folder."
       (let (asked-in)
         (cl-letf (((symbol-function 'shell-maker-busy)
                    (lambda () (setq asked-in (current-buffer)) nil)))
-          (+my/claude-ask "Explain:" (lambda (_) "ctx"))
+          (+my/agent-shell-ask "Explain:" (lambda (_) "ctx"))
           (should (eq asked-in shell))
           (should sent))))))
 
 (ert-deftest actions/claude-ask-nothing-to-send ()
   (+test-actions--in "code"
     (+test-actions--with-claude
-      (let ((err (should-error (+my/claude-ask "Fix this error:" (lambda (_) nil))
+      (let ((err (should-error (+my/agent-shell-ask "Fix this error:" (lambda (_) nil))
                                :type 'user-error)))
         (should (equal (cadr err) "Nothing to send")))
       (should-not sent)
@@ -577,7 +580,7 @@ shell; the context made with the project's folder."
                  (lambda (&rest args) (push args started) new))
                 ((symbol-function 'shell-maker-busy) (lambda () nil))
                 ((symbol-function 'agent-shell-insert) (lambda (&rest args) (push args sent))))
-        (+my/claude-ask "Explain:" (lambda (_) "ctx")))
+        (+my/agent-shell-ask "Explain:" (lambda (_) "ctx")))
       (should (= (length started) 1))
       (should (eq (map-elt (plist-get (car started) :config) :identifier) 'claude-code))
       (should (equal (plist-get (car started) :cwd) cwd))
@@ -588,7 +591,7 @@ shell; the context made with the project's folder."
 (ert-deftest actions/claude-nothing-in-a-plain-buffer ()
   "No error, no selection, no file: no Claude actions."
   (+test-actions--in "text"
-    (should-not (+my/context-actions-claude))))
+    (should-not (+my/context-actions-agent-shell))))
 
 (ert-deftest actions/claude-without-agent-shell ()
   (+test-actions--in "text"
@@ -596,17 +599,39 @@ shell; the context made with the project's folder."
     (set-mark 1) (goto-char 3) (activate-mark)
     (cl-letf (((symbol-function 'agent-shell) nil)
               ((symbol-function '+my/context-actions--error-at-point-p) (lambda () t)))
-      (should-not (+my/context-actions-claude)))
+      (should-not (+my/context-actions-agent-shell)))
     (setq buffer-file-name nil)))
 
 (defun +test-actions--labels (actions)
   (mapcar (lambda (a) (nth 1 a)) actions))
 
+(ert-deftest actions/named-for-the-agent ()
+  "The actions named for the agent the prompt goes to: the project's
+session's, else your agent's; neither known: the agent."
+  (+test-actions--in "code"
+    (setq buffer-file-name (+test-tmp-file "a.el"))
+    (let ((agent-shell-preferred-agent-config nil))
+      (let ((actions (+my/context-actions-agent-shell)))
+        (should (equal (+test-actions--labels actions) '("Add file to the agent's prompt")))
+        (should (equal (car (car actions)) "Agent"))))
+    (let ((agent-shell-preferred-agent-config 'codex))
+      (should (equal (+test-actions--labels (+my/context-actions-agent-shell)) '("Add file to Codex's prompt"))))
+    ;; The project's session's, over yours.
+    (let ((session (generate-new-buffer "Gemini")))
+      (unwind-protect
+          (progn
+            (with-current-buffer session
+              (setq-local agent-shell--state (list (cons :agent-config (list (cons :mode-line-name "Gemini"))))))
+            (cl-letf (((symbol-function 'agent-shell-project-buffers) (lambda (&rest _) (list session))))
+              (should (equal (car (car (+my/context-actions-agent-shell))) "Gemini"))))
+        (kill-buffer session)))
+    (setq buffer-file-name nil)))
+
 (ert-deftest actions/claude-in-a-file ()
   (+test-actions--in "code"
     (setq buffer-file-name (+test-tmp-file "a.el"))
-    (let ((actions (+my/context-actions-claude)))
-      (should (equal (+test-actions--labels actions) '("Add file to Claude prompt")))
+    (let ((actions (+my/context-actions-agent-shell)))
+      (should (equal (+test-actions--labels actions) '("Add file to Claude's prompt")))
       (should (equal (car (car actions)) "Claude"))
       (should (eq (nth 2 (car actions)) #'agent-shell-send-file)))
     (setq buffer-file-name nil)))
@@ -616,15 +641,15 @@ shell; the context made with the project's folder."
   (+test-actions--in "code"
     (setq buffer-file-name (+test-tmp-file "a.el"))
     (cl-letf (((symbol-function '+my/context-actions--error-at-point-p) (lambda () t)))
-      (should (equal (+test-actions--labels (+my/context-actions-claude))
+      (should (equal (+test-actions--labels (+my/context-actions-agent-shell))
                      '("Fix error with Claude" "Explain error with Claude"
-                       "Add file to Claude prompt"))))
+                       "Add file to Claude's prompt"))))
     (setq buffer-file-name nil)))
 
 (ert-deftest actions/claude-on-an-error-outside-files ()
   (+test-actions--in "code"
     (cl-letf (((symbol-function '+my/context-actions--error-at-point-p) (lambda () t)))
-      (should (equal (+test-actions--labels (+my/context-actions-claude))
+      (should (equal (+test-actions--labels (+my/context-actions-agent-shell))
                      '("Fix error with Claude" "Explain error with Claude"))))))
 
 (ert-deftest actions/claude-on-a-selection ()
@@ -632,24 +657,24 @@ shell; the context made with the project's folder."
   (+test-actions--in "some code"
     (setq buffer-file-name (+test-tmp-file "a.el"))
     (set-mark 1) (goto-char 5) (activate-mark)
-    (should (equal (+test-actions--labels (+my/context-actions-claude))
-                   '("Explain selection with Claude" "Add selection to Claude prompt")))
+    (should (equal (+test-actions--labels (+my/context-actions-agent-shell))
+                   '("Explain selection with Claude" "Add selection to Claude's prompt")))
     (setq buffer-file-name nil)))
 
 (ert-deftest actions/claude-on-a-selection-outside-files ()
   (+test-actions--in "some code"
     (set-mark 1) (goto-char 5) (activate-mark)
-    (should (equal (+test-actions--labels (+my/context-actions-claude))
-                   '("Explain selection with Claude" "Add selection to Claude prompt")))))
+    (should (equal (+test-actions--labels (+my/context-actions-agent-shell))
+                   '("Explain selection with Claude" "Add selection to Claude's prompt")))))
 
 (ert-deftest actions/claude-on-an-error-in-a-selection ()
   (+test-actions--in "some code"
     (set-mark 1) (goto-char 5) (activate-mark)
     (cl-letf (((symbol-function '+my/context-actions--error-at-point-p) (lambda () t)))
-      (let ((actions (+my/context-actions-claude)))
+      (let ((actions (+my/context-actions-agent-shell)))
         (should (equal (+test-actions--labels actions)
                        '("Fix error with Claude" "Explain error with Claude"
-                         "Explain selection with Claude" "Add selection to Claude prompt")))
+                         "Explain selection with Claude" "Add selection to Claude's prompt")))
         (should (seq-every-p (lambda (a) (equal (car a) "Claude")) actions))))))
 
 (ert-deftest actions/claude-on-an-evil-visual-selection ()
@@ -663,21 +688,21 @@ the cursor included."
     (evil-visual-refresh)
     ;; As M-RET runs: evil expands the region to the selection first.
     (evil-visual-pre-command #'+my/context-actions)
-    (let ((actions (+my/context-actions-claude))
+    (let ((actions (+my/context-actions-agent-shell))
           seen)
       (should (equal (+test-actions--labels actions)
-                     '("Explain selection with Claude" "Add selection to Claude prompt")))
+                     '("Explain selection with Claude" "Add selection to Claude's prompt")))
       (evil-normal-state)
       (cl-letf (((symbol-function 'agent-shell-send-region)
                  (lambda (&rest _)
                    (setq seen (buffer-substring (region-beginning) (region-end))))))
-        (+test-actions--run actions "Add selection to Claude prompt"))
+        (+test-actions--run actions "Add selection to Claude's prompt"))
       (should (equal seen "code")))))
 
 (ert-deftest actions/claude-inactive-mark-is-no-selection ()
   (+test-actions--in "some code"
     (set-mark 1) (goto-char 5) (deactivate-mark)
-    (should-not (+my/context-actions-claude))))
+    (should-not (+my/context-actions-agent-shell))))
 
 (ert-deftest actions/claude-fix-error-sends-it ()
   (+test-actions--in "code"
@@ -685,7 +710,7 @@ the cursor included."
       (cl-letf (((symbol-function '+my/context-actions--error-at-point-p) (lambda () t))
                 ((symbol-function 'agent-shell--get-error-context)
                  (lambda () "a.el:1:1: error: void-function foo")))
-        (+test-actions--run (+my/context-actions-claude) "Fix error with Claude")
+        (+test-actions--run (+my/context-actions-agent-shell) "Fix error with Claude")
         (should (equal (plist-get (car sent) :text)
                        "Fix this error:\n\na.el:1:1: error: void-function foo"))
         (should (eq (plist-get (car sent) :submit) t))))))
@@ -695,7 +720,7 @@ the cursor included."
     (+test-actions--with-claude
       (cl-letf (((symbol-function '+my/context-actions--error-at-point-p) (lambda () t))
                 ((symbol-function 'agent-shell--get-error-context) (lambda () "E")))
-        (+test-actions--run (+my/context-actions-claude) "Explain error with Claude")
+        (+test-actions--run (+my/context-actions-agent-shell) "Explain error with Claude")
         (should (equal (plist-get (car sent) :text)
                        "Explain this error and how to fix it. Don't change any files.\n\nE"))))))
 
@@ -705,7 +730,7 @@ the cursor included."
     (+test-actions--with-claude
       (cl-letf (((symbol-function '+my/context-actions--error-at-point-p) (lambda () t))
                 ((symbol-function 'agent-shell--get-error-context) (lambda () nil)))
-        (should-error (+test-actions--run (+my/context-actions-claude) "Fix error with Claude")
+        (should-error (+test-actions--run (+my/context-actions-agent-shell) "Fix error with Claude")
                       :type 'user-error)
         (should-not sent)))))
 
@@ -720,7 +745,7 @@ the cursor included."
     (flymake-start)
     (goto-char 7)
     (+test-actions--with-claude
-      (+test-actions--run (+my/context-actions-claude) "Fix error with Claude")
+      (+test-actions--run (+my/context-actions-agent-shell) "Fix error with Claude")
       (let ((text (plist-get (car sent) :text)))
         (should (string-prefix-p "Fix this error:\n\n" text))
         (should (string-match-p "bad word here" text))))
@@ -741,7 +766,7 @@ though it was lost when the menu closed; the selection is deactivated."
         (goto-char (point-max))
         (activate-mark)
         (+test-actions--with-claude
-          (let ((actions (+my/context-actions-claude)))
+          (let ((actions (+my/context-actions-agent-shell)))
             (deactivate-mark)
             (goto-char (point-min))
             (+test-actions--run actions "Explain selection with Claude")
@@ -760,14 +785,14 @@ though it was lost when the menu closed; the selection is deactivated."
 opened."
   (+test-actions--in "some code here"
     (set-mark 6) (goto-char 10) (activate-mark)
-    (let ((actions (+my/context-actions-claude))
+    (let ((actions (+my/context-actions-agent-shell))
           seen)
       (deactivate-mark)
       (cl-letf (((symbol-function 'agent-shell-send-region)
                  (lambda (&rest _)
                    (setq seen (and (region-active-p)
                                    (buffer-substring (region-beginning) (region-end)))))))
-        (+test-actions--run actions "Add selection to Claude prompt"))
+        (+test-actions--run actions "Add selection to Claude's prompt"))
       (should (equal seen "code")))))
 
 (ert-deftest actions/claude-add-file ()
@@ -776,7 +801,7 @@ opened."
     (let (called)
       (cl-letf (((symbol-function 'agent-shell-send-file)
                  (lambda (&rest _) (setq called (current-buffer)))))
-        (+test-actions--run (+my/context-actions-claude) "Add file to Claude prompt"))
+        (+test-actions--run (+my/context-actions-agent-shell) "Add file to Claude's prompt"))
       (should (eq called (current-buffer))))
     (setq buffer-file-name nil)))
 

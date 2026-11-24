@@ -27,20 +27,27 @@ in a new pane: not a list's preview (P), where it asks: a list's own
 goes to the first one's pane: config/beads/project.el.)"
   (not (string-prefix-p "*Beads Preview" (buffer-name))))
 
+(defun +my/tiling--chosen ()
+  "The applications' names `+my/tiling-apps' chooses (a list), an old name
+as its new one (`+my/tiling-renamed-apps')."
+  (mapcar (lambda (name) (alist-get name +my/tiling-renamed-apps name))
+          (ensure-list +my/tiling-apps)))
+
 (defun +my/tiling--apps ()
   "The applications chosen (`+my/tiling-apps'): their modes, as
 `+my/tiling-known-apps' has them (MODE, or (MODE . PREDICATE))."
-  (mapcan (lambda (app)
-            (when (or (eq +my/tiling-apps 'all) (memq (car app) (ensure-list +my/tiling-apps)))
-              (copy-sequence (cdr app))))
-          +my/tiling-known-apps))
+  (let ((chosen (+my/tiling--chosen)))
+    (mapcan (lambda (app)
+              (when (or (eq +my/tiling-apps 'all) (memq (car app) chosen))
+                (copy-sequence (cdr app))))
+            +my/tiling-known-apps)))
 
 (defun +my/tiling--check-apps ()
   "Warn of names in `+my/tiling-apps' tiling doesn't know (config.el's), the
 ones it does said."
   (unless (eq +my/tiling-apps 'all)
     (when-let* ((unknown (seq-remove (lambda (name) (assq name +my/tiling-known-apps))
-                                     (ensure-list +my/tiling-apps))))
+                                     (+my/tiling--chosen))))
       (display-warning
        'tiling
        (format "+my/tiling-apps: no application %s; it's all, or a list of: %s"
