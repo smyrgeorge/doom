@@ -96,11 +96,24 @@ as its step and min have (0.1 six times: 0.6, not 0.6000000000000001)."
                                (remhash key agent-ui-slider--live-timers)
                                (when (buffer-live-p canvas)
                                  (with-current-buffer canvas
-                                   (funcall agent-ui-action-function
-                                            (format "Slider %s (%s) set to %s" (plist-get ctx :id)
-                                                    (plist-get props :label) (agent-ui-slider--shown props value))
-                                            t)))))
+                                   ;; Its element the one acting (a
+                                   ;; section's session's), not point's.
+                                   (let ((agent-ui-pressed (plist-get ctx :id)))
+                                     (funcall agent-ui-action-function
+                                              (format "Slider %s (%s) set to %s" (plist-get ctx :id)
+                                                      (or (plist-get props :label) "value")
+                                                      (agent-ui-slider--shown props value))
+                                              t))))))
              agent-ui-slider--live-timers)))
+
+(defun agent-ui-slider--removed (key)
+  "Element KEY gone from the current canvas: its live send waiting, called
+off. In `agent-ui-removed-functions'."
+  (when-let* ((timer (gethash (cons (current-buffer) key) agent-ui-slider--live-timers)))
+    (cancel-timer timer)
+    (remhash (cons (current-buffer) key) agent-ui-slider--live-timers)))
+
+(add-hook 'agent-ui-removed-functions #'agent-ui-slider--removed)
 
 (defun agent-ui-slider--slide (steps)
   "Move the knob on point's line STEPS steps (below 0: left)."

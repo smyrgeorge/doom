@@ -2671,6 +2671,34 @@ last), at once; never locked."
         (agent-ui-slider-left)
         (should (= (plist-get (agent-ui-get "th") :value) 0.6))))))
 
+(ert-deftest agent-ui-elements/slider-live-sent-as-itself ()
+  "A live slider's value sent as its own (the element acting it, not
+point's; no label: value); removed before it rests, nothing sent
+\(doom-ht6.63)."
+  (+test-aue-canvas
+    (let* ((sent nil)
+           (agent-ui-slider-live-delay 0.05)
+           (agent-ui-action-function (lambda (prompt _submit) (push (list prompt agent-ui-pressed) sent)))
+           (wait (lambda () (let ((end (+ (float-time) 0.3)))
+                              (while (< (float-time) end) (accept-process-output nil 0.02))))))
+      (agent-ui-show '(:id "s" :type "slider" :min 0 :max 10 :value 5 :live t))
+      (agent-ui-show '(:id "other" :type "text" :text "elsewhere"))
+      (with-current-buffer canvas
+        (agent-ui--flush)
+        (goto-char (point-min))
+        (search-forward "●")
+        (agent-ui-slider-right)
+        (goto-char (point-max))
+        (funcall wait)
+        (should (equal sent '(("Slider s (value) set to 6" "s"))))
+        (setq sent nil)
+        (goto-char (point-min))
+        (search-forward "●")
+        (agent-ui-slider-right)
+        (agent-ui-remove "s")
+        (funcall wait)
+        (should-not sent)))))
+
 (ert-deftest agent-ui-elements/slider-wrong ()
   (should (string-match-p "min is required" (+test-aue-error '(:type "slider" :max 1))))
   (should (string-match-p "min must be below max" (+test-aue-error '(:type "slider" :min 2 :max 1))))
