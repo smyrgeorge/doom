@@ -398,12 +398,13 @@ running ended."
            (close round (if (equal event "run-done") "done" event))))))))
 
 (defun agent-workflow--pane-rounds-element ()
-  "The pane's rounds as a timeline (nil before the first): a bar each, its
-round past 1 and an outcome other than done said; one running growing;
-one ended done (its outcome in its name), replaced or cancelled grey."
+  "The pane's rounds as a timeline (nil before the first), under its caption
+\(rounds, as the git's: branch): a bar each, its round past 1 and an
+outcome other than done said; one running growing; one ended done (its
+outcome in its name), replaced or cancelled grey."
   (when agent-workflow--pane-rounds
     (cl-flet ((stamp (time) (format-time-string "%FT%TZ" time t)))
-      (list :id "rounds" :type "timeline" :title "Rounds"
+      (list :id "rounds" :type "timeline" :caption "rounds"
             :tasks (mapcar (lambda (round)
                              (let ((outcome (plist-get round :outcome))
                                    (number (plist-get round :round)))
@@ -793,10 +794,11 @@ of 6: its try that failed, of all it may have)."
       (format "%s fixing it · try %d of %d" who tries (1+ (or (plist-get step :retries) 0))))))
 
 (defun agent-workflow--pane-graph (run)
-  "RUN's jobs as a graph: each a node, marked and coloured by its state (its
-round past 1 said), an arrow from each job to those needing it."
+  "RUN's jobs as a graph, under its caption (flow, as the git's: branch):
+each a node, marked and coloured by its state (its round past 1 said), an
+arrow from each job to those needing it."
   (let ((specs (plist-get (agent-workflow-run-workflow run) :jobs)))
-    (list :id "graph" :type "graph"
+    (list :id "graph" :type "graph" :caption "flow"
           :nodes (mapcar (lambda (job)
                            (let* ((state (cdr job))
                                   (status (plist-get state :status))
@@ -816,8 +818,14 @@ round past 1 said), an arrow from each job to those needing it."
                           append (mapcar (lambda (need) (list need job)) (plist-get spec :needs))))))
 
 (defun agent-workflow--pane-jobs (run)
-  "RUN's checklist: its jobs. Finished, it stays (its pane with it)."
+  "RUN's checklist: its jobs, under their count (4 jobs · 1 done, as the
+git's: 3 commits). Finished, it stays (its pane with it)."
   (list :id "jobs" :type "steps" :close :false
+        :caption (let ((all (length (agent-workflow-run-jobs run)))
+                       (done (cl-count-if (lambda (job) (eq (plist-get (cdr job) :status) 'done))
+                                          (agent-workflow-run-jobs run))))
+                   (concat (format "%d job%s" all (if (= all 1) "" "s"))
+                           (if (> done 0) (format " · %d done" done) "")))
         :steps (mapcar (lambda (job) (agent-workflow--pane-job run (car job) (cdr job)))
                        (agent-workflow-run-jobs run))))
 

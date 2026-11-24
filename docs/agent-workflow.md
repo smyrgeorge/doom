@@ -342,12 +342,15 @@ A test-lexer.el  +1 −0
 2b437d2  Lexer: string escapes
 
 ▾ Run ◆ ──────────────────────────────────────
+flow
 [build ✓ r2] → [docs ✓ r2] → [review ◆ r2] → [merge ○]     (a graph)
+4 jobs · 1 done
 ✓ build      2m 34s  agent build · round 2
 – security           its if: (member "security" (issue-labels))
 ◆ review    12m 56s  agent review · round 2 · needs you
 ○ merge
-Rounds: build ▬▬ docs ▬ review → changes ▬ build · round 2 ▬ …   (a timeline)
+rounds
+build ▬▬ docs ▬ review → changes ▬ build · round 2 ▬ …   (a timeline)
 ▾ Needs you ◆ review ─────────────────────────
 Unicode
 review asks: Should the escape table also cover Unicode escapes?
@@ -373,12 +376,12 @@ review asks: Should the escape table also cover Unicode escapes?
   said), and its latest commits. Started from a branch other than the main one, it says so: that branch's commits not
   in the main one are merged with it. Looked at again every 15 seconds while the pane is open
   (`agent-workflow-pane-where-every`); once the run is done, its worktree gone, its branch deleted or kept (above).
-- **Run:** a graph of its jobs and their `needs`, each marked and coloured by its state, its round past 1; its
-  checklist, each job a step, its steps under it (status, agent, round, try, time; a job waiting for you ◆, timed;
+- **Run:** each part under a caption, as the git's (`branch`, `3 commits`): `flow`, a graph of its jobs and their
+  `needs`, each marked and coloured by its state, its round past 1; `4 jobs · 1 done`, its checklist, each job a step, its steps under it (status, agent, round, try, time; a job waiting for you ◆, timed;
   one skipped, its `if`; one that edits and committed nothing, `no commit`; the merge, `merged` or `nothing to merge`;
   a step that failed while an agent fixes it, ✗ and who and its try, `ci fixing it · try 1 of 6`, its job `fixing`;
   a job its run's cancel or failure stopped, grey, `cancelled`, ⊘ in the graph);
-  its rounds as a timeline, each job's runs as bars, one sent back said (`review → changes`),
+  `rounds`, its rounds as a timeline, each job's runs as bars, one sent back said (`review → changes`),
   the one running growing.
 - **Needs you**, only while the run waits for you: what on, a line coloured, its answers buttons: an approval
   (Approve, or Reject…, which asks its note), retries used up, a step that broke (go on, skip it, stop; go on with a

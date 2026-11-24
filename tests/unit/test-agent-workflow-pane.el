@@ -189,7 +189,11 @@ counting down, until closed (q)."
         (should (string-match-p "\\`build [●◆]\\'" (plist-get (car (plist-get graph :nodes)) :label)))
         (should (equal (mapcar (lambda (task) (plist-get task :name))
                                (plist-get (agent-ui-get "rounds" :canvas pane :section "run") :tasks))
-                       '("build"))))
+                       '("build")))
+        ;; Each under its caption, as the git's (branch, 3 commits).
+        (should (equal (mapcar (lambda (id) (plist-get (agent-ui-get id :canvas pane :section "run") :caption))
+                               '("graph" "jobs" "rounds"))
+                       '("flow" "3 jobs" "rounds"))))
       (should (member "build   started"
                       (mapcar (lambda (line) (substring (if (stringp line) line (plist-get line :text)) 7))
                               (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
@@ -203,6 +207,7 @@ counting down, until closed (q)."
                      "Built it, with its tests."))
       (should (string-search "no commit" (plist-get (car (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :steps))
                                                     :detail)))
+      (should (equal (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :caption) "3 jobs · 1 done"))
       (with-current-buffer pane (agent-workflow--pane-show-boxes run pane))
       (should-not (ignore-errors (agent-ui-get "now-build" :canvas pane :section "run")))
       ;; Review's: its box.
