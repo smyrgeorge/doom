@@ -579,7 +579,7 @@ does."
 
 
 ;; WHAT AN AGENT IS TOLD (see ITS SESSION above), after what every session is.
-(add-hook '+my/agent-shell-claude-context-functions #'agent-workspace-agent-context t)
+(add-hook '+my/agent-shell-context-functions #'agent-workspace-agent-context t)
 
 ;; AN AGENT'S PANELS (config/agent-workspace/panels.el): a project panel an
 ;; agent opens runs in its worktree, "tests · ada", never popped up (its pane

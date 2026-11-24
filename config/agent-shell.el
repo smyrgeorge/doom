@@ -14,7 +14,8 @@
 ;; itself: Claude can ask Emacs (`emacsclient', the server runs) what you're
 ;; looking at, carefully. A line on the theme's colours is added when the
 ;; session starts, so the images it draws suit it.
-(defvar +my/agent-shell-claude-context
+(define-obsolete-variable-alias '+my/agent-shell-claude-context '+my/agent-shell-context "2026-11-24")
+(defvar +my/agent-shell-context
   "You are running inside Emacs, in an agent-shell buffer (the agent-shell \
 package, through the claude-agent-acp ACP adapter), not in a terminal. The \
 user reads your replies in Emacs and works on the same files there.
@@ -53,8 +54,8 @@ waits for input, and change windows, buffers or settings only when asked. \
 Emacs reloads a file you edit when its buffer is next shown, unless the \
 buffer has unsaved changes: before editing a file the user has open, check \
 that its buffer isn't modified."
-  "Appended to Claude Code's system prompt in agent-shell (see above), with
-`+my/agent-shell-claude-theme'.")
+  "What every session is told (see above), the theme's line after it
+\(`+my/agent-shell-theme-context'): config/agent-shell/context.el.")
 
 ;; DRAWINGS FOR CLAUDE
 ;; In an agent-shell buffer, C-c C-d (SPC m d) opens a new drawing on its left

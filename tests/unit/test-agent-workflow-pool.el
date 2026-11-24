@@ -18,7 +18,7 @@
 (+test-load "config/agent-shell" "config/agent-workflow")
 
 ;; Nothing about this config's own issues in the stand-in's prompt.
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)
@@ -219,6 +219,47 @@ agent's instructions; its first message sent."
         (should (string-match-p "run as demo-1/build (BEADS_ACTOR)" told))
         (should (string-suffix-p "Build demo-1 on feat/demo-1-pool, in agent." told)))
       (should-not (agent-workflow-agent-context)))))
+
+(ert-deftest agent-workflow-pool/told-whatever-its-agent ()
+  "What its session is told (every session's, then its job's): to an agent
+taking a system prompt from Emacs (the stand-in, as Claude Code's adapter),
+as it; to one taking none, before its first message, once."
+  (+test-awp--with-project "told"
+    (+test-awp--start project "demo-1" "build" :prompt "Build it")
+    (let* ((new (car (+test-awp--wait
+                      (lambda () (+test-awp--logged (lambda (e) (equal (plist-get e :method) "session/new")))))))
+           (system (plist-get (plist-get new :params) :systemPrompt))
+           (text (plist-get (car (plist-get system :content)) :text))
+           (prompt (car (+test-awp--wait
+                         (lambda () (+test-awp--logged (lambda (e) (equal (plist-get e :method) "session/prompt"))))))))
+      (should (equal (plist-get system :mode) "append"))
+      (should (string-prefix-p "You are running inside Emacs" text))
+      (should (string-match-p "you do the job build of the run on the issue demo-1" text))
+      ;; Its first message, its own alone.
+      (should (equal (mapcar (lambda (block) (plist-get block :text)) (plist-get (plist-get prompt :params) :prompt))
+                     '("Build it")))))
+  (+test-awp--with-project "told-first"
+    (let ((process-environment (cons "MOCK_ACP_NO_SYSTEM_PROMPT=1" process-environment)))
+      (let ((agent (+test-awp--start project "demo-1" "build" :prompt "Build it")))
+        (let* ((new (car (+test-awp--wait
+                          (lambda () (+test-awp--logged (lambda (e) (equal (plist-get e :method) "session/new")))))))
+               (prompt (car (+test-awp--wait
+                             (lambda () (+test-awp--logged (lambda (e) (equal (plist-get e :method) "session/prompt")))))))
+               (blocks (mapcar (lambda (block) (plist-get block :text)) (plist-get (plist-get prompt :params) :prompt))))
+          (should-not (plist-get (plist-get new :params) :systemPrompt))
+          (should (= (length blocks) 2))
+          (should (string-match-p "<system-prompt>\nYou are running inside Emacs" (car blocks)))
+          (should (string-match-p "you do the job build of the run on the issue demo-1" (car blocks)))
+          (should (equal (cadr blocks) "Build it")))
+        ;; Its next message, its own alone.
+        (+test-awp--wait (lambda () (not (with-current-buffer (agent-workflow-agent-buffer agent) (shell-maker-busy)))) 5)
+        (agent-workflow-send agent "Again")
+        (let ((again (car (last (+test-awp--wait
+                                 (lambda () (let ((prompts (+test-awp--logged
+                                                            (lambda (e) (equal (plist-get e :method) "session/prompt")))))
+                                              (and (= (length prompts) 2) prompts))))))))
+          (should (equal (mapcar (lambda (block) (plist-get block :text)) (plist-get (plist-get again :params) :prompt))
+                         '("Again"))))))))
 
 (ert-deftest agent-workflow-pool/a-step-s-model-and-effort ()
   "Its model and effort: its agent's, or its step's over them; its effort

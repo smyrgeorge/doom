@@ -13,7 +13,7 @@
 
 ;; config/agent-shell.el's (what Claude Code is told about Emacs), not loaded
 ;; here: special, a test binds it.
-(defvar +my/agent-shell-claude-context)
+(defvar +my/agent-shell-context)
 
 ;; ====== HELPERS ======
 
@@ -492,18 +492,18 @@ no message: an error."
 (ert-deftest notify/claude-is-told-how-to-notify ()
   "What Claude Code is told about Emacs gets how to notify, once (loaded
 again: not twice)."
-  (let ((+my/agent-shell-claude-context "About Emacs."))
+  (let ((+my/agent-shell-context "About Emacs."))
     (+test-load "config/notify/claude")
     (+test-load "config/notify/claude")
-    (should (string-prefix-p "About Emacs.\n\nNotifications: " +my/agent-shell-claude-context))
+    (should (string-prefix-p "About Emacs.\n\nNotifications: " +my/agent-shell-context))
     (should (= (with-temp-buffer
-                 (insert +my/agent-shell-claude-context)
+                 (insert +my/agent-shell-context)
                  (count-matches "Notifications: " (point-min) (point-max)))
                1))
-    (should (string-search "emacsclient --eval '(+my/notify-claude " +my/agent-shell-claude-context))
+    (should (string-search "emacsclient --eval '(+my/notify-claude " +my/agent-shell-context))
     ;; Not those it gets already: a turn's end, a permission, a question.
     (should (string-search "when you finish a turn, when you ask for permission and when you ask a question in the conversation: don't send those again"
-                           +my/agent-shell-claude-context))))
+                           +my/agent-shell-context))))
 
 ;; ====== AN AGENT CREW'S (config/notify/crew.el) ======
 

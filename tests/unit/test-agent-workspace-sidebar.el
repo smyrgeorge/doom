@@ -11,7 +11,7 @@
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
 
 (+test-load "config/agent-shell" "config/agent-ui" "config/tiling" "config/agent-workspace")
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 ;; ====== HELPERS ======
 

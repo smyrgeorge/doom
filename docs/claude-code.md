@@ -21,7 +21,8 @@ those of the selection there), the image you're on. `(setq agent-shell-context-s
 `config.el` brings the error at point too, or else the line you're on.
 
 Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
-and Claude can ask Emacs what you're looking at. Claude shows you information on a canvas beside its session, each
+and Claude can ask Emacs what you're looking at. Every agent is told the same, whichever it is: in its system prompt
+where it takes one from Emacs (Claude Code does), else before the first message of a new session. Claude shows you information on a canvas beside its session, each
 kind as the element that fits it (figures, tables, charts, diagrams, plans, changes), its reply keeping the words
 ([Agent UI](agent-ui.md)). Its questions come there too, as interactive elements (a list to pick from, options side by
 side, a yes or no, a form...), your answer its next prompt; only a quick one (2 to 4 short options) comes as a form in

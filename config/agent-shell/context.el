@@ -1,12 +1,18 @@
 ;;; $DOOMDIR/config/agent-shell/context.el -*- lexical-binding: t; -*-
-;; What Claude Code is told about Emacs. Loaded from config/agent-shell.el.
+;; What every session is told about Emacs, whatever its agent. Loaded from
+;; config/agent-shell.el.
 
-;; INSIDE EMACS (see config/agent-shell.el). agent-shell builds the agent's config each time a
-;; session starts (SPC o c, SPC o C, the Option+Enter Claude actions) and sends
-;; its session metadata to claude-agent-acp, which adds the `append' text of
-;; its `systemPrompt' to Claude Code's system prompt.
-(defun +my/agent-shell-claude-theme ()
-  "A line on the theme's colours, for the images Claude draws (nil if unknown)."
+;; WHAT A SESSION IS TOLD (see INSIDE EMACS in config/agent-shell.el): worked
+;; out as a session starts (`agent-shell--start': where it starts, a crew's
+;; or a run's agent bound), kept in its config (:+my/context). An agent that
+;; takes a system prompt from Emacs (ACP's systemPrompt session capability:
+;; Claude Code's adapter does) has it appended to its own, in every session
+;; it starts or resumes (agent-shell's `agent-shell--system-prompt'). One that
+;; doesn't is told it once, before the first message of a new session, a
+;; block of its own (a resumed one has it in its history already).
+(defun +my/agent-shell-theme-context ()
+  "A line on the theme's colours, for the images the agent draws (nil if
+unknown)."
   (let ((dark (eq (frame-parameter nil 'background-mode) 'dark))
         (bg (face-background 'default nil t))
         (fg (face-foreground 'default nil t)))
@@ -23,25 +29,75 @@ to read well on it: %s."
                   "a dark or transparent background, light text and lines"
                 "a light or transparent background, dark text and lines")))))
 
-(defvar +my/agent-shell-claude-context-functions (list #'+my/agent-shell-claude-theme)
-  "Functions each returning more for Claude Code's system prompt, or nil,
-appended after `+my/agent-shell-claude-context' in this order: the theme's
-line; a project's issues (config/agent-shell/beads.el); Mermaid's diagrams
-\(config/agent-shell/mermaid.el); the Agent UI canvas (config/agent-ui.el).")
+(define-obsolete-function-alias '+my/agent-shell-claude-theme #'+my/agent-shell-theme-context "2026-11-24")
 
-(defadvice! +my/agent-shell-claude-context-a (config)
-  "Append `+my/agent-shell-claude-context' (and what
-`+my/agent-shell-claude-context-functions' return) to Claude Code's system
-prompt."
-  :filter-return #'agent-shell-anthropic-make-claude-code-config
-  (let ((text (string-join (delq nil (cons +my/agent-shell-claude-context
-                                           (mapcar #'funcall
-                                                   +my/agent-shell-claude-context-functions)))
-                           "\n\n")))
-    (setf (alist-get :session-meta config)
-          (cons `(systemPrompt . ((append . ,text)))
-                (alist-get :session-meta config))))
-  config)
+(define-obsolete-variable-alias '+my/agent-shell-claude-context-functions
+  '+my/agent-shell-context-functions "2026-11-24")
+
+(defvar +my/agent-shell-context-functions (list #'+my/agent-shell-theme-context)
+  "Functions each returning more of what a session is told, or nil,
+appended after `+my/agent-shell-context' in this order: the theme's line; a
+project's issues (config/agent-shell/beads.el); Mermaid's diagrams
+\(config/agent-shell/mermaid.el); the Agent UI canvas (config/agent-ui.el);
+a crew's agent (config/agent-workspace.el); a run's agent
+\(config/agent-workflow.el).")
+
+(defun +my/agent-shell-context-text ()
+  "What a session starting now is told: `+my/agent-shell-context', then
+what `+my/agent-shell-context-functions' return."
+  (string-join (delq nil (cons +my/agent-shell-context
+                               (mapcar #'funcall +my/agent-shell-context-functions)))
+               "\n\n"))
+
+(defadvice! +my/agent-shell-context-start-a (args)
+  "A session starting (`agent-shell--start''s ARGS): what it's told, worked
+out now, kept in its config (:+my/context); one given it already keeps it."
+  :filter-args #'agent-shell--start
+  (let ((config (plist-get args :config)))
+    (if (or (null config) (assq :+my/context config))
+        args
+      (plist-put (copy-sequence args) :config
+                 (cons (cons :+my/context (+my/agent-shell-context-text)) config)))))
+
+(defadvice! +my/agent-shell-system-prompt-a (fn)
+  "agent-shell's system prompt (FN's: `agent-shell-system-prompt', its
+config's), then what the session is told, for an agent taking one."
+  :around #'agent-shell--system-prompt
+  (let ((own (funcall fn)))
+    (if-let* (((map-elt agent-shell--state :supports-system-prompt))
+              (told (map-nested-elt agent-shell--state '(:agent-config :+my/context))))
+        (string-join (delq nil (list own told)) "\n\n")
+      own)))
+
+(defvar-local +my/agent-shell--context-pending nil
+  "In a new session whose agent takes no system prompt: what it's told,
+until its first message goes (before it, a block of its own).")
+
+(defadvice! +my/agent-shell-context-new-session-a (&rest args)
+  "A new session (ARGS, `agent-shell--initiate-new-session''s): its agent
+taking no system prompt, what it's told waits for its first message."
+  :before #'agent-shell--initiate-new-session
+  (with-current-buffer (or (plist-get args :shell-buffer) (current-buffer))
+    (setq +my/agent-shell--context-pending
+          (and (not (map-elt agent-shell--state :supports-system-prompt))
+               (map-nested-elt agent-shell--state '(:agent-config :+my/context))))))
+
+(defun +my/agent-shell--context-block (text)
+  "TEXT, what a session is told, as its first message's first block."
+  `((type . "text")
+    (text . ,(concat "What follows is this session's system prompt from Emacs (your agent takes \
+none from it): follow it for the whole session. The user's first message comes \
+after it.\n\n<system-prompt>\n" text "\n</system-prompt>"))))
+
+(defadvice! +my/agent-shell-context-blocks-a (blocks)
+  "A message's content BLOCKS: the first of a new session whose agent takes
+no system prompt, what it's told first (`+my/agent-shell--context-pending')."
+  :filter-return #'agent-shell--prompt-content-blocks
+  (if-let* ((text +my/agent-shell--context-pending))
+      (progn
+        (setq +my/agent-shell--context-pending nil)
+        (vconcat (vector (+my/agent-shell--context-block text)) blocks))
+    blocks))
 
 ;; CONTEXT FROM THE CURRENT BUFFER
 ;; Starting a session (SPC o c), agent-shell takes what's at point as context:

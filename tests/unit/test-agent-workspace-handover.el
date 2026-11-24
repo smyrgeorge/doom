@@ -11,7 +11,7 @@
 (require (quote agent-shell))
 (+test-load "config/agent-shell" "config/agent-ui" "config/agent-workspace")
 (load (expand-file-name "../helper-agent-workspace" (file-name-directory (or load-file-name buffer-file-name))) nil t)
-(remove-hook (quote +my/agent-shell-claude-context-functions) (function +my/agent-shell-beads-context))
+(remove-hook (quote +my/agent-shell-context-functions) (function +my/agent-shell-beads-context))
 
 ;; ====== HELPERS ======
 

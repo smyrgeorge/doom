@@ -20,7 +20,7 @@
 (require 'json)
 (+test-load "config/agent-shell" "config/agent-ui" "config/agent-workspace")
 (load (expand-file-name "../helper-agent-workspace" (file-name-directory (or load-file-name buffer-file-name))) nil t)
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)

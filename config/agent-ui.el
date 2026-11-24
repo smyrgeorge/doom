@@ -260,4 +260,4 @@ session's name and directory read when the session starts (in its buffer)."
 
 ;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
 ;; project's issues).
-(add-hook '+my/agent-shell-claude-context-functions #'agent-ui-agent-context t)
+(add-hook '+my/agent-shell-context-functions #'agent-ui-agent-context t)

@@ -67,7 +67,7 @@ its fragment (a new one with CREATE-NEW), the fragment's body rendered."
 (ert-deftest agent-shell-mermaid/registered ()
   (should (memq #'+my/agent-shell-mermaid-render agent-shell-markdown-render-functions))
   (should (memq #'+my/agent-shell-mermaid-theme-h +my/mermaid-theme-hook))
-  (should (memq #'+my/agent-shell-mermaid-context +my/agent-shell-claude-context-functions)))
+  (should (memq #'+my/agent-shell-mermaid-context +my/agent-shell-context-functions)))
 
 (ert-deftest agent-shell-mermaid/a-closed-block-drawn ()
   (+test-as-mermaid

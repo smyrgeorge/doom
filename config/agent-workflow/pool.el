@@ -161,7 +161,7 @@ effort over its own."
   "What the agent whose session starts is told, after what every session
 is: the job it does and where, how it ends a step, what it never does;
 then its agent's instructions. nil for any other session. One of
-`+my/agent-shell-claude-context-functions'."
+`+my/agent-shell-context-functions'."
   (when-let* ((agent agent-workflow--starting))
     (let* ((definition (agent-workflow-definition-filled agent))
            (instructions (plist-get definition :instructions))
@@ -326,8 +326,11 @@ DEFINITION isn't one."
       (condition-case err
           (let* ((config (agent-workflow--config agent))
                  (agent-shell-buffer-name-format (lambda (name _project) name))
-                 (buffer (setq made (agent-shell--start :config config :no-focus t :new-session t
-                                                        :session-strategy 'new :cwd dir :session-id resume))))
+                 ;; What it's told worked out as it starts, it bound
+                 ;; (`agent-workflow-agent-context').
+                 (buffer (setq made (let ((agent-workflow--starting agent))
+                                      (agent-shell--start :config config :no-focus t :new-session t
+                                                          :session-strategy 'new :cwd dir :session-id resume)))))
             (with-current-buffer buffer
               (setq agent-workflow--agent agent)
               ;; Stopping it asks nothing: not agent-shell's "N prompts

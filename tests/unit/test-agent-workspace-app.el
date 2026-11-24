@@ -20,7 +20,7 @@
 (+test-load "config/agent-shell" "config/agent-ui" "config/tiling" "config/agent-workspace")
 ;; The Beads panel's look: the issue list's types are drawn as it draws them.
 (+test-load "config/beads/look")
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 ;; The stage's layout, the minimap off (test-agent-workspace-minimap.el's).
 (setq agent-workspace-minimap nil)
 

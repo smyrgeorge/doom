@@ -17,7 +17,7 @@
 (+test-load "config/agent-shell" "config/agent-workspace")
 
 ;; Nothing about this config's own issues in the stand-in's prompt.
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 (defconst +test-aws--mock (expand-file-name "examples/agent-workspace/stand-in.el" +test-root)
   "The stand-in agent.")

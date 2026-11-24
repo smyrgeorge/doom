@@ -208,9 +208,13 @@ only), EFFORT its effort now."
     (mock-acp--log `(:method ,(or method :null) :params ,(or params :null)))
     (pcase method
       ("initialize"
-       (mock-acp--result id '(:protocolVersion 1
+       ;; A system prompt from Emacs taken, as claude-agent-acp does, unless
+       ;; MOCK_ACP_NO_SYSTEM_PROMPT says not (an agent that takes none).
+       (mock-acp--result id `(:protocolVersion 1
                               :agentCapabilities (:loadSession :false
-                                                  :promptCapabilities (:image :false :embeddedContext :false))
+                                                  :promptCapabilities (:image :false :embeddedContext :false)
+                                                  ,@(unless (getenv "MOCK_ACP_NO_SYSTEM_PROMPT")
+                                                      '(:sessionCapabilities (:systemPrompt (:mode "append")))))
                               :authMethods [])))
       ("session/new"
        ;; Claude Code's modes and models, as claude-agent-acp lists them.

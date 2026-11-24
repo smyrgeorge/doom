@@ -180,7 +180,7 @@ another notifies of (`+my/notify-claude-own-functions'): one notifies of it
 \(non-nil if shown).")
 
 ;; What Claude Code is told about it: appended to what it's told about Emacs
-;; (config/agent-shell.el's `+my/agent-shell-claude-context', loaded before),
+;; (config/agent-shell.el's `+my/agent-shell-context', loaded before),
 ;; once.
 (defconst +my/notify-claude--context
   "Notifications: the user may be in another app while you work. When they \
@@ -193,8 +193,8 @@ turn, when you ask for permission and when you ask a question in the \
 conversation: don't send those again."
   "What Claude Code is told about notifying (see above).")
 
-(when (and (boundp '+my/agent-shell-claude-context)
-           (stringp +my/agent-shell-claude-context)
-           (not (string-search +my/notify-claude--context +my/agent-shell-claude-context)))
-  (setq +my/agent-shell-claude-context
-        (concat +my/agent-shell-claude-context "\n\n" +my/notify-claude--context)))
+(when (and (boundp '+my/agent-shell-context)
+           (stringp +my/agent-shell-context)
+           (not (string-search +my/notify-claude--context +my/agent-shell-context)))
+  (setq +my/agent-shell-context
+        (concat +my/agent-shell-context "\n\n" +my/notify-claude--context)))

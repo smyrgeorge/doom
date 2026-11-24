@@ -72,8 +72,11 @@ processes with it."
                (agent-shell-buffer-name-format (lambda (name _project) name))
                ;; Its kind's welcome (Claude Code's banner) as any
                ;; agent-shell buffer's: `agent-shell-show-welcome-message'.
-               (buffer (setq made (agent-shell--start :config config :no-focus t :new-session t
-                                                      :session-strategy 'new :cwd dir))))
+               ;; What it's told worked out as it starts, it bound
+               ;; (`agent-workspace-agent-context').
+               (buffer (setq made (let ((agent-workspace--starting agent))
+                                    (agent-shell--start :config config :no-focus t :new-session t
+                                                        :session-strategy 'new :cwd dir)))))
           (with-current-buffer buffer
             (setq agent-workspace--agent agent)
             ;; Stopping it asks nothing: not agent-shell's "N prompts

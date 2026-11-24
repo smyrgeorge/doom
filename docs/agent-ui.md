@@ -571,7 +571,7 @@ to have its tests and its section in the skill, which the filed issue is for.
 ## What the agent is told
 
 A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
-`+my/agent-shell-claude-context-functions`), while Emacs runs a server, in three parts:
+`+my/agent-shell-context-functions`), while Emacs runs a server, in three parts:
 
 - **What to show:** the canvas is where information goes. Whatever has a shape (figures, records, a comparison, a
   trend, a structure, steps, changes, output) goes there as the element that fits it, and the reply keeps the words

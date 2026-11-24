@@ -160,4 +160,4 @@ streaming is left as it is. For `agent-shell-markdown-render-functions'."
   (when (fboundp '+my/mermaid-render)
     +my/agent-shell-mermaid-context))
 
-(add-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-mermaid-context t)
+(add-hook '+my/agent-shell-context-functions #'+my/agent-shell-mermaid-context t)

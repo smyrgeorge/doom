@@ -162,7 +162,7 @@ killed after."
 ;; ====== WHAT THE AGENT IS TOLD ======
 
 (ert-deftest agent-ui-agent/told-in-its-system-prompt ()
-  (should (memq #'agent-ui-agent-context +my/agent-shell-claude-context-functions))
+  (should (memq #'agent-ui-agent-context +my/agent-shell-context-functions))
   (should (file-executable-p agent-ui-command))
   (should (equal agent-ui-command (expand-file-name "cmd/agent-ui" +test-root)))
   (should (equal agent-ui-skill (expand-file-name "skills/agent-ui/SKILL.md" +test-root)))

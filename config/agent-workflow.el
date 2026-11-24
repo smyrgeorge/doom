@@ -207,12 +207,12 @@ last few, scrolling back through these)."
 ;; In its system prompt, after what every Claude Code session is: the job it
 ;; does, where, how it ends a step, then its agent's instructions
 ;; (config/agent-workflow/pool.el).
-(add-hook '+my/agent-shell-claude-context-functions #'agent-workflow-agent-context t)
+(add-hook '+my/agent-shell-context-functions #'agent-workflow-agent-context t)
 
 ;; WHAT EVERY SESSION IS TOLD
 ;; Where the agent-workflow skill is (skills/agent-workflow/SKILL.md): to
 ;; write, check or run a project's workflows (config/agent-workflow/core.el).
-(add-hook '+my/agent-shell-claude-context-functions #'agent-workflow-skill-context t)
+(add-hook '+my/agent-shell-context-functions #'agent-workflow-skill-context t)
 
 ;; Its canvas opens no pane of its own: kept, for its ticket's pane.
 (agent-workflow--take-canvases)

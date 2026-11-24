@@ -378,7 +378,7 @@ config function, from the first file to the last."
 (ert-deftest config/everything-defined ()
   "A command from each part of the config is there after loading."
   (dolist (fn '(+my/tiling-split +my/goto-declaration-or-usages +my/context-actions
-                +my/agent-shell-claude-theme +my/lsp-gitignored-directories
+                +my/agent-shell-theme-context +my/lsp-gitignored-directories
                 +my/peek--title +my/compile-config-functions-h +my/excalidraw-insert))
     (should (fboundp fn))))
 

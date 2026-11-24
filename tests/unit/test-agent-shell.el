@@ -33,7 +33,7 @@
 ;; What Claude is told of a project's issues (config/agent-shell/beads.el):
 ;; its own tests (test-agent-shell-beads.el), in projects of their own. Not
 ;; here: these run in this config's folder, which may track its issues.
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 ;; ====== HELPERS ======
 
@@ -132,10 +132,6 @@ folder in the temp folder. `calls' collects (FUNCTION . ARGS) in order;
   "CALLS (newest first) to NAME, oldest first."
   (reverse (seq-filter (lambda (call) (eq (car call) name)) calls)))
 
-(defun +test-agent-shell--system-prompt (config)
-  "The text CONFIG appends to Claude Code's system prompt."
-  (map-nested-elt config '(:session-meta systemPrompt append)))
-
 ;; ====== KEYS ======
 
 (ert-deftest agent-shell/keys ()
@@ -196,12 +192,7 @@ login is used), and no OAuth token."
              (lambda (&rest _) (error "Asked which agent to use"))))
     (let ((config (agent-shell--auto-preferred-config)))
       (should config)
-      (should (eq (map-elt config :identifier) 'claude-code))
-      ;; Built by the Claude Code maker: what Claude is told comes with it.
-      (should (equal (+test-agent-shell--system-prompt config)
-                     (string-join (delq nil (list +my/agent-shell-claude-context
-                                                  (+my/agent-shell-claude-theme)))
-                                  "\n\n"))))))
+      (should (eq (map-elt config :identifier) 'claude-code)))))
 
 (ert-deftest agent-shell/buffers-named-after-the-agent ()
   "A session's buffer is named after its agent alone (\"Claude\", not
@@ -277,7 +268,7 @@ columns; a smaller share of the window, or a size in pixels, as it is."
 ;; ====== WHAT CLAUDE IS TOLD ======
 
 (ert-deftest agent-shell/context-says-where-it-runs ()
-  (let ((text +my/agent-shell-claude-context))
+  (let ((text +my/agent-shell-context))
     (should (stringp text))
     (should (string-prefix-p "You are running inside Emacs, in an agent-shell buffer" text))
     (should (string-match-p "claude-agent-acp" text))
@@ -285,14 +276,14 @@ columns; a smaller share of the window, or a size in pixels, as it is."
 
 (ert-deftest agent-shell/context-sections ()
   "Each paragraph is one of the documented sections, in order."
-  (let ((paragraphs (split-string +my/agent-shell-claude-context "\n\n")))
+  (let ((paragraphs (split-string +my/agent-shell-context "\n\n")))
     (should (= (length paragraphs) 6))
     (should (equal (mapcar (lambda (p) (car (split-string p ":")))
                            (cdr paragraphs))
                    '("Formatting" "File references" "Images" "Reports" "The editor")))))
 
 (ert-deftest agent-shell/context-formatting ()
-  (let ((text +my/agent-shell-claude-context))
+  (let ((text +my/agent-shell-context))
     (dolist (thing '("Markdown" "tables" "fenced code blocks" "always name it"))
       (should (string-match-p (regexp-quote thing) text)))
     ;; What doesn't render (Mermaid does: config/agent-shell/mermaid.el).
@@ -300,13 +291,13 @@ columns; a smaller share of the window, or a size in pixels, as it is."
     (should-not (string-match-p "Mermaid" text))))
 
 (ert-deftest agent-shell/context-file-references ()
-  (let ((text +my/agent-shell-claude-context))
+  (let ((text +my/agent-shell-context))
     (dolist (form '("path:line" "path:line-line" "path:line:col"))
       (should (string-match-p (regexp-quote form) text)))
     (should (string-match-p "links that open the file at that line" text))))
 
 (ert-deftest agent-shell/context-images ()
-  (let ((text +my/agent-shell-claude-context))
+  (let ((text +my/agent-shell-context))
     (should (string-match-p (regexp-quote "![chart](/abs/path/chart.png)") text))
     (should (string-match-p (regexp-quote "{width=50%}") text))
     (should (string-match-p "PNG, JPEG, WebP and SVG" text))
@@ -315,14 +306,14 @@ columns; a smaller share of the window, or a size in pixels, as it is."
     (should (string-match-p "kept out of git" text))))
 
 (ert-deftest agent-shell/context-reports ()
-  (let ((text +my/agent-shell-claude-context))
+  (let ((text +my/agent-shell-context))
     (should (string-match-p "report itself as Markdown in your reply, not as an HTML page or one big image"
                             text))
     (should (string-match-p "each diagram, chart or graph its own image, linked where it belongs" text))
     (should (string-match-p "diagram code too, unless it's drawn in replies" text))))
 
 (ert-deftest agent-shell/context-the-editor ()
-  (let ((text +my/agent-shell-claude-context))
+  (let ((text +my/agent-shell-context))
     (should (string-match-p "emacsclient --eval" text))
     (should (string-match-p (regexp-quote "~/.config/doom") text))
     (should (string-match-p "keep each eval quick and bounded" text))
@@ -333,7 +324,7 @@ columns; a smaller share of the window, or a size in pixels, as it is."
 (ert-deftest agent-shell/context-text-is-clean ()
   "The source's line continuations leave single spaces, no stray backslashes
 or indentation."
-  (let ((text +my/agent-shell-claude-context))
+  (let ((text +my/agent-shell-context))
     (should-not (string-match-p "  " text))
     (should-not (string-match-p "\\\\" text))
     (should-not (string-match-p "\n " text))
@@ -345,30 +336,30 @@ or indentation."
 
 (ert-deftest agent-shell/theme-dark ()
   (+test-agent-shell--with-colours +test-agent-shell--dark '(doom-one)
-    (should (equal (+my/agent-shell-claude-theme)
+    (should (equal (+my/agent-shell-theme-context)
                    "Emacs uses a dark theme (doom-one): background #282c34, text #bbc2cf. \
 Draw images to read well on it: a dark or transparent background, light text and lines."))))
 
 (ert-deftest agent-shell/theme-light ()
   (+test-agent-shell--with-colours +test-agent-shell--light '(doom-one-light)
-    (should (equal (+my/agent-shell-claude-theme)
+    (should (equal (+my/agent-shell-theme-context)
                    "Emacs uses a light theme (doom-one-light): background #fafafa, text #383a42. \
 Draw images to read well on it: a light or transparent background, dark text and lines."))))
 
 (ert-deftest agent-shell/theme-without-a-theme-name ()
   (+test-agent-shell--with-colours +test-agent-shell--dark nil
     (should (string-prefix-p "Emacs uses a dark theme: background #282c34,"
-                             (+my/agent-shell-claude-theme)))))
+                             (+my/agent-shell-theme-context)))))
 
 (ert-deftest agent-shell/theme-the-first-enabled-one ()
   "Several themes enabled: the latest (first in the list) is named."
   (+test-agent-shell--with-colours +test-agent-shell--dark '(doom-one user)
-    (should (string-match-p "dark theme (doom-one):" (+my/agent-shell-claude-theme)))))
+    (should (string-match-p "dark theme (doom-one):" (+my/agent-shell-theme-context)))))
 
 (ert-deftest agent-shell/theme-unknown-mode-is-light ()
   "Only a dark background mode says dark."
   (+test-agent-shell--with-colours '((background-mode . nil) (bg . "#ffffff") (fg . "#000000")) nil
-    (should (string-match-p "a light theme" (+my/agent-shell-claude-theme)))))
+    (should (string-match-p "a light theme" (+my/agent-shell-theme-context)))))
 
 (ert-deftest agent-shell/theme-unknown-colours-say-nothing ()
   "No line when the colours aren't known as #RRGGBB (a terminal, batch...)."
@@ -378,7 +369,7 @@ Draw images to read well on it: a light or transparent background, dark text and
                      ((background-mode . dark) (bg . nil) (fg . "#bbc2cf"))
                      ((background-mode . dark) (bg . "#282c34") (fg . nil))))
     (+test-agent-shell--with-colours colours '(doom-one)
-      (should-not (+my/agent-shell-claude-theme)))))
+      (should-not (+my/agent-shell-theme-context)))))
 
 ;; ====== THE SYSTEM PROMPT ======
 
@@ -542,91 +533,98 @@ nothing."
         (should-not (string-search "@" context)))
       (set-buffer-modified-p nil))))
 
-(ert-deftest agent-shell/advice-installed ()
-  (should (advice-member-p #'+my/agent-shell-claude-context-a
-                           #'agent-shell-anthropic-make-claude-code-config)))
+(ert-deftest agent-shell/context-advice-installed ()
+  "What a session is told: worked out as any session starts, given as its
+system prompt or before its first message; nothing in Claude Code's own
+session meta."
+  (should (advice-member-p #'+my/agent-shell-context-start-a #'agent-shell--start))
+  (should (advice-member-p #'+my/agent-shell-system-prompt-a #'agent-shell--system-prompt))
+  (should (advice-member-p #'+my/agent-shell-context-new-session-a #'agent-shell--initiate-new-session))
+  (should (advice-member-p #'+my/agent-shell-context-blocks-a #'agent-shell--prompt-content-blocks))
+  (let ((meta (map-elt (agent-shell-anthropic-make-claude-code-config) :session-meta)))
+    (should-not (assq 'systemPrompt meta))
+    ;; Its thinking options, the package's, kept.
+    (should (equal (map-nested-elt meta '(claudeCode options thinking display)) "summarized"))))
 
-(ert-deftest agent-shell/advice-appends-to-session-meta ()
-  "systemPrompt's append goes first in the session metadata; what was there
-(Claude Code's thinking options) stays."
-  (+test-agent-shell--with-colours '((bg . nil)) nil
-    (let* ((meta '((claudeCode . ((options . x)))))
-           (config (list (cons :identifier 'claude-code) (cons :session-meta meta)))
-           (result (+my/agent-shell-claude-context-a config)))
-      (should (eq result config))
-      (should (equal (alist-get :session-meta result)
-                     `((systemPrompt . ((append . ,+my/agent-shell-claude-context)))
-                       (claudeCode . ((options . x))))))
-      ;; The package's metadata isn't changed, only consed onto.
-      (should (equal meta '((claudeCode . ((options . x)))))))))
-
-(ert-deftest agent-shell/advice-without-session-meta ()
-  (+test-agent-shell--with-colours '((bg . nil)) nil
-    (let ((result (+my/agent-shell-claude-context-a (list (cons :identifier 'claude-code)))))
-      (should (eq (alist-get :identifier result) 'claude-code))
-      (should (equal (alist-get :session-meta result)
-                     `((systemPrompt . ((append . ,+my/agent-shell-claude-context)))))))))
-
-(ert-deftest agent-shell/advice-adds-the-theme-line ()
+(ert-deftest agent-shell/context-text ()
+  "What a session is told: the text, then the theme's line; the variable read
+each time (nil: the theme's line alone)."
   (+test-agent-shell--with-colours +test-agent-shell--dark '(doom-one)
-    (let ((text (+test-agent-shell--system-prompt
-                 (+my/agent-shell-claude-context-a (list (cons :session-meta nil))))))
-      (should (equal text (concat +my/agent-shell-claude-context "\n\n"
-                                  (+my/agent-shell-claude-theme))))
-      (should (string-suffix-p "light text and lines." text)))))
+    (should (equal (+my/agent-shell-context-text)
+                   (concat +my/agent-shell-context "\n\n" (+my/agent-shell-theme-context))))
+    (let ((+my/agent-shell-context "Be brief."))
+      (should (string-prefix-p "Be brief.\n\nEmacs uses a dark theme" (+my/agent-shell-context-text))))
+    (let ((+my/agent-shell-context nil))
+      (should (string-prefix-p "Emacs uses a dark theme" (+my/agent-shell-context-text))))))
 
-(ert-deftest agent-shell/advice-follows-the-variable ()
-  "The text is read when the config is built: a changed variable counts; nil
-leaves only the theme line."
-  (+test-agent-shell--with-colours +test-agent-shell--dark nil
-    (let ((+my/agent-shell-claude-context "Be brief."))
-      (should (string-prefix-p "Be brief.\n\nEmacs uses a dark theme"
-                               (+test-agent-shell--system-prompt
-                                (+my/agent-shell-claude-context-a (list))))))
-    (let ((+my/agent-shell-claude-context nil))
-      (should (string-prefix-p "Emacs uses a dark theme"
-                               (+test-agent-shell--system-prompt
-                                (+my/agent-shell-claude-context-a (list))))))))
+(ert-deftest agent-shell/context-kept-in-the-config-as-it-starts ()
+  "A session starting: what it's told, worked out then (the theme of the
+moment), in its config, its other arguments as they were; a config given it
+already keeps it."
+  (let* ((config (list (cons :identifier 'codex) (cons :buffer-name "Codex")))
+         (dark (+test-agent-shell--with-colours +test-agent-shell--dark '(doom-one)
+                 (+my/agent-shell-context-start-a (list :config config :no-focus t))))
+         (light (+test-agent-shell--with-colours +test-agent-shell--light '(doom-one-light)
+                  (+my/agent-shell-context-start-a (list :config config :no-focus t)))))
+    (should (eq (plist-get dark :no-focus) t))
+    (should (eq (map-elt (plist-get dark :config) :identifier) 'codex))
+    (should (string-match-p "a dark theme (doom-one)" (map-elt (plist-get dark :config) :+my/context)))
+    (should (string-match-p "a light theme (doom-one-light)" (map-elt (plist-get light :config) :+my/context)))
+    ;; The config given isn't changed.
+    (should-not (assq :+my/context config))
+    (let ((given (list :config (cons (cons :+my/context "Told.") config))))
+      (should (equal (+my/agent-shell-context-start-a given) given)))))
 
-(ert-deftest agent-shell/claude-code-config-carries-it ()
-  "The real Claude Code config: our text appended, its thinking options kept."
-  (+test-agent-shell--with-colours +test-agent-shell--dark '(doom-one)
-    (let* ((config (agent-shell-anthropic-make-claude-code-config))
-           (meta (map-elt config :session-meta)))
-      (should (eq (map-elt config :identifier) 'claude-code))
-      (should (eq (caar meta) 'systemPrompt))
-      (should (equal (+test-agent-shell--system-prompt config)
-                     (concat +my/agent-shell-claude-context "\n\n"
-                             (+my/agent-shell-claude-theme))))
-      (should (equal (map-nested-elt meta '(claudeCode options thinking display))
-                     "summarized")))))
+(ert-deftest agent-shell/context-as-the-system-prompt ()
+  "An agent taking a system prompt from Emacs: what the session is told,
+after agent-shell's own if any; one that takes none: agent-shell's (nil)."
+  (with-temp-buffer
+    (setq-local agent-shell--state (list (cons :supports-system-prompt t)
+                                         (cons :agent-config (list (cons :+my/context "Told.")))))
+    (let ((agent-shell-system-prompt nil))
+      (should (equal (agent-shell--system-prompt) "Told.")))
+    (let ((agent-shell-system-prompt "Own."))
+      (should (equal (agent-shell--system-prompt) "Own.\n\nTold.")))
+    (map-put! agent-shell--state :supports-system-prompt nil)
+    (let ((agent-shell-system-prompt nil))
+      (should-not (agent-shell--system-prompt)))))
 
-(ert-deftest agent-shell/each-session-gets-it-once ()
-  "Built anew for each session: never twice, and the colours of the theme of
-the moment (dark, then light)."
-  (let ((dark (+test-agent-shell--with-colours +test-agent-shell--dark '(doom-one)
-                (agent-shell-anthropic-make-claude-code-config)))
-        (light (+test-agent-shell--with-colours +test-agent-shell--light '(doom-one-light)
-                 (agent-shell-anthropic-make-claude-code-config))))
-    (dolist (config (list dark light))
-      (should (= (cl-count 'systemPrompt (map-elt config :session-meta) :key #'car) 1)))
-    (should (string-match-p "a dark theme (doom-one)" (+test-agent-shell--system-prompt dark)))
-    (should (string-match-p "a light theme (doom-one-light)" (+test-agent-shell--system-prompt light)))
-    (should-not (string-match-p "dark theme" (+test-agent-shell--system-prompt light)))))
+(ert-deftest agent-shell/context-before-the-first-message ()
+  "A new session whose agent takes no system prompt: what it's told, a block
+before its first message's, once; one whose agent takes it: nothing added."
+  (with-temp-buffer
+    (setq-local agent-shell--state (list (cons :supports-system-prompt nil)
+                                         (cons :agent-config (list (cons :+my/context "Told.")))))
+    (cl-letf (((symbol-function 'agent-shell--build-content-blocks)
+               (lambda (prompt) (vector `((type . "text") (text . ,prompt))))))
+      (+my/agent-shell-context-new-session-a :shell-buffer (current-buffer))
+      (let ((blocks (agent-shell--prompt-content-blocks "Hello")))
+        (should (= (length blocks) 2))
+        (should (string-match-p "this session's system prompt from Emacs" (map-elt (aref blocks 0) 'text)))
+        (should (string-suffix-p "<system-prompt>\nTold.\n</system-prompt>" (map-elt (aref blocks 0) 'text)))
+        (should (equal (map-elt (aref blocks 1) 'text) "Hello")))
+      (should (= (length (agent-shell--prompt-content-blocks "Again")) 1))
+      ;; Its agent taking a system prompt: nothing waits.
+      (map-put! agent-shell--state :supports-system-prompt t)
+      (+my/agent-shell-context-new-session-a :shell-buffer (current-buffer))
+      (should-not +my/agent-shell--context-pending)
+      (should (= (length (agent-shell--prompt-content-blocks "Hello")) 1)))))
 
 (ert-deftest agent-shell/sent-on-new-resumed-and-loaded-sessions ()
-  "agent-shell sends the config's metadata as _meta when it starts, resumes or
-loads a session: as JSON, {\"systemPrompt\": {\"append\": TEXT}}."
-  (+test-agent-shell--with-colours '((bg . nil)) nil
-    (let ((meta (map-elt (agent-shell-anthropic-make-claude-code-config) :session-meta)))
-      (dolist (request (list (acp-make-session-new-request :cwd "/tmp/" :meta meta)
-                             (acp-make-session-resume-request :session-id "s" :cwd "/tmp/" :meta meta)
-                             (acp-make-session-load-request :session-id "s" :cwd "/tmp/" :meta meta)))
-        (let* ((params (map-elt request :params))
-               (json (json-parse-string (json-serialize (map-elt params '_meta))
-                                        :object-type 'alist)))
-          (should (equal (map-nested-elt json '(systemPrompt append))
-                         +my/agent-shell-claude-context)))))))
+  "To an agent taking it, agent-shell sends what the session is told as
+ACP's systemPrompt (append) when it starts, resumes or loads a session."
+  (with-temp-buffer
+    (setq-local agent-shell--state (list (cons :supports-system-prompt t)
+                                         (cons :agent-config (list (cons :+my/context "Told.")))))
+    (let ((agent-shell-system-prompt nil))
+      (dolist (request (list (acp-make-session-new-request :cwd "/tmp/" :system-prompt (agent-shell--system-prompt))
+                             (acp-make-session-resume-request :session-id "s" :cwd "/tmp/"
+                                                              :system-prompt (agent-shell--system-prompt))
+                             (acp-make-session-load-request :session-id "s" :cwd "/tmp/"
+                                                            :system-prompt (agent-shell--system-prompt))))
+        (let ((json (json-parse-string (json-serialize (map-elt request :params)) :object-type 'alist)))
+          (should (equal (map-nested-elt json '(systemPrompt mode)) "append"))
+          (should (equal (map-elt (aref (map-nested-elt json '(systemPrompt content)) 0) 'text) "Told.")))))))
 
 ;; ====== SPC o c ======
 
@@ -638,11 +636,7 @@ loads a session: as JSON, {\"systemPrompt\": {\"append\": TEXT}}."
       (should (= (length starts) 1))
       (let ((args (cdar starts)))
         (should (eq (map-elt (plist-get args :config) :identifier) 'claude-code))
-        (should (plist-get args :new-session))
-        (should (equal (+test-agent-shell--system-prompt (plist-get args :config))
-                       (string-join (delq nil (list +my/agent-shell-claude-context
-                                                    (+my/agent-shell-claude-theme)))
-                                    "\n\n")))))
+        (should (plist-get args :new-session))))
     (should (equal (+test-agent-shell--calls calls 'display)
                    (list (list 'display started nil))))
     (should-not (+test-agent-shell--calls calls 'picker))
@@ -666,11 +660,7 @@ project's sessions to resume or a new one), though the project has one."
       (should (= (length starts) 1))
       (let ((args (cdar starts)))
         (should (eq (map-elt (plist-get args :config) :identifier) 'claude-code))
-        (should (plist-get args :new-session))
-        (should (equal (+test-agent-shell--system-prompt (plist-get args :config))
-                       (string-join (delq nil (list +my/agent-shell-claude-context
-                                                    (+my/agent-shell-claude-theme)))
-                                    "\n\n")))))
+        (should (plist-get args :new-session))))
     (should (equal (+test-agent-shell--calls calls 'display)
                    (list (list 'display started nil))))
     (should-not (+test-agent-shell--calls calls 'picker))

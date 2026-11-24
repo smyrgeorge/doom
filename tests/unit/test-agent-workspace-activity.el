@@ -10,7 +10,7 @@
 (require 'agent-shell)
 (require 'agent-shell-mock-agent)
 (+test-load "config/agent-shell" "config/agent-workspace")
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)

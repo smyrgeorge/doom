@@ -92,9 +92,9 @@ also `root'), with a temp HOME; skipped without bd."
   (let ((plain (+test-asb--dir)))
     (cl-letf (((symbol-function 'agent-shell-cwd) (lambda () plain)))
       (should-not (+my/agent-shell-beads-context))))
-  (should (memq #'+my/agent-shell-beads-context +my/agent-shell-claude-context-functions))
+  (should (memq #'+my/agent-shell-beads-context +my/agent-shell-context-functions))
   ;; After the theme's line.
-  (should (eq (car +my/agent-shell-claude-context-functions) #'+my/agent-shell-claude-theme)))
+  (should (eq (car +my/agent-shell-context-functions) #'+my/agent-shell-theme-context)))
 
 (ert-deftest agent-shell-beads/context-with-beads-guide ()
   (+test-asb-with-bd
@@ -150,12 +150,11 @@ the user's (doom-zoa)."
       (should-not (+my/agent-shell-beads--primed-p root)))))
 
 (ert-deftest agent-shell-beads/context-in-the-system-prompt ()
-  "A session started in the project: its system prompt has it, after the
+  "A session started in the project: what it's told has it, after the
 editor's text."
   (+test-asb-with-bd
-    (let* ((config (agent-shell-anthropic-make-claude-code-config))
-           (text (map-nested-elt (alist-get :session-meta config) '(systemPrompt append))))
-      (should (string-prefix-p +my/agent-shell-claude-context text))
+    (let ((text (+my/agent-shell-context-text)))
+      (should (string-prefix-p +my/agent-shell-context text))
       (should (string-match-p (regexp-quote +my/agent-shell-beads-context) text)))))
 
 (ert-deftest agent-shell-beads/context-text-is-clean ()

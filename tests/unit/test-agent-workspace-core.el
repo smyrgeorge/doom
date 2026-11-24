@@ -10,7 +10,7 @@
 (+test-load "config/agent-shell" "config/agent-workspace")
 
 ;; What Claude is told of a project's issues: not this config's.
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 ;; ====== HELPERS ======
 
@@ -45,7 +45,7 @@
 (ert-deftest agent-workspace/wired-in ()
   "What an agent is told comes after what every session is; a question on
 its canvas raises its hand; quitting Emacs closes the crews."
-  (should (eq (car (last +my/agent-shell-claude-context-functions)) #'agent-workspace-agent-context))
+  (should (eq (car (last +my/agent-shell-context-functions)) #'agent-workspace-agent-context))
   (should (memq #'agent-workspace--question-waiting agent-ui-question-waiting-functions))
   (should (memq #'agent-workspace--quit-h kill-emacs-hook)))
 
@@ -570,7 +570,7 @@ role itself untouched; the main branch asked once."
         (should (equal (alist-get 'disallowedTools options)
                        ["Bash(git -C * push)" "Bash(git -C /tmp/my\\ project reset:*)"]))
         (should (string-suffix-p "git -C /tmp/my\\ project merge --no-ff BRANCH, into main (main); {NAME}."
-                                 (alist-get 'append (alist-get 'systemPrompt meta))))))))
+                                 (let ((agent-workspace--starting agent)) (+my/agent-shell-context-text))))))))
 
 (ert-deftest agent-workspace/what-a-lead-is-told ()
   "An agent whose role leads is told it runs the crew for the user, on their
@@ -590,7 +590,7 @@ hand work to other agents."
 (ert-deftest agent-workspace/a-session-s-config ()
   "Claude Code's config for an agent: its buffer's name, its role's model and
 mode, tools and MCP servers, its environment added to its client's, what
-it's told in its system prompt; the maker's own config untouched."
+it's told as it starts; the maker's own config untouched."
   (let* ((agent (+test-awc--agent))
          (agent-shell-mcp-servers '(((name . "agent-ui"))))
          (agent-workspace-role-function
@@ -619,8 +619,9 @@ it's told in its system prompt; the maker's own config untouched."
         (should (equal (alist-get 'disallowedTools options) ["WebFetch"]))
         ;; agent-shell's own options kept.
         (should (alist-get 'thinking options))
-        (let ((prompt (alist-get 'append (alist-get 'systemPrompt meta))))
-          (should (string-prefix-p +my/agent-shell-claude-context prompt))
+        ;; What it's told, worked out as it starts (it bound).
+        (let ((prompt (let ((agent-workspace--starting agent)) (+my/agent-shell-context-text))))
+          (should (string-prefix-p +my/agent-shell-context prompt))
           (should (string-search "You are ada, the builder" prompt))
           (should (string-suffix-p "Build it." prompt)))
         (with-temp-buffer

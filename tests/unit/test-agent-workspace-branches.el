@@ -17,7 +17,7 @@
 
 (require 'agent-shell)
 (+test-load "config/agent-shell" "config/agent-ui" "config/tiling" "config/agent-workspace")
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 (setq agent-workspace-minimap nil)
 
 ;; ====== HELPERS ======

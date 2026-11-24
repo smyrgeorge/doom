@@ -92,7 +92,7 @@ changed since."
 (defun agent-workflow-skill-context ()
   "The line every agent-shell session is told of agent workflows (for its
 system prompt): where the skill is; nil while Emacs runs no server (the
-command couldn't reach it). One of `+my/agent-shell-claude-context-functions'."
+command couldn't reach it). One of `+my/agent-shell-context-functions'."
   (when (and (fboundp 'server-running-p) (server-running-p))
     (format "Agent workflows: to write, check or run a project's agent workflows (its .agent-workflow/, \
 %s), read %s first." (abbreviate-file-name agent-workflow-command) (abbreviate-file-name agent-workflow-skill))))

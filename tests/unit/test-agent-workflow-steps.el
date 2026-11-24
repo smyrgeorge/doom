@@ -16,7 +16,7 @@
 (setenv "GIT_CONFIG_NOSYSTEM" "1")
 
 (+test-load "config/agent-shell" "config/agent-workflow")
-(remove-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context)
+(remove-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context)
 
 (setq agent-shell-mock-agent-acp-command
       (list (expand-file-name invocation-name invocation-directory)

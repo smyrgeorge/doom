@@ -68,7 +68,7 @@ project's Claude Code settings give it already (see above); else nil."
                                       (+my/agent-shell-beads--bd root "prime"))))
                  "\n\n")))
 
-(add-hook '+my/agent-shell-claude-context-functions #'+my/agent-shell-beads-context t)
+(add-hook '+my/agent-shell-context-functions #'+my/agent-shell-beads-context t)
 
 ;; EMACS FOLLOWS CLAUDE'S CHANGES
 ;; Each of Claude's shell commands running bd, once done: the project's issue
