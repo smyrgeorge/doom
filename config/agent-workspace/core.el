@@ -454,6 +454,15 @@ napping), or its hand is raised for a question on its canvas."
   (or (memq (agent-workspace-agent-state agent) '(desk done nap))
       (agent-workspace--canvas-hand-p agent)))
 
+(defun agent-workspace--in-turn-p (agent)
+  "Whether AGENT is in a turn of yours: working, or its hand raised in one.
+Not one at rest with its hand up for a question on its canvas, nor in a
+turn it started by itself (a background task's): a prompt then starts a
+turn of its own, on its issue's branch."
+  (and (memq (agent-workspace-agent-state agent) '(working hand))
+       (not (agent-workspace--self-turn-can-start-p agent))
+       (not (gethash agent agent-workspace--self-turns))))
+
 (defun agent-workspace--self-turn-start (agent)
   "AGENT's turn started by itself: noted, its quiet stretch waited for, the
 question on its canvas it asks kept. Return its plist
@@ -604,9 +613,9 @@ waiting on AGENT's canvas, unanswered."
       ('input-submitted
        ;; Its branch first (worktree.el), before its agent gets the prompt:
        ;; the issue's it was given while it worked, or one made for it at rest.
-       ;; Not for a steer into the turn running (working, its hand raised):
-       ;; that turn goes on on its branch.
-       (agent-workspace--turn-branch agent (alist-get :prompt data) (memq state '(working hand)))
+       ;; Not for a steer into a turn of yours running (working, its hand
+       ;; raised in it): that turn goes on on its branch.
+       (agent-workspace--turn-branch agent (alist-get :prompt data) (agent-workspace--in-turn-p agent))
        ;; A turn starts: its time counts from here, a raised hand and its
        ;; answer don't reset it.
        (unless (memq state '(working hand))

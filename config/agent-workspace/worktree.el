@@ -604,7 +604,7 @@ worktree."
   (when (agent-workspace--worktree-live agent)
     (let* ((project (agent-workspace-agent-project agent))
            (type (or type (and (fboundp 'agent-workspace-issue-type) (agent-workspace-issue-type project issue)))))
-      (if (memq (agent-workspace-agent-state agent) '(working hand))
+      (if (agent-workspace--in-turn-p agent)
           (puthash agent (list issue type title) agent-workspace--branch-next)
         (remhash agent agent-workspace--branch-next)
         (agent-workspace--issue-branch-go agent issue type title)))))

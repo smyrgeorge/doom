@@ -702,6 +702,27 @@ turn running, its files there; the issue's branch comes with its next turn
       (should (+test-aws--wait (lambda () (equal (funcall head) "task/demo-2-two"))))
       (should-not (file-exists-p (expand-file-name "one.txt" dir))))))
 
+(ert-deftest agent-workspace-session/an-issue-given-at-rest-hand-up ()
+  "An issue given to an agent at rest, its hand up for a question on its
+canvas (or in a turn of its own): its branch at once, not left for a turn
+that's no turn of yours (doom-pbk.168)."
+  (+test-aws--with-crew "hand-up"
+    (let* ((agent (+test-aws--create "ada"))
+           (dir (agent-workspace-agent-worktree agent))
+           (head (lambda () (let ((default-directory dir)) (+test-aws--git "branch" "--show-current")))))
+      (agent-workspace--set-state agent 'hand)
+      (cl-letf (((symbol-function 'agent-workspace--canvas-hand-p) (lambda (_agent) t)))
+        (should-not (agent-workspace--in-turn-p agent))
+        (agent-workspace-give agent "demo-1" "One")
+        (should (equal (funcall head) "task/demo-1")))
+      ;; In a turn of yours, its hand raised in it: in a turn.
+      (cl-letf (((symbol-function 'agent-workspace--canvas-hand-p) #'ignore))
+        (should (agent-workspace--in-turn-p agent))
+        ;; In one it started by itself: not.
+        (puthash agent (list :timer nil) agent-workspace--self-turns)
+        (unwind-protect (should-not (agent-workspace--in-turn-p agent))
+          (remhash agent agent-workspace--self-turns))))))
+
 ;; ====== WHAT YOU DO TO ONE ======
 
 (ert-deftest agent-workspace-session/interrupt ()
