@@ -2757,6 +2757,17 @@ never split (cut to fit when wider than it)."
     (should (equal (substring-no-properties text) "[bug 12] [feature 4] [agent-ui 31] [P1 2] [docs]"))
     (should (string-match-p ">bug 12</text>" (plist-get (cdr (get-text-property 0 'display text)) :data)))))
 
+(ert-deftest agent-ui-elements/tags-a-colour-is-a-colour ()
+  "A tag's color: #RGB to #RRGGBBAA or a colour's name, nothing that would
+go into an SVG's attributes as more (doom-ht6.72)."
+  (dolist (color '("#fff" "#12ab34" "#12ab34cc" "red"))
+    (ert-info (color) (should (agent-ui-check "tags" (list :tags (list (list :label "a" :color color)))))))
+  (dolist (color '("#fff\" onload=\"alert(1)" "#f00\"/><script>alert(1)</script>" "#zzz" "nope-colour"))
+    (ert-info (color)
+      (should-error (agent-ui-check "tags" (list :tags (list (list :label "a" :color color)))) :type 'agent-ui-error)))
+  ;; A snapshot's colour escaped, whatever it is.
+  (should (string-search "fill=\"a&quot;b\"" (agent-ui-snapshot--run "x" 0 0 "a\"b" nil 8 16))))
+
 (ert-deftest agent-ui-elements/tags-a-chips-prompt-and-appended ()
   "A chip with a prompt puts it into the session's prompt; appending a tag
 whose label is there changes it in its place."

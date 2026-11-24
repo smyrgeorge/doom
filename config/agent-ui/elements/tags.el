@@ -44,7 +44,12 @@ an error naming it (the I-th) if it's wrong."
         (agent-ui--fail "tags: tag %d has no label" i))
       (unless (or (null face) (member (format "%s" face) '("plain" "muted" "success" "warning" "error" "accent")))
         (agent-ui--fail "tags: tag %d's face is plain, muted, success, warning, error or accent" i))
-      (unless (or (null color) (and (stringp color) (color-defined-p color)) (string-prefix-p "#" (format "%s" color)))
+      ;; #RGB to #RRGGBBAA, or a colour's name: nothing else (it goes into
+      ;; an SVG's attributes).
+      (unless (or (null color)
+                  (and (stringp color)
+                       (or (string-match-p "\\`#[0-9a-fA-F]\\{3,8\\}\\'" color)
+                           (and (string-match-p "\\`[A-Za-z][A-Za-z0-9 ]*\\'" color) (color-defined-p color)))))
         (agent-ui--fail "tags: tag %d's color isn't a colour: %s" i (agent-ui--show-value color)))
       (unless (or (null count) (numberp count) (stringp count))
         (agent-ui--fail "tags: tag %d's count is a number" i))

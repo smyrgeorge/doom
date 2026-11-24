@@ -99,7 +99,9 @@ at Y: SVG path data. Its vertical ones as long as the line's HEIGHT
 characters as rectangles (full ones joined), ░ a faint cell, its
 box-drawing ones as lines (`agent-ui-snapshot--lines', down to the line's
 HEIGHT), the rest text."
-  (let ((parts nil) (pending "") (pending-col col) (bar-start nil) (bar-cells 0) (lines ""))
+  (let ((parts nil) (pending "") (pending-col col) (bar-start nil) (bar-cells 0) (lines "")
+        ;; In attributes: escaped, whatever it is.
+        (color (xml-escape-string (format "%s" color))))
     (cl-flet ((flush-text ()
                 ;; Word by word, each at its column: no viewer's way with
                 ;; spaces (some collapse them) moves anything.
@@ -259,7 +261,8 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
                   (when (and back (not (equal back bg)))
                     (push (format "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"%s\"/>"
                                   (+ pad (* col cw)) (+ y (round (* 0.15 lh)))
-                                  (* cw (string-width (car run))) (round (* 0.7 lh)) back)
+                                  (* cw (string-width (car run))) (round (* 0.7 lh))
+                                  (xml-escape-string (format "%s" back)))
                           spans)))
                 (push (agent-ui-snapshot--run (car run) col y
                                               (agent-ui-snapshot--color (cdr run) :foreground fg)
