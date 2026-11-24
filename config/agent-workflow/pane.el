@@ -795,7 +795,10 @@ has a budget of them or spent some), its jobs done."
                   (append (list :label "Time" :value (agent-workflow--duration-words (plist-get spent :time)) :good "none")
                           (and (plist-get budget :time)
                                (list :change (concat "of " (agent-workflow--duration-words (plist-get budget :time))))))
-                  (append (list :label "Cost" :value (agent-workflow--pane-money cost) :good "none")
+                  ;; An agent's cost not known (it reports none): +.
+                  (append (list :label "Cost" :good "none"
+                                :value (concat (agent-workflow--pane-money cost)
+                                               (if (plist-get spent :cost-unknown) "+" "")))
                           (and (plist-get budget :cost)
                                (list :change (concat "of " (agent-workflow--pane-money (plist-get budget :cost))))))
                   (and (or (plist-get budget :tokens) (> tokens 0))

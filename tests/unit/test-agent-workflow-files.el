@@ -475,6 +475,31 @@ jobs:
                    (list '(error 5 "kind: only for an agent: step")
                          (list 'error 8 (concat "kind chatgpt: not one of " (agent-workflow--kinds-said))))))))
 
+(ert-deftest agent-workflow-files/model-effort-and-mode-by-kind ()
+  "An agent's model, effort and mode checked by its kind: Claude Code's
+against its names, levels and modes; another agent's taken as they are, in
+its file or on a step of it."
+  (pcase-let ((`(,definition . ,problems)
+               (+test-awf--definition "---\ndescription: x\nkind: codex\nmodel: gpt-5\neffort: extreme\nmode: full-auto\n---\nDo.\n")))
+    (should-not problems)
+    (should (equal (mapcar (lambda (key) (plist-get definition key)) '(:model :effort :mode))
+                   '("gpt-5" "extreme" "full-auto"))))
+  (pcase-let ((`(,_ . ,problems)
+               (+test-awf--definition "---\ndescription: x\nmode: full-auto\n---\nDo.\n")))
+    (should (equal (+test-awf--said problems)
+                   '((error 3 "mode full-auto: not one of default, acceptEdits, plan, auto, dontAsk, bypassPermissions")))))
+  (pcase-let ((`(,workflow . ,problems)
+               (+test-awf--workflow "description: x
+jobs:
+  build:
+    agent: build
+    kind: codex
+    model: gpt-5
+    effort: extreme
+")))
+    (should workflow)
+    (should-not problems)))
+
 (ert-deftest agent-workflow-files/runs-in-checkout-claude-code-only ()
   "A workflow that runs in your checkout: its agents (their steps' kinds,
 their files', its on-fail agents') Claude Code only: another, an error

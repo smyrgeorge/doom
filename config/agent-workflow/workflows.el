@@ -86,6 +86,7 @@
 (defvar agent-workflow-kinds)
 (defvar agent-workflow-kind)
 (declare-function agent-workflow--kinds-said "agent-workflow/agents")
+(declare-function agent-workflow--claude-code-kind-p "agent-workflow/agents")
 
 ;; ====== VARIABLES ======
 
@@ -445,6 +446,21 @@ file). NEEDS: every job's needs (an alist), DEFINITIONS the agents' names
             (agent-workflow--steps-session (plist-get read :steps) paths problem)))))
     read))
 
+(defvar agent-workflow--reading-definitions nil
+  "While a project's workflows are read: its agents (an alist), their
+kinds known to its steps' checks.")
+
+(defun agent-workflow--step-spec-claude-p (spec)
+  "Non-nil if the agent step SPEC (as read) runs Claude Code: its kind:,
+else its agent file's (`agent-workflow--reading-definitions'), else
+`agent-workflow-kind'."
+  (let ((kind (cdr (assoc "kind" spec))))
+    (agent-workflow--claude-code-kind-p
+     (if (stringp kind)
+         (intern kind)
+       (or (plist-get (alist-get (cdr (assoc "agent" spec)) agent-workflow--reading-definitions nil nil #'equal) :kind)
+           agent-workflow-kind)))))
+
 (defun agent-workflow--step-kind (step definitions &optional fixer)
   "The kind STEP's agent runs on (its FIXER's, its on-fail agent's): its
 kind:, else its agent file's (DEFINITIONS), else `agent-workflow-kind'."
@@ -567,7 +583,7 @@ this file). As `agent-workflow--job-read' for the rest."
                   (funcall problem 'error at "model %s: a model (%s, a model's id)" (agent-workflow--shown value)
                            (string-join agent-workflow-models ", ")))
                  ((not (equal kind "agent")) (funcall problem 'error at "model: only for an agent: step"))
-                 (t (unless (agent-workflow--model-p value)
+                 (t (when (and (agent-workflow--step-spec-claude-p spec) (not (agent-workflow--model-p value)))
                       (funcall problem 'warning at "model %s: not one of %s, nor a model's id (claude-...)"
                                value (string-join agent-workflow-models ", ")))
                     (setq step (plist-put step :model value)))))
@@ -576,7 +592,7 @@ this file). As `agent-workflow--job-read' for the rest."
                   (funcall problem 'error at "effort %s: one of %s" (agent-workflow--shown value)
                            (string-join agent-workflow-efforts ", ")))
                  ((not (equal kind "agent")) (funcall problem 'error at "effort: only for an agent: step"))
-                 (t (unless (member value agent-workflow-efforts)
+                 (t (when (and (agent-workflow--step-spec-claude-p spec) (not (member value agent-workflow-efforts)))
                       (funcall problem 'warning at "effort %s: not one of %s"
                                value (string-join agent-workflow-efforts ", ")))
                     (setq step (plist-put step :effort value)))))
@@ -699,7 +715,8 @@ of its name it replaced."
         (cadr cached)
       (let ((names (mapcar #'car definitions)) workflows problems)
         (dolist (file files)
-          (pcase-let ((`(,workflow . ,found) (agent-workflow-workflow-read (cdr file) names)))
+          (pcase-let ((`(,workflow . ,found) (let ((agent-workflow--reading-definitions definitions))
+                                               (agent-workflow-workflow-read (cdr file) names))))
             (setq problems (append problems found))
             ;; One that runs in your checkout: its agents Claude Code (it
             ;; alone kept from editing what runs them there).

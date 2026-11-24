@@ -267,7 +267,9 @@ never (`agent-workflow--protected-rules', PROJECT's)."
                    (error "No such kind of agent: %s" (plist-get definition :kind))))
          (model (plist-get definition :model))
          (effort (plist-get definition :effort))
-         (mode (or (plist-get definition :mode) agent-workflow-mode))
+         ;; Its mode: its agent's, else its kind's (Claude Code: auto).
+         (mode (or (plist-get definition :mode)
+                   (if (plist-get kind :claude-code) agent-workflow-mode (plist-get kind :mode))))
          (config (copy-tree (let ((agent-workflow--starting agent)) (funcall (plist-get kind :config)))))
          (maker (alist-get :client-maker config))
          (environment (agent-workflow--environment agent)))
@@ -276,15 +278,16 @@ never (`agent-workflow--protected-rules', PROJECT's)."
       (setf (alist-get :default-model-id config) (lambda () model)))
     (when mode
       (setf (alist-get :default-session-mode-id config) (lambda () mode)))
-    ;; Its effort, set once its model is (the levels are its model's): one
-    ;; it doesn't offer skipped, its session saying so.
+    ;; Its effort, set once its model is (the levels are its model's), by
+    ;; ACP's category for it (Claude Code's effort, another's reasoning
+    ;; effort...): one it doesn't offer skipped, its session saying so.
     (when effort
       (let ((options (alist-get :default-config-options config)))
         (setf (alist-get :default-config-options config)
               (lambda ()
-                (append (seq-remove (lambda (option) (equal (car-safe option) "effort"))
+                (append (seq-remove (lambda (option) (member (car-safe option) '("effort" "thought_level")))
                                     (and options (funcall options)))
-                        (list (cons "effort" effort)))))))
+                        (list (cons "thought_level" effort)))))))
     (when (plist-get kind :claude-code)
       (setf (alist-get :session-meta config)
             (agent-workflow--claude-options (alist-get :session-meta config) definition

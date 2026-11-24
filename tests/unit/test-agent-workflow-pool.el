@@ -272,7 +272,8 @@ set once its model is, as a config option (claude-agent-acp's effort)."
     (let* ((agent (+test-awp--start project "demo-2" "build" :model "opus" :effort "high"))
            (config (agent-workflow--config agent)))
       (should (equal (funcall (alist-get :default-model-id config)) "opus"))
-      (should (equal (funcall (alist-get :default-config-options config)) '(("effort" . "high"))))
+      ;; By ACP's category for it (Claude Code's effort; another's own).
+      (should (equal (funcall (alist-get :default-config-options config)) '(("thought_level" . "high"))))
       (should (equal (plist-get (agent-workflow-definition-filled agent) :effort) "high"))
       ;; Its session: its model set, then its effort.
       (let* ((set (car (+test-awp--wait

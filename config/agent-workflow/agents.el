@@ -110,6 +110,12 @@ too)."
 
 (defvar agent-workflow-kinds)
 
+(defvar agent-workflow-kind)
+
+(defun agent-workflow--claude-code-kind-p (kind)
+  "Non-nil if KIND (of `agent-workflow-kinds') is Claude Code."
+  (plist-get (alist-get kind (bound-and-true-p agent-workflow-kinds)) :claude-code))
+
 (defun agent-workflow--kinds-said ()
   "The kinds, as a problem lists them."
   (mapconcat (lambda (kind) (symbol-name (car kind))) (bound-and-true-p agent-workflow-kinds) ", "))
@@ -243,22 +249,15 @@ of their lines."
                   (if (assq (intern value) (bound-and-true-p agent-workflow-kinds))
                       (setq definition (plist-put definition :kind (intern value)))
                     (problem 'error n "kind %s: not one of %s" value (agent-workflow--kinds-said))))
+                 ;; Its model, effort and mode checked once its kind is
+                 ;; known (below): Claude Code's names, another's own.
                  ("model"
                   (unless (member value '("" "inherit"))
-                    (unless (agent-workflow--model-p value)
-                      (problem 'warning n "model %s: not inherit, one of %s, nor a model's id (claude-...)"
-                               value (string-join agent-workflow-models ", ")))
                     (setq definition (plist-put definition :model value))))
                  ("effort"
                   (unless (member value '("" "default"))
-                    (unless (member value agent-workflow-efforts)
-                      (problem 'warning n "effort %s: not default, nor one of %s"
-                               value (string-join agent-workflow-efforts ", ")))
                     (setq definition (plist-put definition :effort value))))
-                 ("mode"
-                  (if-let* ((id (agent-workflow--mode-id value)))
-                      (setq definition (plist-put definition :mode id))
-                    (problem 'error n "mode %s: not one of %s" value (string-join agent-workflow-modes ", "))))
+                 ("mode" (setq definition (plist-put definition :mode value)))
                  ("colour"
                   (if (member value agent-workflow-colours)
                       (setq definition (plist-put definition :colour value))
@@ -272,6 +271,26 @@ of their lines."
                     (when (cadr parts)
                       (setq definition (plist-put definition :glyph (cadr parts)))))))))))
         (when closed
+          ;; By its kind: Claude Code's model, effort and mode checked (its
+          ;; mode as Claude Code names it: accept-edits, acceptEdits);
+          ;; another agent's taken as they are.
+          (when (agent-workflow--claude-code-kind-p
+                 (or (plist-get definition :kind) (bound-and-true-p agent-workflow-kind)))
+            (let ((model (plist-get definition :model))
+                  (effort (plist-get definition :effort))
+                  (mode (plist-get definition :mode)))
+              (when (and model (not (agent-workflow--model-p model)))
+                (problem 'warning (cdr (assoc "model" seen)) "model %s: not inherit, one of %s, nor a model's id (claude-...)"
+                         model (string-join agent-workflow-models ", ")))
+              (when (and effort (not (member effort agent-workflow-efforts)))
+                (problem 'warning (cdr (assoc "effort" seen)) "effort %s: not default, nor one of %s"
+                         effort (string-join agent-workflow-efforts ", ")))
+              (when mode
+                (if-let* ((id (agent-workflow--mode-id mode)))
+                    (setq definition (plist-put definition :mode id))
+                  (setq definition (plist-put definition :mode nil))
+                  (problem 'error (cdr (assoc "mode" seen)) "mode %s: not one of %s" mode
+                           (string-join agent-workflow-modes ", "))))))
           (unless (assoc "description" seen)
             (problem 'error 1 "no description: say what it's for (description: ...)"))
           (dolist (tool (plist-get definition :tools))

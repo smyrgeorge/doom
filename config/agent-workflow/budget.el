@@ -23,6 +23,7 @@
 
 (defvar agent-shell--state)
 (defvar agent-workflow-budget)
+(defvar agent-workflow-kinds)
 
 (defvar agent-workflow--budget-timer nil
   "Looks at the runs' time, while one with a time budget runs.")
@@ -30,15 +31,24 @@
 ;; ====== WHAT A RUN SPENT ======
 
 (defun agent-workflow--agent-usage (agent)
-  "What AGENT's session spent so far: (:cost N :tokens N), its tokens its
-turns' (`agent-workflow--turn-tokens')."
+  "What AGENT's session spent so far: (:cost N :tokens N :unknown BOOL),
+its tokens its turns' (`agent-workflow--turn-tokens'); :unknown, its cost
+not known (an agent other than Claude Code that reports none, its cost
+counted 0)."
   (let ((buffer (agent-workflow-agent-buffer agent))
         (tokens (or (agent-workflow-agent-tokens agent) 0)))
     (if (and buffer (buffer-live-p buffer))
         (with-current-buffer buffer
-          (let ((usage (and (local-variable-p 'agent-shell--state) (map-elt agent-shell--state :usage))))
-            (list :cost (or (map-elt usage :cost-amount) 0) :tokens tokens)))
+          (let* ((usage (and (local-variable-p 'agent-shell--state) (map-elt agent-shell--state :usage)))
+                 (cost (map-elt usage :cost-amount)))
+            (list :cost (or cost 0) :tokens tokens
+                  :unknown (and (not cost) (not (agent-workflow--agent-claude-code-p agent))))))
       (list :cost 0 :tokens tokens))))
+
+(defun agent-workflow--agent-claude-code-p (agent)
+  "Non-nil if AGENT runs Claude Code (its kind's :claude-code)."
+  (plist-get (alist-get (plist-get (agent-workflow-definition-filled agent) :kind) agent-workflow-kinds)
+             :claude-code))
 
 (defun agent-workflow--turn-tokens (&rest args)
   "A turn of an agent of a run over, its usage saved (agent-shell's
@@ -64,22 +74,28 @@ tokens added to its agent's. Once a turn: a turn without usage adds none."
            (usage (agent-workflow--agent-usage agent))
            (spent (agent-workflow-run-spent run)))
       (setf (agent-workflow-run-spent run)
-            (list :cost (+ (or (plist-get spent :cost) 0) (plist-get usage :cost))
-                  :tokens (+ (or (plist-get spent :tokens) 0) (plist-get usage :tokens)))))))
+            (append (list :cost (+ (or (plist-get spent :cost) 0) (plist-get usage :cost))
+                          :tokens (+ (or (plist-get spent :tokens) 0) (plist-get usage :tokens)))
+                    (and (or (plist-get spent :cost-unknown) (plist-get usage :unknown))
+                         (list :cost-unknown t)))))))
 
 (defun agent-workflow-run-spent-now (run)
-  "What RUN spent so far: (:cost DOLLARS :tokens N :time SECONDS), its
-agents gone and working."
+  "What RUN spent so far: (:cost DOLLARS :tokens N :time SECONDS
+:cost-unknown BOOL), its agents gone and working; :cost-unknown, an agent's
+cost not known (counted 0: `agent-workflow--agent-usage')."
   (let ((cost (or (plist-get (agent-workflow-run-spent run) :cost) 0))
-        (tokens (or (plist-get (agent-workflow-run-spent run) :tokens) 0)))
+        (tokens (or (plist-get (agent-workflow-run-spent run) :tokens) 0))
+        (unknown (plist-get (agent-workflow-run-spent run) :cost-unknown)))
     (dolist (job (agent-workflow-run-jobs run))
       (when-let* ((agent (plist-get (cdr job) :agent)))
         (let ((usage (agent-workflow--agent-usage agent)))
           (cl-incf cost (plist-get usage :cost))
-          (cl-incf tokens (plist-get usage :tokens)))))
-    (list :cost cost :tokens tokens
-          :time (round (+ (agent-workflow-run-active run)
-                          (if-let* ((since (agent-workflow-run-active-since run))) (- (float-time) since) 0))))))
+          (cl-incf tokens (plist-get usage :tokens))
+          (when (plist-get usage :unknown) (setq unknown t)))))
+    (append (list :cost cost :tokens tokens
+                  :time (round (+ (agent-workflow-run-active run)
+                                  (if-let* ((since (agent-workflow-run-active-since run))) (- (float-time) since) 0))))
+            (and unknown (list :cost-unknown t)))))
 
 ;; ====== ITS BUDGET ======
 
@@ -108,7 +124,10 @@ added to it on top: (:cost :tokens :time), each nil without a cap."
   "SPENT of BUDGET, as said: \"$12.40 of $15, 2h 10m of 3h\"."
   (string-join
    (delq nil
-         (list (and (plist-get budget :cost) (format "$%.2f of $%s" (plist-get spent :cost) (plist-get budget :cost)))
+         (list (and (plist-get budget :cost)
+                    (format "$%.2f%s of $%s" (plist-get spent :cost)
+                            (if (plist-get spent :cost-unknown) " (an agent's not known)" "")
+                            (plist-get budget :cost)))
                (and (plist-get budget :tokens) (format "%d of %d tokens" (plist-get spent :tokens) (plist-get budget :tokens)))
                (and (plist-get budget :time) (format "%s of %s" (agent-workflow--duration-words (plist-get spent :time))
                                                      (agent-workflow--duration-words (plist-get budget :time))))))

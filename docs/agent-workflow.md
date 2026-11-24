@@ -181,9 +181,9 @@ Build it with its tests, commit on {branch}.
 | `kind` | Its agent: `claude-code`, `codex`, `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor` (`agent-workflow-kinds`); none: `agent-workflow-kind` (`claude-code`) |
 | `tools` | Allowed without asking |
 | `deny` | Never available |
-| `model` | `fable`, `opus`, `sonnet`, `haiku`, a model's id; none: your default |
-| `effort` | How hard it thinks: `low`, `medium`, `high`, `xhigh`, `max`; none: its model's default |
-| `mode` | Claude Code's permission mode; none: auto |
+| `model` | Claude Code's: `fable`, `opus`, `sonnet`, `haiku`, a model's id; another agent's own; none: your default |
+| `effort` | How hard it thinks (its ACP thought level): Claude Code's `low`, `medium`, `high`, `xhigh`, `max`; another agent's own; none: its model's default |
+| `mode` | Its permission mode: Claude Code's (checked); another agent's own; none: auto for Claude Code, another agent's default |
 | `icon`, `verb`, `colour` | How its steps are shown |
 
 What's after the front matter is the agent's instructions.
@@ -488,7 +488,9 @@ its time (while it runs or waits for an agent, not while it waits for you). What
 kept with the run, those working read from their sessions.
 
 - **Its cost** is each agent's session's, as Claude Code says it: what its tokens would cost on the API, at its list
-  prices (a running total). On a subscription, an estimate: nothing is billed by the run.
+  prices (a running total). On a subscription, an estimate: nothing is billed by the run. Another agent that reports
+  none counts nothing: the pane's cost says `+` (`$1.50+`), its budget's words that an agent's isn't known; its tokens
+  and time count all the same.
 - **Its tokens** are every turn's of each agent, added up as each turn ends (cache reads, most of them, included).
 
 - At 80% of any, it's said once, in its journal and as a message.

@@ -1075,6 +1075,20 @@ it does, what it was asked for; neither known, nothing."
               (should (agent-ui-check 'activity element)))))
       (kill-buffer session))))
 
+(ert-deftest agent-workflow-pane/an-agent-s-cost-not-known ()
+  "A run with an agent whose cost isn't known (another agent reporting
+none): its Cost tile says so (+), its budget's words too."
+  (let ((run (agent-workflow-run--make :project "/p/" :issue "demo-1" :n 1 :state 'running
+                                       :workflow '(:name "feature" :jobs nil) :jobs nil
+                                       :spent '(:cost 1.5 :tokens 10 :cost-unknown t))))
+    (cl-letf (((symbol-function 'agent-workflow-run-budget) (lambda (_) '(:cost 10))))
+      (should (equal (plist-get (seq-find (lambda (tile) (equal (plist-get tile :label) "Cost"))
+                                          (agent-workflow--pane-figures run))
+                                :value)
+                     "$1.50+"))
+      (should (string-prefix-p "$1.50 (an agent's not known) of $10"
+                               (agent-workflow--budget-words (agent-workflow-run-spent-now run) '(:cost 10)))))))
+
 (ert-deftest agent-workflow-pane/live-boxes-at-the-bottom ()
   "The live boxes at the Run section's bottom: under Rounds, even one
 shown before Rounds came (all shown again under it)."
