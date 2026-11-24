@@ -118,7 +118,16 @@ error naming them."
                    (list (list 'error (concat "tester.md:3: kind chatgpt: not one of "
                                               (mapconcat (lambda (kind) (symbol-name (car kind)))
                                                          agent-workspace-kinds ", ")))))))
-  (should (equal (mapcar #'car (seq-take agent-workspace-kinds 3)) '(claude-code codex gemini-cli))))
+  (should (equal (mapcar #'car (seq-take agent-workspace-kinds 3)) '(claude-code codex gemini-cli)))
+  ;; Another agent than Claude Code with deny: warned, it's weaker there.
+  (pcase-let ((`(,role . ,problems)
+               (+test-awr--read "---\ndescription: builds\nkind: codex\ndeny: Bash(git push:*)\n---\nBuild.\n")))
+    (should role)
+    (should (equal (+test-awr--messages problems)
+                   '((warning "tester.md:4: deny: codex isn't Claude Code: what it asks is refused, but it isn't kept from it (one that asks nothing, refused nothing)")))))
+  (pcase-let ((`(,_ . ,problems)
+               (+test-awr--read "---\ndescription: builds\nkind: claude-code\ndeny: Bash(git push:*)\n---\nBuild.\n")))
+    (should-not problems)))
 
 (ert-deftest agent-workspace-roles/leads ()
   "leads: true (or yes, any case), it runs the crew from its shell; false

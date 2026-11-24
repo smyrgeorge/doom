@@ -341,6 +341,14 @@ each item of its talks-to, hands-to and returns-to: ((KEY (ITEM . LINE)...)...).
             (when (member tool (plist-get role :deny))
               (problem 'warning (or (cdr (assoc "deny" seen)) 1)
                        "%s both allowed (tools) and denied (deny): denied" tool)))
+          ;; Another agent than Claude Code: its deny only refuses what it
+          ;; asks (config/agent-shell/permissions.el).
+          (when-let* ((kind (plist-get role :kind))
+                      ((plist-get role :deny))
+                      ((not (plist-get (alist-get kind (bound-and-true-p agent-workspace-kinds)) :claude-code))))
+            (problem 'warning (or (cdr (assoc "deny" seen)) 1)
+                     "deny: %s isn't Claude Code: what it asks is refused, but it isn't kept from it (one that asks nothing, refused nothing)"
+                     kind))
           (if (string-empty-p instructions)
               (problem 'warning closed "no instructions after its front matter")
             (setq role (plist-put role :instructions instructions))))))

@@ -235,6 +235,38 @@ its session."
                      (equal (plist-get entry :method) "session/set_mode"))
            collect (plist-get (plist-get entry :params) :modeId)))
 
+(ert-deftest agent-workspace-session/another-agent-s-requests-answered-by-its-role ()
+  "An agent other than Claude Code: its role's tools and deny answer its
+permission requests (nothing in Claude Code's options): one denied,
+refused for it, no hand raised; one allowed, allowed; neither, asked (its
+hand raised)."
+  (+test-aws--with-crew "rules"
+    (let* ((roles agent-workspace-role-function)
+           (deny nil)
+           (agent-workspace-role-function
+            (lambda (project name)
+              (append (list :tools '("Read") :deny deny) (funcall roles project name)))))
+      (setq deny '("Bash(npm install:*)"))
+      (let ((ada (+test-aws--create "ada")))
+        (should (equal (buffer-local-value '+my/agent-shell-permission-rules (agent-workspace-agent-buffer ada))
+                       '(:tools ("Read") :deny ("Bash(npm install:*)"))))
+        (agent-workspace-send ada "needs permission" :submit t)
+        (should (+test-aws--wait
+                 (lambda () (seq-some (lambda (entry)
+                                        (equal (map-nested-elt (plist-get entry :result) '(:outcome :optionId)) "reject"))
+                                      (+test-aws--log-entries)))))
+        (should-not (eq (agent-workspace-agent-state ada) 'hand)))
+      ;; Its role allowing it: allowed.
+      (setq deny nil)
+      (let ((agent-workspace-role-function
+             (lambda (project name) (append (list :tools '("Bash(npm:*)")) (funcall roles project name)))))
+        (let ((ken (+test-aws--create "ken")))
+          (agent-workspace-send ken "needs permission" :submit t)
+          (should (+test-aws--wait
+                   (lambda () (seq-some (lambda (entry)
+                                          (equal (map-nested-elt (plist-get entry :result) '(:outcome :optionId)) "allow"))
+                                        (+test-aws--log-entries))))))))))
+
 (ert-deftest agent-workspace-session/its-role-s-tools-and-mode-reach-its-agent ()
   "A role's tools and permission mode go to the agent, enforced there: its
 denied tools in Claude Code's disallowedTools (claude-agent-acp merges them

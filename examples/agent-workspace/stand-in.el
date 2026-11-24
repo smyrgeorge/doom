@@ -205,7 +205,9 @@ only), EFFORT its effort now."
   (let ((id (gethash "id" message))
         (method (gethash "method" message))
         (params (gethash "params" message)))
-    (mock-acp--log `(:method ,(or method :null) :params ,(or params :null)))
+    ;; A response to its own request (a permission's): what was answered.
+    (mock-acp--log `(:method ,(or method :null) :params ,(or params :null)
+                     ,@(when-let* ((result (and (null method) (gethash "result" message)))) (list :result result))))
     (pcase method
       ("initialize"
        ;; A system prompt from Emacs taken, as claude-agent-acp does, unless

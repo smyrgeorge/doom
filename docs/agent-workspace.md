@@ -601,7 +601,10 @@ Write the tests first, then run them.
 - `kind` is its agent: one of `agent-workspace-kinds`, agent-shell's names for them (`claude-code`, `codex`,
   `gemini-cli`, `opencode`, `qwen-code`, `copilot`, `goose`, `cursor`); none, `agent-workspace-kind` (`claude-code`).
 - `tools` are allowed without asking. `deny` are never offered. `mode` is Claude Code's permission mode (the
-  starters have none: their agents run in auto mode). Claude Code enforces all three.
+  starters have none: their agents run in auto mode). Claude Code enforces all three. Another agent takes no such
+  rules: its permission requests are answered by them instead (a `deny` one matching, refused; a `tools` one,
+  allowed; neither, it asks you), matched by their kind and what they act on. Weaker: nothing is hidden from it,
+  and in a mode that asks nothing, nothing is refused (a role naming another `kind` with `deny`: a warning).
 - `tools`, `deny` and the instructions can name the agent's own paths, filled in as its session starts: `{main}` (the
   project's main checkout), `{main-branch}` (its branch), `{name}` (the agent's name) and `{project}` (the main
   checkout's folder name). A rule then names the exact command, as the reviewer's do: `Bash(git -C {main} merge

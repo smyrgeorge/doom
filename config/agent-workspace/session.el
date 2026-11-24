@@ -23,6 +23,7 @@
 (defvar agent-shell-mcp-servers)
 (defvar agent-shell-buffer-name-format)
 (defvar shell-maker-prompt-before-killing-buffer)
+(defvar +my/agent-shell-permission-rules)
 
 ;; ====== VARIABLES ======
 
@@ -95,7 +96,14 @@ processes with it."
             (setq-local shell-maker-prompt-before-killing-buffer nil)
             (when-let* ((process (ignore-errors (shell-maker--process))))
               (set-process-query-on-exit-flag process nil))
-            (add-hook 'window-buffer-change-functions #'agent-workspace--shown-h nil t))
+            (add-hook 'window-buffer-change-functions #'agent-workspace--shown-h nil t)
+            ;; An agent other than Claude Code (which takes them as its
+            ;; options): its role's tools and deny answer its permission
+            ;; requests (config/agent-shell/permissions.el).
+            (unless (plist-get (alist-get (agent-workspace-agent-kind agent) agent-workspace-kinds) :claude-code)
+              (let ((role (agent-workspace-role-filled agent)))
+                (setq-local +my/agent-shell-permission-rules
+                            (list :tools (plist-get role :tools) :deny (plist-get role :deny))))))
           (setf (agent-workspace-agent-buffer agent) buffer)
           (agent-shell-subscribe-to
            :shell-buffer buffer
