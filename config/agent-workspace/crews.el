@@ -171,7 +171,10 @@ ones: ((ORIGIN . FILE)...)."
   (seq-mapcat (lambda (place)
                 (when (file-directory-p (cdr place))
                   (mapcar (lambda (file) (cons (car place) file))
-                          (directory-files (cdr place) t "\\`[^.].*\\.md\\'"))))
+                          ;; Files it can read: a dangling link, a folder or
+                          ;; one it can't read named *.md isn't one.
+                          (seq-filter (lambda (file) (and (file-regular-p file) (file-readable-p file)))
+                                      (directory-files (cdr place) t "\\`[^.].*\\.md\\'")))))
               (agent-workspace--crew-places project)))
 
 (defun agent-workspace--crew-specs-read (project)

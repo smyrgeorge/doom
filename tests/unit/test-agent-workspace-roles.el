@@ -384,6 +384,10 @@ name; one with errors is left out, warned about once."
       (+test-awr--file dir "tester.md" "---\ndescription: tests\nverb: testing\n---\nTest it.\n")
       (+test-awr--file dir "builder.md" "---\ndescription: makes\nverb: making\nmodel: haiku\n---\nMake.\n")
       (+test-awr--file dir "broken.md" "---\nmax: lots\ndescription: broken\n---\nBreak.\n")
+      ;; A dangling link, a folder named *.md: no role, none broken
+      ;; (doom-pbk.176).
+      (make-symbolic-link (expand-file-name "gone.md" dir) (expand-file-name "dangling.md" dir))
+      (make-directory (expand-file-name "folder.md" dir))
       (+test-awr--quietly
         (let ((roles (agent-workspace-roles project)))
           (should (equal (mapcar #'car roles) '("builder" "investigator" "reviewer" "scribe" "tester")))
