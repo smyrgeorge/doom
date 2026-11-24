@@ -2493,6 +2493,25 @@ across them, so rejecting one rejects it alone (doom-ht6.50)."
     (should (equal (agent-ui-diff--decided diff (agent-ui-diff--parse text))
                    '(("x @@ -1,2 +1,2 @@") . ("x @@ -20,2 +20,2 @@"))))))
 
+(ert-deftest agent-ui-elements/a-diff-inside-a-confirm-is-still ()
+  "A confirm's diff, a compare's option: drawn still, nothing to comment
+on: c there says so, writing nothing to the confirm (doom-ht6.67)."
+  (+test-aue-canvas
+    (agent-ui-show (list :id "ok" :type "confirm" :question "Apply?" :diff +test-aue-two-hunks))
+    (agent-ui-show (list :id "cmp" :type "compare" :question "Which?"
+                         :options (list (list :label "A" :element (list :type "code" :code "x = 1"))
+                                        (list :label "B" :element (list :type "code" :code "y = 2")))))
+    (with-current-buffer canvas
+      (agent-ui--flush)
+      (goto-char (point-min))
+      (search-forward "size_t")
+      (should-not (get-text-property (point) 'agent-ui-line))
+      (should (equal (cadr (should-error (agent-ui-comment (point) (point)) :type 'user-error))
+                     "Comment on a line of code or of a diff"))
+      (should-not (plist-get (agent-ui-get "ok") :comments))
+      (search-forward "x = 1")
+      (should-not (get-text-property (1- (point)) 'agent-ui-line)))))
+
 (ert-deftest agent-ui-elements/diff-hunks-accepted-and-sent ()
   "x on any line of a hunk rejects it (the cursor staying), again: back; RET
 on its mark too; Reject all, Accept all; Send names them by file and header,

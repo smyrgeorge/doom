@@ -84,7 +84,7 @@ label (wrapped, its lines under the label's start), a button picking it."
                      (columns (mapcar (lambda (option)
                                         (agent-ui-panel--lines
                                          (concat (agent-ui-compare--head props ctx option column still) "\n"
-                                                 (agent-ui-panel--child (plist-get option :element) text-ctx column))
+                                                 (agent-ui-inert (plist-get option :element) text-ctx column))
                                          column text-ctx))
                                       options))
                      (height (apply #'max (mapcar #'length columns))))
@@ -100,8 +100,8 @@ label (wrapped, its lines under the label's start), a button picking it."
                                   (cons ""
                                         (cons (agent-ui-compare--head props ctx option (- width 1) still " ")
                                               (mapcar (lambda (line) (concat "   " line))
-                                                      (split-string (agent-ui-panel--child (plist-get option :element)
-                                                                                           ctx (- width 3))
+                                                      (split-string (agent-ui-inert (plist-get option :element)
+                                                                                    ctx (- width 3))
                                                                     "\n")))))
                                 options))))))
     (string-join

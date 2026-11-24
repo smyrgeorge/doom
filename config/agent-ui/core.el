@@ -1150,6 +1150,17 @@ over it."
                                  cx cy cx (- cy r) r r (if (> f 0.5) 1 0) ex ey)))))
         (propertize text 'display (agent-ui-svg-image svg))))))
 
+(defun agent-ui-inert (element ctx &optional width)
+  "ELEMENT drawn inside another (a confirm's diff, a compare's option),
+CTX the outer one's (WIDTH wide, if given): a still picture of it, no
+buttons, nothing to comment on (its lines' file and number taken off): what
+they'd do would go to the outer element, which takes none of it."
+  (let* ((ctx (plist-put (copy-sequence ctx) :still t))
+         (ctx (if width (plist-put ctx :width width) ctx))
+         (text (copy-sequence (agent-ui-render element ctx))))
+    (remove-list-of-text-properties 0 (length text) '(agent-ui-line agent-ui-file) text)
+    text))
+
 ;; ====== JSON ======
 
 (defun agent-ui-parse-json (string)

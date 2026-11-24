@@ -60,7 +60,7 @@ one refused."
                                                         "\n    ")))
                           (plist-get props :details)))
          (diff (when-let* ((diff (plist-get props :diff)))
-                 (agent-ui-render (list :type "diff" :diff diff) ctx))))
+                 (agent-ui-inert (list :type "diff" :diff diff) ctx))))
     (string-join
      (append
       (list question)
