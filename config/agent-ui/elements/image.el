@@ -40,8 +40,10 @@ nil, or what went wrong."
     (let ((output (generate-new-buffer " *agent-ui-image*")))
       (make-process
        :name "agent-ui-image" :buffer output :noquery t :connection-type 'pipe
-       :command (list "curl" "--silent" "--show-error" "--fail" "--location" "--max-time" "60"
-                      "--max-filesize" "52428800" "--output" file url)
+       ;; --globoff: its [] and {} as they are, not ranges (one URL, one
+       ;; transfer); --: it's no option, whatever it starts with.
+       :command (list "curl" "--silent" "--show-error" "--fail" "--location" "--globoff" "--max-time" "60"
+                      "--max-filesize" "52428800" "--output" file "--" url)
        :sentinel (lambda (process _)
                    (unless (process-live-p process)
                      (let ((message (with-current-buffer output (string-trim (buffer-string))))

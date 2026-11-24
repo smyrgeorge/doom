@@ -6023,6 +6023,16 @@ named, not downloaded: text never shows it (it was fetched, and said
           (should (equal fetches '("https://example.com/a.png"))))
       (delete-directory agent-ui-image-cache-directory t))))
 
+(ert-deftest agent-ui-elements/image-its-url-as-it-is ()
+  "curl takes an image's URL as it is: its [] and {} no ranges, nothing in
+it an option (doom-ht6.71)."
+  (let ((command nil))
+    (cl-letf (((symbol-function 'executable-find) (lambda (_) "/usr/bin/curl"))
+              ((symbol-function 'make-process) (lambda (&rest args) (setq command (plist-get args :command)) nil)))
+      (agent-ui-image-curl "https://example.com/a[1-3].png?f{x,y}" "/tmp/out.part" #'ignore))
+    (should (member "--globoff" command))
+    (should (equal (last command 2) '("--" "https://example.com/a[1-3].png?f{x,y}")))))
+
 (ert-deftest agent-ui-elements/image-from-a-url ()
   (let* ((agent-ui-image-cache-directory (file-name-as-directory (make-temp-file (+test-tmp-file "images-") t)))
          (agent-ui-image--fetches (make-hash-table :test #'equal))
