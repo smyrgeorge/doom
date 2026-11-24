@@ -4706,6 +4706,20 @@ whole."
     (should (eq (+test-aue-face-at element "✗") 'agent-ui-error))
     (should (eq (+test-aue-face-at element "← always") 'agent-ui-error))))
 
+(ert-deftest agent-ui-elements/code-only-a-major-mode ()
+  "Its language a major mode for code or text: never a minor mode (turned
+on), nor one doing something of its own (a special mode) (doom-ht6.49)."
+  (let ((global-auto-revert-mode nil))
+    (+test-aue-draw '(:type "code" :code "x" :language "global-auto-revert"))
+    (should-not global-auto-revert-mode))
+  (should-not (agent-ui-code--mode "auto-save-visited" nil))
+  (should-not (agent-ui-code--mode "doc-view" nil))
+  (should-not (agent-ui-code--mode "special" nil))
+  (should (eq (agent-ui-code--mode "emacs-lisp" nil) 'emacs-lisp-mode))
+  (should (eq (agent-ui-code--mode "python" nil) 'python-mode))
+  (should (eq (agent-ui-code--mode "diff" nil) 'diff-mode))
+  (should (eq (agent-ui-code--mode nil "a.py") (agent-ui-code--major-mode (assoc-default "a.py" auto-mode-alist #'string-match)))))
+
 ;; doom-nwj.69
 (ert-deftest agent-ui-elements/code-long-line-keeps-its-note ()
   "A mark's note is shown whole at widths 40 to 80: after its line if both

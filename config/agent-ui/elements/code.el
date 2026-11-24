@@ -19,15 +19,32 @@
   '((error "✗" agent-ui-error) (warning "!" agent-ui-warning) (change "+" agent-ui-success) (info "•" agent-ui-accent))
   "Each mark kind: its sign and face.")
 
+(defconst agent-ui-code-other-modes '(diff-mode)
+  "Major modes for code that aren't for programs, text or configuration.")
+
+(defun agent-ui-code--major-mode (mode)
+  "MODE, if it's a major mode for code or text (one for programs, text or
+configuration, or one of `agent-ui-code-other-modes'); else nil. Never a
+minor mode (global-auto-revert would turn it on), nor one that does
+something of its own (doc-view, a special mode)."
+  (when (and (symbolp mode) (fboundp mode))
+    ;; An autoload: loaded, to know what it is.
+    (when (autoloadp (symbol-function mode))
+      (ignore-errors (autoload-do-load (symbol-function mode) mode)))
+    (and (not (memq mode minor-mode-list))
+         (or (provided-mode-derived-p mode 'prog-mode 'text-mode 'conf-mode)
+             (memq mode agent-ui-code-other-modes))
+         mode)))
+
 (defun agent-ui-code--mode (language file)
   "The major mode for LANGUAGE (a mode's name without -mode: python, c,
-emacs-lisp), else for FILE's name; nil if neither says."
+emacs-lisp), else for FILE's name; nil if neither says
+\(`agent-ui-code--major-mode')."
   (or (and language
-           (let ((mode (intern (concat (replace-regexp-in-string "-mode\\'" "" language) "-mode"))))
-             (and (fboundp mode) mode)))
+           (agent-ui-code--major-mode
+            (intern (concat (replace-regexp-in-string "-mode\\'" "" language) "-mode"))))
       (and file
-           (let ((mode (assoc-default file auto-mode-alist #'string-match)))
-             (and (symbolp mode) (fboundp mode) mode)))))
+           (agent-ui-code--major-mode (assoc-default file auto-mode-alist #'string-match)))))
 
 (defun agent-ui-code--highlight (code mode)
   "CODE highlighted by MODE (its faces as face properties); CODE if none."
