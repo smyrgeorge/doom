@@ -53,10 +53,49 @@
 
 ;; ====== REGULAR EXPRESSIONS ======
 
+(defun agent-ui-source--class (pcre i)
+  "PCRE's bracket class starting at I (its [) as an Emacs one: (TEXT .
+END), END just past its ]. Its members gathered: an escaped ] first, an
+escaped ^ and - last (where Emacs takes them as themselves), \d \s \w as
+their characters, [:alpha:] as it is."
+  (let ((n (length pcre)) (members nil) (negated nil) (bracket nil) (caret nil) (hyphen nil)
+        (i (1+ i)) (end nil))
+    (when (and (< i n) (eq (aref pcre i) ?^))
+      (setq negated t) (cl-incf i))
+    ;; A ] first is itself.
+    (when (and (< i n) (eq (aref pcre i) ?\]))
+      (setq bracket t) (cl-incf i))
+    (while (and (not end) (< i n))
+      (let ((c (aref pcre i)))
+        (cond
+         ((and (eq c ?\\) (< (1+ i) n))
+          (cl-incf i)
+          (pcase (aref pcre i)
+            (?\] (setq bracket t))
+            (?- (setq hyphen t))
+            (?^ (setq caret t))
+            (?d (push "0-9" members))
+            (?s (push " \t\n\r\f" members))
+            (?w (push "[:alnum:]_" members))
+            (?t (push "\t" members)) (?n (push "\n" members)) (?r (push "\r" members))
+            (d (push (string d) members)))
+          (cl-incf i))
+         ;; [:alpha:] whole.
+         ((and (eq c ?\[) (< (1+ i) n) (eq (aref pcre (1+ i)) ?:)
+               (string-match ":\\]" pcre (+ i 2)))
+          (push (substring pcre i (match-end 0)) members)
+          (setq i (match-end 0)))
+         ((eq c ?\]) (setq end (1+ i)))
+         (t (push (string c) members) (cl-incf i)))))
+    (cons (concat "[" (if negated "^" "") (if bracket "]" "")
+                  (apply #'concat (nreverse members))
+                  (if caret "^" "") (if hyphen "-" "") "]")
+          (or end n))))
+
 (defun agent-ui-source-regexp (pcre)
   "PCRE (its common part: grep -E's, with \\d \\s \\w \\b (?:...)) as an
 Emacs regexp."
-  (let ((i 0) (n (length pcre)) (out nil) (in-class nil))
+  (let ((i 0) (n (length pcre)) (out nil))
     (while (< i n)
       (let ((c (aref pcre i)))
         (cond
@@ -64,38 +103,34 @@ Emacs regexp."
           (cl-incf i)
           (let ((d (aref pcre i)))
             (push (pcase d
-                    (?d (if in-class "0-9" "[0-9]"))
+                    (?d "[0-9]")
                     (?D "[^0-9]")
-                    (?s (if in-class " \t\n\r\f" "[[:space:]]"))
+                    (?s "[[:space:]]")
                     (?S "[^[:space:]]")
-                    (?w (if in-class "[:alnum:]_" "[[:alnum:]_]"))
+                    (?w "[[:alnum:]_]")
                     (?W "[^[:alnum:]_]")
                     (?b "\\b")
                     (?t "\t") (?n "\n") (?r "\r")
                     ;; An escaped character: itself.
-                    (_ (if in-class (string d) (regexp-quote (string d)))))
-                  out)))
-         (in-class
-          (when (eq c ?\]) (setq in-class nil))
-          (push (string c) out))
+                    (_ (regexp-quote (string d))))
+                  out))
+          (cl-incf i))
          ((eq c ?\[)
-          (setq in-class t)
-          (push "[" out)
-          (when (and (< (1+ i) n) (eq (aref pcre (1+ i)) ?^))
-            (push "^" out) (cl-incf i))
-          ;; A ] first is itself.
-          (when (and (< (1+ i) n) (eq (aref pcre (1+ i)) ?\]))
-            (push "]" out) (cl-incf i)))
-         ((eq c ?\()
-          (if (and (< (+ i 2) n) (eq (aref pcre (1+ i)) ??) (eq (aref pcre (+ i 2)) ?:))
-              (progn (push "\\(?:" out) (cl-incf i 2))
-            (push "\\(" out)))
-         ((eq c ?\)) (push "\\)" out))
-         ((eq c ?|) (push "\\|" out))
-         ((eq c ?{) (push "\\{" out))
-         ((eq c ?}) (push "\\}" out))
-         (t (push (string c) out))))
-      (cl-incf i))
+          (let ((class (agent-ui-source--class pcre i)))
+            (push (car class) out)
+            (setq i (cdr class))))
+         (t
+          (push (pcase c
+                  (?\( (if (and (< (+ i 2) n) (eq (aref pcre (1+ i)) ??) (eq (aref pcre (+ i 2)) ?:))
+                           (progn (cl-incf i 2) "\\(?:")
+                         "\\("))
+                  (?\) "\\)")
+                  (?| "\\|")
+                  (?{ "\\{")
+                  (?} "\\}")
+                  (_ (string c)))
+                out)
+          (cl-incf i)))))
     (apply #'concat (nreverse out))))
 
 ;; ====== CHECKING A SOURCE ======

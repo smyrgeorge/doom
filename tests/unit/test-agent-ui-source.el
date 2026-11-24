@@ -46,8 +46,16 @@
                   ("[\\d.]+" "[0-9.]+")
                   ("[^]x]" "[^]x]")
                   ("\\[\\(\\.\\)" "\\[(\\.)")
-                  ("^a$" "^a$")))
+                  ("^a$" "^a$")
+                  ;; In a class: an escaped ] first, ^ and - last (doom-ht6.59).
+                  ("[\\[\\]]" "[][]")
+                  ("[a\\-z]" "[az-]")
+                  ("[\\^a]" "[a^]")
+                  ("[[:alpha:]_]" "[[:alpha:]_]")))
     (should (equal (agent-ui-source-regexp (car case)) (cadr case))))
+  (should (string-match-p (agent-ui-source-regexp "^[\\[\\]]$") "]"))
+  (should-not (string-match-p (agent-ui-source-regexp "^[a\\-z]$") "q"))
+  (should (string-match-p (agent-ui-source-regexp "^[a\\-z]$") "-"))
   ;; As grep -E would match.
   (let ((re (agent-ui-source-regexp "^\\[(\\d+)/(\\d+)\\] (CC|LD) (\\S+)$")))
     (should (string-match re "[3/12] CC lexer.c"))
