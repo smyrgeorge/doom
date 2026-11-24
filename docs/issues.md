@@ -21,9 +21,10 @@ is `+my/beads-init-command` in `config/beads.el`.
 
 ## The list
 
-The list opens in the current window; an issue opened from it below the list, and the next ones in that window. The
-preview (`P`) opens beside the list, its room taken from the pane next to it when the list's is narrow, and closes with
-the list.
+The list opens in the current window, in the current workspace; an issue opened from it below the list, and the next
+ones in that window. They keep their tabs as files do, and close once no window has them as a tab (`q` too). The preview
+(`P`) opens beside the list, its room taken from the pane next to it when the list's is narrow, and closes with the
+list.
 
 Each issue's status, priority and type are icons and badges in their colours: ○ ready (nothing open blocks it), ◔ in
 progress, ⊘3 blocked by 3 open issues (in the Blocked section), ✓ closed; P0 and P1 stand out, P3 and P4 are muted; the

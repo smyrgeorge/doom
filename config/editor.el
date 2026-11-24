@@ -79,10 +79,12 @@ three times this.")
 with (before its icon), or nil; the first text is used. An agent's avatar on
 its worktree's files (config/agent-workspace.el).")
 
-(defvar +my/tabs-real-modes '(ibuffer-mode)
+(defvar +my/tabs-real-modes '(ibuffer-mode
+                               beads-list-mode beads-detail-mode beads-detail-vui-mode)
   "Major modes whose buffers keep a tab though they visit no file, as files
 do: in the workspace, listed by SPC b b, killed once no window has them as
-a tab (q too). The buffer list (SPC b i).")
+a tab (q too). The buffer list (SPC b i); the issue list and its issues
+\(SPC o i, config/beads.el).")
 
 ;; A pane's tab line never resizes it (a pane below another: Emacs drags its
 ;; top edge from wherever its tab line has no keymap): every part of it has

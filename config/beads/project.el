@@ -106,7 +106,8 @@ first of *Beads: NAME*, *Beads: PARENT/NAME* and *Beads: PATH* no buffer has."
 ;; SPC o i opens the list in the current window, as beads.el has it (issues
 ;; aren't one of tiling's applications); an issue opened from it (RET) as
 ;; beads.el has it (below), the next ones in that issue's window, not each in
-;; a new one.
+;; a new one. Both in the current workspace, their tabs kept as files'
+;; (`+my/tabs-real-modes', config/editor.el).
 (defun +my/beads--show-list (root &optional filter)
   "ROOT's issue list shown (see above), with FILTER (beads.el's) if given."
   (let ((default-directory root))

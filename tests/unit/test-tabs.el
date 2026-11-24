@@ -222,6 +222,37 @@ real: its tab kept, shown again by its tab; q closes it (killed)."
     ;; Another mode: still unreal, its tab only while shown.
     (should-not (doom-real-buffer-p (+test-tabs--plain "*Ibuffer-ish*")))))
 
+;; doom-djc.32
+(ert-deftest tabs/the-issue-list-and-its-issues-keep-their-tabs ()
+  "SPC o i's issue list and an issue opened from it (config/beads.el): once
+out of tiling's applications (which made them real), Doom called them unreal
+\(no file, a *name*): Doom's workspaces left them out (in Default, not the
+workspace SPC o i was pressed in), and their tab went once another tab was
+shown. Modes of `+my/tabs-real-modes': real, their tab kept; q closes them
+\(killed)."
+  (+test-tabs
+    (require 'beads)                    ; its modes, beads-list's hint
+    (require 'beads-list)
+    (require 'beads-detail)
+    (let ((a (+test-tabs--file "a.txt")))
+      (+test-tabs--show a)
+      (dolist (mode '(beads-list-mode beads-detail-mode beads-detail-vui-mode))
+        (let ((buffer (generate-new-buffer (format "*Beads: %s*" mode))))
+          ;; Its mode first: a mode change turns its tab line off.
+          (with-current-buffer buffer (funcall mode))
+          (+test-tabs--on buffer)
+          (should (doom-real-buffer-p buffer))
+          (should-not (doom-unreal-buffer-p buffer)) ; what Doom's workspaces add
+          (+test-tabs--show buffer)
+          (should (equal (+test-tabs--tabs) (list a buffer)))
+          (+test-tabs--show a)
+          (should (equal (+test-tabs--tabs) (list a buffer)))
+          (+test-tabs--show buffer)
+          (quit-window)
+          (should (eq (window-buffer) a))
+          (should (equal (+test-tabs--tabs) (list a)))
+          (should-not (buffer-live-p buffer)))))))
+
 (ert-deftest tabs/the-buffer-list-closes-with-its-tab ()
   "The buffer list (a mode of `+my/tabs-real-modes') is closed as a file is:
 killed once no window has it as a tab, by its ✕, a middle click or q; kept
