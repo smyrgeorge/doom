@@ -132,8 +132,11 @@ reply, a plist."
   "AGENT as a reply says it: a plist."
   (list :name (agent-workspace-agent-name agent)
         :role (agent-workspace-agent-role agent)
-        :worktree (directory-file-name (agent-workspace-agent-worktree agent))
-        :branch (agent-workspace-agent-branch agent)
+        :worktree (agent-workspace--request-or-null
+                   (and (agent-workspace-agent-worktree agent)
+                        (directory-file-name (agent-workspace-agent-worktree agent))))
+        ;; None checked out (a rebase, a commit): null, not {}.
+        :branch (agent-workspace--request-or-null (agent-workspace-agent-branch agent))
         :state (symbol-name (agent-workspace-agent-state agent))))
 
 (defun agent-workspace--request-crew (directory payload)

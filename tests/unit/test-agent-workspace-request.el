@@ -249,6 +249,14 @@ talk setting. From an agent's shell too, any role's."
   (let ((default-directory (file-name-as-directory (make-temp-file (+test-tmp-file "awq-nogit-") t))))
     (should (string-prefix-p "No crew here: not a git repository" (+test-awq--error "status" "{}")))))
 
+(ert-deftest agent-workspace-request/no-branch-is-null ()
+  "An agent with no branch checked out (a rebase, a commit): its branch
+null in an action's reply, not {} (doom-pbk.183)."
+  (let ((agent (agent-workspace--make-agent :name "ada" :role "builder" :state 'desk
+                                            :worktree "/p/.agent-shell/worktrees/ada/" :branch nil)))
+    (should (equal (json-serialize (agent-workspace--request-agent agent))
+                   "{\"name\":\"ada\",\"role\":\"builder\",\"worktree\":\"/p/.agent-shell/worktrees/ada\",\"branch\":null,\"state\":\"desk\"}"))))
+
 (ert-deftest agent-workspace-request/status-of-an-empty-crew ()
   "status where a crew could be, but none's running: no agents, nothing
 conflicting or offered."
