@@ -25,9 +25,9 @@
 ;; IN ITS SESSION'S PANE
 ;; A session's Agent UI opens in its session's pane when an element is shown,
 ;; without taking the focus (config/agent-ui/pane.el): the pane split, the
-;; conversation on top, Agent UI at the bottom, a quarter of the pane
-;; (`agent-ui-pane-share'), more when what it shows needs it, up to half
-;; (`agent-ui-pane-max-share'); back to a quarter when that's gone.
+;; conversation on top, Agent UI at the bottom, as high as what it shows
+;; needs (no empty lines under its views), at most half the pane
+;; (`agent-ui-pane-max-share').
 ;; Its views (the session's canvas, and its others: ask, tests...) are laid
 ;; out there in a grid: as many columns as fit, `agent-ui-grid-min-width'
 ;; each, up to the square root of their count, rows filled in turn. Each view

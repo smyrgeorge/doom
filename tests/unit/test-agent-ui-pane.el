@@ -49,7 +49,7 @@ text; nil without one."
 ;; ====== SETTINGS ======
 
 (ert-deftest agent-ui-pane/settings ()
-  (should (= (default-value 'agent-ui-pane-share) 0.25))
+  (should-not (boundp 'agent-ui-pane-share))
   (should (= (default-value 'agent-ui-pane-max-share) 0.5))
   (should (= (default-value 'agent-ui-pane-min-lines) 6))
   (should (= (default-value 'agent-ui-grid-min-width) 40))
@@ -64,42 +64,41 @@ text; nil without one."
 ;; ====== ITS HEIGHT ======
 
 (ert-deftest agent-ui-pane/its-height-bounds ()
-  "A quarter of the pane at least (6 lines at least), half at most, the
-conversation keeping 6 lines; in between, what the views need."
-  (should (= (agent-ui--pane-least 64) 16))
+  "6 lines at least, half the pane at most, the conversation keeping 6
+lines; in between, what the views need."
   (should (= (agent-ui--pane-most 64) 32))
-  (should (= (agent-ui--pane-least 16) 6))
   (should (= (agent-ui--pane-most 14) 7))
   (should (= (agent-ui--pane-most 10) 6)))
 
 (ert-deftest agent-ui-pane/grows-with-what-it-shows ()
-  "Something taller shown: Agent UI grows to fit it (its bar too), up to half
-the pane; gone again: back to a quarter. Only when what it needs changes: a
-height you gave it stays while an element changes without needing more."
+  "Something taller shown: Agent UI grows to fit it (its bars too), up to
+half the pane; gone again: as small as what's left. Only when what it needs
+changes: a height you gave it stays while an element changes without
+needing more."
   (+test-aup
     (let* ((window (selected-window))
            (pane (window-total-height window))
            (area (lambda () (window-total-height (window-next-sibling window)))))
       (+test-aup-show name)
-      (should (= (funcall area) (agent-ui--pane-least pane)))
-      ;; 8 lines: 9 with the bar, between a quarter and half.
+      (should (= (funcall area) agent-ui-pane-min-lines))
+      ;; 8 lines: 10 with its bar and the one under it.
       (agent-ui-show '(:id "lines" :type "text" :text "1\n2\n3\n4\n5\n6\n7") :canvas name)
       (agent-ui--pane-fit-now)
       (let ((wanted (min (agent-ui--pane-most pane)
-                         (max (agent-ui--pane-least pane)
+                         (max agent-ui-pane-min-lines
                               (+ 2 (with-current-buffer (+test-aup-canvas name)
                                     (count-lines (point-min) (point-max))))))))
-        (should (> wanted (agent-ui--pane-least pane)))
+        (should (> wanted agent-ui-pane-min-lines))
         (should (= (funcall area) wanted)))
       ;; Much taller: half at most.
       (agent-ui-show `(:id "lines" :type "text" :text ,(mapconcat #'number-to-string (number-sequence 1 60) "\n"))
                      :canvas name)
       (agent-ui--pane-fit-now)
       (should (= (funcall area) (agent-ui--pane-most pane)))
-      ;; Gone: a quarter again.
+      ;; Gone: as small as what's left.
       (agent-ui-remove "lines" :canvas name)
       (agent-ui--pane-fit-now)
-      (should (= (funcall area) (agent-ui--pane-least pane)))
+      (should (= (funcall area) agent-ui-pane-min-lines))
       ;; Made taller by hand: kept while what it shows needs no more.
       (window-resize (window-next-sibling window) 2)
       (let ((yours (funcall area)))
@@ -358,7 +357,7 @@ made again at startup, its buffers gone): a window like any again, kept."
 (ert-deftest agent-ui-pane/views-closed-less-room ()
   "Views closed (q, SPC w d): the others laid out again as a grid of their
 count (two left in two rows: side by side), Agent UI as high as they need
-now, a quarter at least."
+now, as small as they need."
   (+test-aup
     (let* ((window (selected-window))
            (pane (window-total-height window))
@@ -370,7 +369,7 @@ now, a quarter at least."
       (agent-ui--pane-fit-now)
       (let ((four (funcall area)))
         (should (= (length (agent-ui--pane-cells (selected-frame))) 4))
-        (should (> four (agent-ui--pane-least pane)))
+        (should (> four agent-ui-pane-min-lines))
         ;; The top two closed: q on one, SPC w d on the other.
         (select-window (get-buffer-window (+test-aup-canvas name)))
         (agent-ui-quit)
@@ -381,4 +380,49 @@ now, a quarter at least."
           (should (= (length cells) 2))
           (should (= (window-top-line (car cells)) (window-top-line (cadr cells)))))
         (should (< (funcall area) four))
-        (should (= (funcall area) (agent-ui--pane-least pane)))))))
+        (should (= (funcall area) agent-ui-pane-min-lines))))))
+
+(ert-deftest agent-ui-pane/no-empty-lines-under-its-views ()
+  "Views shorter than a quarter of the pane: Agent UI as high as they need
+\(their lines, their bars, the bar under them), no empty lines under them,
+the conversation keeping the rest."
+  (+test-aup
+    (let* ((agent-ui-pane-min-lines 3)
+           (window (selected-window))
+           (pane (window-total-height window)))
+      (agent-ui-show '(:id "x" :type "text" :text "one\ntwo") :canvas name)
+      ;; Measured again once drawn (a timer, after the redraw).
+      (agent-ui--pane-fit-now)
+      (let* ((cell (car (agent-ui--pane-cells (selected-frame))))
+             (lines (with-current-buffer (window-buffer cell) (count-lines (point-min) (point-max)))))
+        (should (< (window-total-height cell) (round (* 0.25 pane))))
+        (should (= (window-total-height cell) (+ lines 2)))
+        (should (= (window-body-height cell) lines))
+        (should (= (window-total-height window) (- pane lines 2)))))))
+
+(ert-deftest agent-ui-pane/a-view-that-fits-from-its-top ()
+  "A view whose content fits its window, scrolled down (shrunk, then grown
+again): shown from its top at the next sync, nothing hidden above it."
+  (+test-aup
+    (agent-ui-show '(:id "x" :type "text" :text "one\ntwo\nthree") :canvas name)
+    (let ((cell (car (agent-ui--pane-cells (selected-frame)))))
+      (with-current-buffer (window-buffer cell)
+        (set-window-start cell (save-excursion (goto-char (point-min)) (forward-line 1) (point)) t))
+      (should (> (window-start cell) 1))
+      (agent-ui--pane-sync)
+      (should (= (window-start cell) (with-current-buffer (window-buffer cell) (point-min)))))))
+
+(ert-deftest agent-ui-pane/each-row-its-own-height ()
+  "Rows of different heights: each as high as its tallest view, no empty
+lines under the views of the short one."
+  (+test-aup
+    (let ((agent-ui-pane-min-lines 3))
+      (+test-aup-show name)
+      (+test-aup-show (agent-ui-sub-canvas name "b"))
+      (agent-ui-show '(:id "x" :type "text" :text "1\n2\n3\n4") :canvas (agent-ui-sub-canvas name "c"))
+      (agent-ui--pane-fit-now)
+      (pcase-let ((`(,a ,_b ,c) (agent-ui--pane-cells (selected-frame))))
+        (should (< (window-total-height a) (window-total-height c)))
+        (dolist (cell (list a c))
+          (should (= (window-body-height cell)
+                     (with-current-buffer (window-buffer cell) (count-lines (point-min) (point-max))))))))))

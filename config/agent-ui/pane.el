@@ -4,12 +4,13 @@
 ;; ask, tests...) in a grid. Loaded from config/agent-ui.el, after agent.el.
 ;; No Doom here (see docs/agent-ui.md).
 ;;
-;; - Its height: a quarter of the pane (`agent-ui-pane-share'), more when what
-;;   it shows needs it (its rows, each as high as its tallest view), up to
-;;   half (`agent-ui-pane-max-share'); back to a quarter when that's gone.
-;;   Fitted when an element changes and at each window change (views closed
-;;   or opened), but only when what it needs changes: a bar moving every
-;;   second leaves it as it is, at a height you gave it too.
+;; - Its height: what its views need (its rows, each as high as its tallest
+;;   view, their bars and the bar under them), no empty lines under them; at
+;;   least `agent-ui-pane-min-lines', at most half the pane
+;;   (`agent-ui-pane-max-share'). Fitted when an element changes and at each
+;;   window change (views closed or opened), but only when what it needs
+;;   changes: a bar moving every second leaves it as it is, at a height you
+;;   gave it too. A view whose content fits its window is shown from its top.
 ;; - A view is a window of its own (scrolled, selected on its own), without a
 ;;   tab line or a mode line: a bar with its name. Under them, Agent UI's
 ;;   bar: what it is, its keys. The session's mode line stays under the
@@ -31,11 +32,6 @@
 (require 'subr-x)
 
 ;; ====== VARIABLES ======
-
-(defcustom agent-ui-pane-share 0.25
-  "The share of its session's pane Agent UI takes, at its bottom, at least
-\(see above)."
-  :type 'number :group 'agent-ui)
 
 (defcustom agent-ui-pane-max-share 0.5
   "The most of its session's pane Agent UI takes when what it shows needs
@@ -76,7 +72,8 @@ its pane (the agent workspace's stage shows its crew's).")
 not shown again until something new is (see above).")
 
 (defvar-local agent-ui--pane-height nil
-  "In a session: the height its Agent UI was last given (see above).")
+  "In a session: the height its Agent UI was last given, in pixels, and its
+rows' (see above).")
 
 (defvar agent-ui--pane-detaching nil
   "Non-nil while Agent UI takes its views' windows out itself (no view
@@ -255,6 +252,17 @@ above), the others none; closing one dismisses its view (see above)."
       (set-window-parameter cell 'delete-window #'agent-ui--pane-delete-cell)
       (set-window-dedicated-p cell t))))
 
+(defun agent-ui--pane-tops (cells)
+  "Each of CELLS whose view fits it shown from its top: none of it hidden
+above, room left under it (shrunk, then grown again, a window kept its
+start)."
+  (dolist (cell cells)
+    (when (window-live-p cell)
+      (with-current-buffer (window-buffer cell)
+        (when (and (> (window-start cell) (point-min))
+                   (<= (count-lines (point-min) (point-max)) (window-body-height cell)))
+          (set-window-start cell (point-min) t))))))
+
 (defun agent-ui--pane-show-in (cell view)
   "VIEW, a canvas, in CELL, a window of the grid."
   (set-window-dedicated-p cell nil)
@@ -265,7 +273,7 @@ above), the others none; closing one dismisses its view (see above)."
 
 (defun agent-ui--pane-attach (window views)
   "VIEWS (canvases) in WINDOW's pane, a session's: WINDOW split, its bottom
-part (`agent-ui-pane-share') a grid of them, a group of their own. Their
+part (as high as they need, see above) a grid of them, a group of their own. Their
 windows; nil without room (WINDOW as it was)."
   (let* ((height (window-total-height window))
          (width (window-total-width window))
@@ -279,23 +287,20 @@ windows; nil without room (WINDOW as it was)."
         (let ((cells (agent-ui--pane-grid area (length views))))
           (cl-mapc #'agent-ui--pane-show-in cells views)
           (agent-ui--pane-decorate window cells)
+          (agent-ui--pane-tops cells)
           (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
+          ;; Drawn at their width now: measured again then, as shown.
           (with-current-buffer (window-buffer window)
-            (setq agent-ui--pane-height lines))
-          ;; Drawn at their width now: measured again then.
+            (setq agent-ui--pane-height nil))
           (agent-ui--pane-fit-soon (window-buffer window))
           cells)))))
 
 ;; ====== ITS HEIGHT (see above) ======
 
-(defun agent-ui--pane-least (pane)
-  "The fewest lines Agent UI takes in a session's pane PANE lines high."
-  (max agent-ui-pane-min-lines (round (* agent-ui-pane-share pane))))
-
 (defun agent-ui--pane-most (pane)
   "The most lines Agent UI takes in a session's pane PANE lines high, the
 conversation keeping its fewest."
-  (max (agent-ui--pane-least pane)
+  (max agent-ui-pane-min-lines
        (min (round (* agent-ui-pane-max-share pane)) (- pane agent-ui-pane-min-lines))))
 
 (defun agent-ui--pane-needs (views width)
@@ -313,23 +318,68 @@ elements drawn first)."
   "The lines Agent UI takes in a session's pane PANE lines high, showing
 VIEWS in a grid WIDTH wide (see above)."
   (min (agent-ui--pane-most pane)
-       (max (agent-ui--pane-least pane) (agent-ui--pane-needs views width))))
+       (max agent-ui-pane-min-lines (agent-ui--pane-needs views width))))
+
+;; Once shown, measured in pixels, as Emacs shows them: each view's text
+;; (charts and images as high as they're drawn), its bars, its divider. Each
+;; row as high as its tallest view; Agent UI the rows' sum, within its least
+;; and most (held at its most: the rows at equal heights).
+
+(defun agent-ui--pane-rows (cells)
+  "CELLS, the views' windows of a grid, by row, top to bottom: lists."
+  (let (rows)
+    (dolist (cell cells)
+      (let* ((top (nth 1 (window-pixel-edges cell)))
+             (row (assq top rows)))
+        (if row
+            (setcdr row (append (cdr row) (list cell)))
+          (push (list top cell) rows))))
+    (mapcar #'cdr (sort rows (lambda (a b) (< (car a) (car b)))))))
+
+(defun agent-ui--pane-cell-need (cell)
+  "The pixels CELL, a view's window, needs: its view's text as shown (its
+dirty elements drawn first), and the bars and divider around it."
+  (with-current-buffer (window-buffer cell)
+    (agent-ui--flush)
+    (+ (cdr (window-text-pixel-size cell (point-min) (point-max)))
+       (- (window-pixel-height cell) (window-body-height cell t)))))
 
 (defun agent-ui--pane-fit (window session)
-  "SESSION's Agent UI, in WINDOW's pane, as high as it should be now (see
-above), if that changed since it was last given its height."
+  "SESSION's Agent UI, in WINDOW's pane, as high as what it shows needs
+\(see above), each row as high as its tallest view, if that changed since
+it was last given its height."
   (when-let* ((area (window-next-sibling window))
               (cells (agent-ui--pane-cells (window-frame window) session))
               ((agent-ui--pane-in-place-p window cells)))
-    (let ((lines (agent-ui--pane-lines (+ (window-total-height window) (window-total-height area))
-                                       (mapcar #'window-buffer cells)
-                                       (window-total-width area))))
-      (unless (eql lines (buffer-local-value 'agent-ui--pane-height session))
+    (let* ((rows (agent-ui--pane-rows cells))
+           (needs (mapcar (lambda (row) (apply #'max (mapcar #'agent-ui--pane-cell-need row))) rows))
+           (pane (+ (window-pixel-height window) (window-pixel-height area)))
+           (line (frame-char-height (window-frame window)))
+           (least (* agent-ui-pane-min-lines line))
+           (most (max least (min (round (* agent-ui-pane-max-share pane)) (- pane least))))
+           (total (apply #'+ needs))
+           (height (min most (max least total)))
+           (wanted (cons height needs)))
+      (unless (equal wanted (buffer-local-value 'agent-ui--pane-height session))
         (with-current-buffer session
-          (setq agent-ui--pane-height lines))
-        (let ((delta (- lines (window-total-height area))))
+          (setq agent-ui--pane-height wanted))
+        (let ((window-resize-pixelwise t)
+              ;; A row of a line and its bar is 2 lines: Emacs's least (4)
+              ;; left empty lines under it.
+              (window-min-height 1)
+              (delta (- height (window-pixel-height area))))
           (unless (zerop delta)
-            (ignore-errors (window-resize area delta))))))))
+            (ignore-errors (window-resize area delta nil nil t)))
+          (if (and (cdr rows) (= height total))
+              ;; Each row its own height, the last one the rest.
+              (cl-loop for row in (butlast rows)
+                       for need in needs
+                       do (let ((row-window (if (cdr row) (window-parent (car row)) (car row))))
+                            (ignore-errors
+                              (adjust-window-trailing-edge
+                               row-window (- need (window-pixel-height row-window)) nil t))))
+            (when (cdr rows)
+              (balance-windows area))))))))
 
 (defvar agent-ui--pane-fit-timer nil)
 
@@ -444,6 +494,7 @@ below it (made again if they aren't), or none. Non-nil if they're shown."
           (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
           ;; As high as what it shows needs now (views closed: less).
           (agent-ui--pane-fit window session)
+          (agent-ui--pane-tops cells)
           t)
       (when cells
         (agent-ui--pane-detach (window-frame window) session))
