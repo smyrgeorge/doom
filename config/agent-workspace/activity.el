@@ -174,7 +174,9 @@ ones (relative to its worktree). Only the latest run's answer is noted."
                      :stderr (get-buffer-create " *agent-workspace changes errors*")
                      :sentinel (lambda (process _event)
                                  (unless (process-live-p process)
-                                   (let ((lines (with-current-buffer output (split-string (buffer-string) "\n" t))))
+                                   ;; Its names NUL-separated (-z): as they
+                                   ;; are, unquoted, a rename's two apart.
+                                   (let ((lines (with-current-buffer output (split-string (buffer-string) "\0" t))))
                                      (kill-buffer output)
                                      (when (eql 0 (process-exit-status process))
                                        (setq files (append files (funcall parse lines))))
@@ -186,11 +188,23 @@ ones (relative to its worktree). Only the latest run's answer is noted."
                                            (agent-workspace--add-changed
                                             agent (delete-dups (append files (cdr since))) t)))))))))))
         (when main
-          (run (list "diff" "--name-only" (concat main "...HEAD")) #'identity))
-        (run (list "status" "--porcelain")
-             (lambda (lines)
-               (mapcar (lambda (line) (string-trim (substring line 3)))
-                       (seq-filter (lambda (line) (> (length line) 3)) lines))))))))
+          (run (list "diff" "--name-only" "-z" (concat main "...HEAD")) #'identity))
+        (run (list "status" "--porcelain" "-z") #'agent-workspace--status-files)))))
+
+(defun agent-workspace--status-files (fields)
+  "The files git status --porcelain -z's FIELDS name: each entry XY NAME,
+a rename's (R) or copy's (C) followed by its old name, a rename's both
+changed."
+  (let ((files nil))
+    (while fields
+      (let ((entry (pop fields)))
+        (when (> (length entry) 3)
+          (push (substring entry 3) files)
+          (when (memq (aref entry 0) '(?R ?C))
+            (let ((old (pop fields)))
+              (when (and old (eq (aref entry 0) ?R))
+                (push old files)))))))
+    (nreverse files)))
 
 (defun agent-workspace--add-changed (agent files &optional replace)
   "FILES among AGENT's changed ones (REPLACE: they're all of them now)."

@@ -106,6 +106,30 @@ Emacs waits for: what the turn changed is worked out in the background
         (agent-workspace--loop-claim ada))
       (should (= waited 0)))))
 
+(ert-deftest agent-workspace-activity/names-as-they-are ()
+  "Its changed files' names read whole from git: a rename's both, not
+\"a -> b\"; a name with a space unquoted, as git diff gives it, once
+\(doom-pbk.182)."
+  (should (equal (agent-workspace--status-files '("R  new.txt" "old.txt" " M with space.txt" "C  copy.txt" "src.txt"))
+                 '("new.txt" "old.txt" "with space.txt" "copy.txt")))
+  (let* ((agent-workspace--crews (make-hash-table :test #'equal))
+         (agent-workspace--activity (make-hash-table :test #'eq :weakness 'key))
+         (project (+test-awa2--project))
+         (ada (+test-awa2--agent project "ada"))
+         (default-directory (agent-workspace-agent-worktree ada)))
+    (write-region "x\n" nil "old.txt")
+    (call-process "git" nil nil nil "add" "old.txt")
+    (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "old")
+    (call-process "git" nil nil nil "mv" "old.txt" "new.txt")
+    (write-region "y\n" nil "with space.txt")
+    (agent-workspace--branch-changes-later ada)
+    (should (+test-wait-for (lambda () (member "new.txt" (plist-get (agent-workspace-activity ada) :changed))) 10))
+    (let ((changed (plist-get (agent-workspace-activity ada) :changed)))
+      (should (member "old.txt" changed))
+      (should (member "with space.txt" changed))
+      (should-not (seq-find (lambda (file) (string-search "->" file)) changed))
+      (should-not (seq-find (lambda (file) (string-search "\"" file)) changed)))))
+
 (ert-deftest agent-workspace-activity/a-path-in-its-worktree-by-its-name ()
   "A path in an agent's worktree is relative to it by its name, the file
 system not asked: once, on a busy machine, `file-in-directory-p' said no
