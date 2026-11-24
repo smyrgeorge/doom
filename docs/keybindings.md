@@ -18,7 +18,7 @@ Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
 |---|---|---|
 | `Cmd+B` | `Ctrl+Shift+B` | Go to the declaration, or list the usages |
 | `Cmd+[` / `Cmd+]` | `Alt+←` / `Alt+→` | Back / forward (`C-o` / `C-i` on both) |
-| `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and Claude |
+| `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and your agent |
 | `SPC c ~` | `SPC c ~` | Cycle the word's case style |
 | `Cmd+W` | `Ctrl+Shift+W` | Close the tab |
 | `Cmd+1`..`Cmd+9` | `Ctrl+1`..`Ctrl+9` | Pick a tab (`9`: the last) |
@@ -47,13 +47,13 @@ Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
 | `h` / `l` (Mermaid preview) | the same | Scroll sideways |
 | `+` / `-` / `0`, `W`, `g r` (HTML page) | the same | Zoom in / out / its own size, as wide as the pane, reload |
 | `Cmd+C` (HTML page) | `Ctrl+Shift+C` | Copy the selection |
-| `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | Claude Code in a new pane / in the window you're in |
-| `RET` (Claude Code, normal state) | the same | Send the prompt |
-| `n` / `p`, `y`, `RET` (Claude's diffs) | the same | The next / previous hunk, accept, open the file |
-| `C-c C-d`, `SPC m d` (Claude Code) | the same | Draw for Claude |
+| `SPC o c` / `SPC o C` | `SPC o c` / `SPC o C` | Your agent (Claude Code) in a new pane / in the window you're in |
+| `RET` (a session, normal state) | the same | Send the prompt |
+| `n` / `p`, `y`, `RET` (the agent's diffs) | the same | The next / previous hunk, accept, open the file |
+| `C-c C-d`, `SPC m d` (a session) | the same | Draw for the agent |
 | `SPC o i` / `SPC o I` | `SPC o i` / `SPC o I` | The project's [issues](issues.md) / a new one |
 | `SPC o w` / `SPC o W` | `SPC o w` / `SPC o W` | The project's [agent crew](agent-workspace.md), in its own workspace / in the window you're in |
-| `C-c C-i` (Claude Code), `C-c C-a` (an issue) | the same | An issue into Claude's prompt |
+| `C-c C-i` (a session), `C-c C-a` (an issue) | the same | An issue into the agent's prompt |
 | `SPC h T` | `SPC h T` | Start / stop the profiler |
 | `SPC t n` / `SPC t N` | the same | All [notifications](notifications.md) on / off; one kind |
 

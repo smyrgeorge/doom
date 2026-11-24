@@ -12,7 +12,7 @@ the current workspace. A file, or the buffer list, closes once no window has it 
 | `Cmd+W`, middle click | `Ctrl+Shift+W`, middle click | Close the tab, and the window with its last tab |
 | Right click | Right click | Close the others, split vertically / horizontally |
 
-The buffer list (`SPC b i`) is grouped by workspace: each buffer under the workspace it's in (the issues, a Claude
+The buffer list (`SPC b i`) is grouped by workspace: each buffer under the workspace it's in (the issues, an agent's
 session too), those in none under Default.
 
 ## A minibuffer left open
@@ -24,10 +24,10 @@ for you. Click it to answer (`C-g` there cancels it); the tint goes as soon as y
 
 Emacs is tiling first:
 
-- Applications (Claude Code, the terminal, magit, the Markdown preview, drawings, issues) open in a new pane where the
-  tiling strategy puts it; one already open (shown, or a tab under a file), in its pane. Inside magit, a log or a diff
-  stays in its pane; a commit opens in a new one. `SPC o C` (Claude Code) and `SPC o T` (a terminal) open in the window
-  you're in instead (`SPC o T` from a popup or the sidebar: in the last pane used).
+- Applications (your agent's sessions, the terminal, magit, the Markdown preview, drawings, issues) open in a new pane
+  where the tiling strategy puts it; one already open (shown, or a tab under a file), in its pane. Inside magit, a log
+  or a diff stays in its pane; a commit opens in a new one. `SPC o C` (your agent) and `SPC o T` (a terminal) open in
+  the window you're in instead (`SPC o T` from a popup or the sidebar: in the last pane used).
 - Then they behave as any buffer: a file opened in their pane is a tab there, and they keep theirs.
 - Files always open as a tab in the current pane, whatever pane it is. From a popup or the sidebar, in the last pane
   used.
@@ -37,9 +37,9 @@ Emacs is tiling first:
   it goes in a pane beside them, and `SPC w a` leaves them as they are.
 
 Which applications open in a new pane is chosen in `config.el`: `(setq +my/tiling-apps 'all)` (the default), or a list
-of `claude`, `terminal`, `preview`, `drawings`, `magit`, `issues`, `agent-ui`, `html` (`M-x customize-variable
-+my/tiling-apps` ticks them). One left out opens as it would without tiling (the terminal as a popup); an unknown name
-is warned about at startup.
+of `agent-shell`, `terminal`, `preview`, `drawings`, `magit`, `issues`, `agent-ui`, `html` (`M-x customize-variable
++my/tiling-apps` ticks them; `claude`, its old name, is still `agent-shell`). One left out opens as it would without
+tiling (the terminal as a popup); an unknown name is warned about at startup.
 
 The strategy, chosen in `config.el` (`(setq +my/tiling-strategy 'tall)`), says where the panes go:
 
@@ -142,7 +142,7 @@ CSS, JSON, YAML...), else its outline (Markdown, Dockerfile). A mode declaring n
 |---|---|---|
 | `Cmd+B` | `Ctrl+Shift+B` | Go to the declaration; on the declaration, list the usages |
 | `Cmd+[` / `Cmd+]` | `Alt+←` / `Alt+→` | Back / forward (`C-o` / `C-i` on both) |
-| `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and [Claude](agent-shell.md), in one menu |
+| `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and [your agent](agent-shell.md), in one menu |
 | `SPC c ~` | `SPC c ~` | Cycle the word through snake_case, UPPER_CASE, PascalCase, camelCase and kebab-case |
 
 Spelling knows ~40k programming words and checks camelCase words part by part.
@@ -177,5 +177,5 @@ it's in and its code, beside a preview of the selected one (in a pane under 70 c
 - Saving returns to normal state.
 - `q` closes transient menus.
 - A thin line marks column 120, or a project's `.editorconfig` `max_line_length`.
-- The line you're on is always shown whole, at a window's bottom too (Claude Code's prompt); only a scroll leaves it
+- The line you're on is always shown whole, at a window's bottom too (an agent's prompt); only a scroll leaves it
   cut.
