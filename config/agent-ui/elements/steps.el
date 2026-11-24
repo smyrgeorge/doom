@@ -587,7 +587,8 @@ them again, without APPROVE."
                      :steps ((:name "compile" :status "done" :seconds 8) (:name "link" :status "running")))
                     "Publish"))
   :animated (lambda (props)
-              (seq-some (lambda (s) (eq (plist-get (cdr s) :status) 'running))
+              ;; Running or waiting: its time counting.
+              (seq-some (lambda (s) (memq (plist-get (cdr s) :status) '(running waiting)))
                         (agent-ui-steps--flat (plist-get props :steps) 0)))
   :check (lambda (props)
            (agent-ui-steps--check-approve props)

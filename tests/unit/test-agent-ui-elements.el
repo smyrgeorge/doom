@@ -273,6 +273,8 @@ sessions …\" at 98 columns, its rest nowhere; doom-qh6)."
     (should (eq (+test-aue-face-at element "exists") 'agent-ui-error))
     (should (eq (+test-aue-face-at element "Publish") 'agent-ui-muted)))
   (should-not (agent-ui-animated-p '(:type "steps" :steps ("a" (:name "b" :status "done")))))
+  ;; Waiting: timed as running, its time ticking (doom-ht6.53).
+  (should (agent-ui-animated-p '(:type "steps" :steps ("a" (:name "b" :status "waiting")))))
   (should (equal (+test-aue-draw '(:type "steps")) "no steps yet")))
 
 (ert-deftest agent-ui-elements/steps-appended-by-name ()
