@@ -279,6 +279,16 @@ Its model's result (a usage update naming its origin) ends one at once."
             (should-not (gethash agent agent-workspace--self-turns))))
       (agent-workspace--self-turn-stop agent))))
 
+(ert-deftest agent-workspace/a-subagent-s-update-claude-code-s-only ()
+  "A subagent's update told apart by claude-agent-acp's parentToolUseId
+only: another agent's (ACP saying nothing of subagents) is its agent at
+work; a background command's end, aside whoever's."
+  (should (agent-workspace--update-aside-p
+           '((:data . ((:meta . ((claudeCode . ((parentToolUseId . "toolu_1"))))))))))
+  (should-not (agent-workspace--update-aside-p '((:data . ((:meta . ((parentToolUseId . "x"))))))))
+  (should-not (agent-workspace--update-aside-p '((:data . ((:meta . nil))))))
+  (should (agent-workspace--update-aside-p '((:data . ((:meta . ((terminal_exit . ((exitCode . 0)))))))))))
+
 (ert-deftest agent-workspace/a-hand-raised-in-a-turn-it-started ()
   "Its hand raised in a turn it started by itself, then answered: working
 again, its time from its turn's start, then done once its turn is over, no

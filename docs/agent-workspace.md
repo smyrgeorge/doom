@@ -656,7 +656,8 @@ line taking you to its file and line.
 A command or a monitor an agent left running in the background can wake it after its turn, with no prompt of yours:
 it's working then too, and its [loop](#loops) and [the inbox](#the-inbox)'s events wait for it. Once it stops, it's
 done (napping again if it loops). That's when Claude Code says the turn ended, or else once its session has been quiet
-for 2 minutes with no tool running. `(setq agent-workspace-quiet-turn 60)` in `config.el` changes how long that is, in
+for 2 minutes with no tool running: always so with another agent, which ACP gives no way to say it. A subagent's work
+(Claude Code's) doesn't wake it; another agent's subagents can't be told apart from it. `(setq agent-workspace-quiet-turn 60)` in `config.el` changes how long that is, in
 seconds. That turn ends as one of yours does: its reply in the room, its notification, a question it left on its
 canvas raising its hand. A hand already raised for a question on its canvas stays raised through it.
 

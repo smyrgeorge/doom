@@ -387,14 +387,17 @@ nil if it isn't a word ending in -ing."
 ;; command, a monitor: Claude Code's task notification) has neither: its
 ;; updates come while it rests. The first starts its turn (working, timed
 ;; from then); the turn is over at its model's result (claude-agent-acp's
-;; usage update naming its origin), or once its session has been quiet for
-;; `agent-workspace-quiet-turn' seconds, no tool of it running. Over, it's
+;; usage update naming its origin: Claude Code's only, ACP saying nothing of
+;; it), or once its session has been quiet for `agent-workspace-quiet-turn'
+;; seconds, no tool of it running (another agent's always so). Over, it's
 ;; said as a prompt's answer is: agent-shell's turn-complete, emitted in its
 ;; session, for all that follows its turns (its state here, the room's
 ;; reply line, its notification, Agent UI's questions waiting: one asked
 ;; raises its hand). Updates just after a turn's end are its late ones; a
-;; subagent's, or a background command's end (its terminal's exit), aren't
-;; the agent at work: none starts a turn. (A second turn of its own that
+;; subagent's (Claude Code's: its adapter says whose; another agent's can't
+;; be told, ACP saying nothing of subagents: they're its own), or a
+;; background command's end (its terminal's exit), aren't the agent at work:
+;; none starts a turn. (A second turn of its own that
 ;; follows at once, a task notification queued, starts at its first update
 ;; past those 2 s: done till then.)
 ;;
@@ -464,8 +467,9 @@ question on its canvas it asks kept. Return its plist
 
 (defun agent-workspace--update-aside-p (event)
   "Non-nil if EVENT, an update of an agent's session, isn't its agent at
-work: a subagent's, or a background command's terminal exiting (its tool
-call over long before)."
+work: a subagent's (claude-agent-acp's parentToolUseId: another agent's
+can't be told), or a background command's terminal exiting (its tool call
+over long before)."
   (let ((meta (alist-get :meta (alist-get :data event))))
     (or (alist-get 'terminal_exit meta)
         (alist-get 'parentToolUseId (alist-get 'claudeCode meta)))))
@@ -623,8 +627,8 @@ waiting on AGENT's canvas, unanswered."
        ;; late after its turn's end); in one, heard.
        (agent-workspace--self-turn-update agent event))
       ('usage-update
-       ;; Its model's result (claude-agent-acp names its origin): a turn it
-       ;; started by itself is over.
+       ;; Its model's result (claude-agent-acp names its origin; another
+       ;; agent's turn ends once quiet): a turn it started by itself is over.
        (when (and (or (eq state 'working) (agent-workspace--canvas-hand-p agent))
                   (gethash agent agent-workspace--self-turns)
                   (alist-get '_claude/origin (alist-get :meta data)))
