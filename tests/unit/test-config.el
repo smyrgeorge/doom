@@ -279,8 +279,13 @@ file fires one, so without that `load!' nothing notifies and nothing breaks."
                              (+test-config--forms))
                  '((load! "config/notify")))))
 
+(ert-deftest config/your-agent-claude-code ()
+  "Your agent is Claude Code, chosen here: SPC o c starts it without asking
+which (config/agent-shell.el chooses none)."
+  (should (eq agent-shell-preferred-agent-config 'claude-code)))
+
 (ert-deftest config/claude-carries-over-what-you-chose ()
-  "A new Claude Code session's prompt gets the selection, dired's marked
+  "A new session's prompt gets the selection, dired's marked
 files, an image; not the line you're on, nor the error there (agent-shell's
 default: every new prompt started with the line)."
   (should (equal agent-shell-context-sources '(files region))))

@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/agent-shell/mermaid.el -*- lexical-binding: t; -*-
-;; ```mermaid blocks drawn as diagrams in Claude Code's replies
+;; ```mermaid blocks drawn as diagrams in an agent's replies
 ;; (config/mermaid.el). Loaded from config/agent-shell.el.
 
 ;; DIAGRAMS IN REPLIES (see config/agent-shell.el)
@@ -154,7 +154,7 @@ streaming is left as it is. For `agent-shell-markdown-render-functions'."
 
 (add-hook '+my/mermaid-theme-hook #'+my/agent-shell-mermaid-theme-h)
 
-;; What Claude is told (see `+my/agent-shell-mermaid-context').
+;; What every session is told (see `+my/agent-shell-mermaid-context').
 (defun +my/agent-shell-mermaid-context ()
   "That Mermaid blocks are drawn, where they are; else nil."
   (when (fboundp '+my/mermaid-render)

@@ -963,7 +963,7 @@ it's still the other drawing (the page exports it again, a newer version)."
       (should (equal (+test-exd--elements) '("ellipse")))
       (set-buffer-modified-p nil))))
 
-;; ====== DRAWINGS FOR CLAUDE ======
+;; ====== DRAWINGS FOR THE AGENT ======
 
 (defmacro +test-exd--for-claude (&rest body)
   "BODY with an agent-shell stand-in, `shell' (its mode only, the selected

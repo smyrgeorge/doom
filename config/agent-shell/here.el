@@ -1,8 +1,10 @@
 ;;; $DOOMDIR/config/agent-shell/here.el -*- lexical-binding: t; -*-
-;; Claude Code in the window you're in (SPC o C; see CLAUDE CODE HERE in
+;; Your agent in the window you're in (SPC o C; see YOUR AGENT HERE in
 ;; config/agent-shell.el). Loaded from config/agent-shell.el.
 
-;; agent-shell asks which session (a new one, one to resume) once Claude Code
+(declare-function agent-shell--dwim "agent-shell")
+
+;; agent-shell asks which session (a new one, one to resume) once the agent
 ;; lists them, and shows the session after: later than the command. It keeps
 ;; the command's `display-buffer-overriding-action' for that (the prefixes
 ;; C-x 4 4, C-x 4 1 work so): the action below, put first in it for the
@@ -32,11 +34,20 @@ minibuffer's, one dedicated to its buffer): the next action then."
                 (if (functionp functions) (list functions) functions))
           (cons (cons '+my/agent-shell-here-window window) (cdr action)))))
 
-(defun +my/agent-shell-claude-here ()
-  "Start Claude Code as SPC o c does (agent-shell asking which session: a
-new one, or one to resume), the session shown in the window you're in
-instead of where agent-shell shows it (SPC o C)."
+(defun +my/agent-shell-start ()
+  "Start a session with your agent (SPC o c): `agent-shell-preferred-agent-config'
+\(chosen in config.el; none: agent-shell asks which), agent-shell asking
+which session (a new one, or one to resume), shown where it shows one."
+  (interactive)
+  (require 'agent-shell)
+  (agent-shell--dwim :new-shell t))
+
+(defun +my/agent-shell-here ()
+  "Start a session with your agent as SPC o c does, shown in the window
+you're in instead of where agent-shell shows it (SPC o C)."
   (interactive)
   (let ((display-buffer-overriding-action
          (+my/agent-shell--here-action display-buffer-overriding-action (selected-window))))
-    (agent-shell-anthropic-start-claude-code)))
+    (+my/agent-shell-start)))
+
+(define-obsolete-function-alias '+my/agent-shell-claude-here #'+my/agent-shell-here "2026-11-24")

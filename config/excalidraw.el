@@ -48,8 +48,8 @@
 ;; drawing" (M-x +my/excalidraw-insert): it links a new one as an image at
 ;; point and opens it beside, saved blank at once; on a link to one, "Edit the
 ;; drawing" opens it beside.
-;; A drawing as a PNG, for what can't read its SVG (Claude, see DRAWINGS FOR
-;; CLAUDE in config/agent-shell.el): `+my/excalidraw-png' asks its page for
+;; A drawing as a PNG, for what can't read its SVG (an agent, see DRAWINGS
+;; FOR THE AGENT in config/agent-shell.el): `+my/excalidraw-png' asks its page for
 ;; one, light as the file is, `+my/excalidraw-png-scale' times its size.
 ;; LIBRARIES: Excalidraw's library (its panel: shapes kept to reuse, drawn or
 ;; added from libraries.excalidraw.com) is the drawings' one, kept in

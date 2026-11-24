@@ -1,23 +1,25 @@
 ;;; $DOOMDIR/config/agent-shell.el -*- lexical-binding: t; -*-
-;; Claude Code inside Emacs (agent-shell, via ACP). Loaded from config.el; its
-;; code is in config/agent-shell/.
+;; A coding agent inside Emacs (agent-shell, via ACP): yours chosen in
+;; config.el (`agent-shell-preferred-agent-config'). Loaded from config.el;
+;; its code is in config/agent-shell/.
 
 ;; ====== VARIABLES ======
 
 ;; INSIDE EMACS
-;; Claude Code is told where it runs and what that allows, appended to its
-;; system prompt (Claude Code's own stays) in every session it starts or
-;; resumes. What agent-shell shows (its Markdown: tables, highlighted code;
+;; Every session is told where it runs and what that allows, whatever its
+;; agent: appended to its system prompt (its own stays) where it takes one
+;; from Emacs, else before its first message (config/agent-shell/context.el).
+;; What agent-shell shows (its Markdown: tables, highlighted code;
 ;; file references as links that open the file at that line; local images
 ;; inline, saved next to agent-shell's transcripts so they keep showing),
 ;; reports as Markdown with only their diagrams as images, and the editor
-;; itself: Claude can ask Emacs (`emacsclient', the server runs) what you're
+;; itself: the agent can ask Emacs (`emacsclient', the server runs) what you're
 ;; looking at, carefully. A line on the theme's colours is added when the
 ;; session starts, so the images it draws suit it.
 (define-obsolete-variable-alias '+my/agent-shell-claude-context '+my/agent-shell-context "2026-11-24")
 (defvar +my/agent-shell-context
   "You are running inside Emacs, in an agent-shell buffer (the agent-shell \
-package, through the claude-agent-acp ACP adapter), not in a terminal. The \
+package, through ACP), not in a terminal. The \
 user reads your replies in Emacs and works on the same files there.
 
 Formatting: agent-shell renders Markdown: headings, bold, italic, \
@@ -57,7 +59,7 @@ that its buffer isn't modified."
   "What every session is told (see above), the theme's line after it
 \(`+my/agent-shell-theme-context'): config/agent-shell/context.el.")
 
-;; DRAWINGS FOR CLAUDE
+;; DRAWINGS FOR THE AGENT
 ;; In an agent-shell buffer, C-c C-d (SPC m d) opens a new drawing on its left
 ;; (in the window there, which shows its own buffer again once the drawing
 ;; closes; without one, in a new window), in Excalidraw (config/excalidraw.el),
@@ -65,7 +67,7 @@ that its buffer isn't modified."
 ;; its screenshots, out of git). Like agent-shell's artist mode (M-x
 ;; agent-shell-artist-insert-text-drawing: text art), with Excalidraw. In it:
 ;;   C-c C-c    insert it into that shell's prompt: saved, exported as a PNG
-;;              beside its file (what Claude reads: not SVG), shown as
+;;              beside its file (what agents read: not SVG), shown as
 ;;              agent-shell shows a screenshot; the drawing closes
 ;;   C-c C-k    discard it: closed, its files deleted
 ;;   M-p / M-n  an earlier drawing of the folder instead of this one (newest
@@ -75,20 +77,20 @@ that its buffer isn't modified."
 ;; SPC b k) with nothing drawn, it leaves no file. It needs what drawings
 ;; need: a GUI Emacs with xwidgets, and Excalidraw.
 (defvar +my/agent-shell-drawings-subdir "drawings"
-  "Where drawings for Claude go, in the project's .agent-shell/ folder.")
+  "Where drawings for the agent go, in the project's .agent-shell/ folder.")
 
 (defvar +my/agent-shell-excalidraw-mode-map (make-sparse-keymap)
-  "Keys of a drawing for Claude (see DRAWINGS FOR CLAUDE above).")
+  "Keys of a drawing for the agent (see DRAWINGS FOR THE AGENT above).")
 
-;; ISSUES FOR CLAUDE
+;; ISSUES FOR THE AGENT
 ;; In a project tracking its issues with Beads (config/beads.el: a .beads/
-;; folder, SPC o i), Claude works with them through bd, its command line:
+;; folder, SPC o i), the agent works with them through bd, its command line:
 ;; - a session started there is told so (`+my/agent-shell-beads-context'),
 ;;   with Beads' own guide for agents (`bd prime': finding work, claiming,
-;;   creating, closing issues, dependencies), appended to its system prompt;
-;;   the guide left out where the project's Claude Code settings give it
-;;   already (a SessionStart hook running bd prime, as this config's has);
-;; - each bd command Claude runs refreshes the issue lists and issues open in
+;;   creating, closing issues, dependencies), with what it's told; the guide
+;;   left out for Claude Code where the project's Claude Code settings give
+;;   it already (a SessionStart hook running bd prime, as this config's has);
+;; - each bd command the agent runs refreshes the issue lists and issues open in
 ;;   Emacs for that project, so its changes show as it makes them;
 ;; - C-c C-i (SPC m i) in agent-shell picks one of the project's open issues
 ;;   (ready ones first) and puts it in the prompt, as its id and title;
@@ -102,22 +104,22 @@ have open there refresh after each bd command you run, so they follow your \
 changes. They may hand you an issue as \"Beads issue ID: title\": read it \
 with bd show ID. Add --json when you read bd's output. Never run bd edit: it \
 opens an editor and waits."
-  "Appended to Claude Code's system prompt in a project tracking its issues
-with Beads (see ISSUES FOR CLAUDE above), before `bd prime''s guide.")
+  "Told to a session in a project tracking its issues with Beads (see ISSUES
+FOR THE AGENT above), before `bd prime''s guide.")
 
 (defvar +my/agent-shell-beads-prime t
   "Non-nil: Beads' guide for agents (`bd prime') follows
-`+my/agent-shell-beads-context' in the system prompt, unless the project's
-Claude Code settings run it as a session starts.")
+`+my/agent-shell-beads-context' in what a session is told, unless it's Claude
+Code's and the project's Claude Code settings run it as a session starts.")
 
 ;; DIAGRAMS IN REPLIES
-;; ```mermaid blocks in Claude's replies are drawn as diagrams, in the theme's
+;; ```mermaid blocks in an agent's replies are drawn as diagrams, in the theme's
 ;; colours (config/mermaid.el: mmdc, in the background), once a block is
 ;; closed; meanwhile, or for an error (its message under it) or without mmdc,
 ;; its source. Copying as Markdown, and the transcript, keep the block's
 ;; source. A theme switch draws them again; they resize with the window, as
 ;; images do, no taller than it; RET or a click opens one at full size, as an
-;; image. Claude is told so (below), where config/mermaid.el is loaded.
+;; image. Sessions are told so (below), where config/mermaid.el is loaded.
 (defvar +my/agent-shell-mermaid-context
   "Diagrams: fenced mermaid blocks (```mermaid) are drawn as diagrams in \
 your replies, in the user's theme's colours: use them for flowcharts, \
@@ -126,7 +128,7 @@ like, in reports too, instead of rendering diagram code to an image. Mermaid \
 11's syntax; keep labels short. A diagram is shrunk to the width of the \
 user's pane, often narrow: prefer top-down layouts (flowchart TD) to wide \
 left-to-right ones."
-  "Appended to Claude Code's system prompt where diagrams are drawn (see
+  "Told to every session where diagrams are drawn (see
 DIAGRAMS IN REPLIES above).")
 
 ;; EVIL KEYS
@@ -134,12 +136,12 @@ DIAGRAMS IN REPLIES above).")
 ;; line there), and in insert state as before, S-RET a newline. Or, with
 ;; `+my/agent-shell-insert-ret-newline' set in config.el, RET in insert state
 ;; is a newline, the prompt sent from normal state (agent-shell's README,
-;; evil-collection's REPLs). In a diff Claude shows (*agent-shell-diff*), the
+;; evil-collection's REPLs). In a diff the agent shows (*agent-shell-diff*), the
 ;; keys its header line names work in normal state, where it opens: n / p the
 ;; next / previous hunk, y accept, RET open the file (C-c C-c reject and q
 ;; quit already did). evil-collection's own keys stay: in normal state, while
-;; Claude waits for a permission, y allows it, n rejects it (and interrupts
-;; Claude), ! always allows, v views its diff.
+;; the agent waits for a permission, y allows it, n rejects it (and interrupts
+;; it), ! always allows, v views its diff.
 (defvar +my/agent-shell-insert-ret-newline nil
   "With Evil, RET in insert state in agent-shell: nil sends the prompt (S-RET
 a newline), non-nil inserts a newline (RET in normal state sends). See EVIL
@@ -147,40 +149,42 @@ KEYS above.")
 
 ;; ====== KEY BINDINGS ======
 
-;; CLAUDE CODE HERE (config/agent-shell/here.el): SPC o c starts Claude Code,
-;; agent-shell asking which session (a new one, one to resume), shown where
-;; agent-shell shows it (with tiling, config/tiling.el: a new pane); SPC o C
-;; the same, shown in the window you're in, what it showed kept as a tab.
+;; YOUR AGENT HERE (config/agent-shell/here.el): SPC o c starts a session with
+;; your agent (`agent-shell-preferred-agent-config', chosen in config.el;
+;; none: agent-shell asks which), agent-shell asking which session (a new
+;; one, one to resume), shown where agent-shell shows it (with tiling,
+;; config/tiling.el: a new pane); SPC o C the same, shown in the window
+;; you're in, what it showed kept as a tab.
 (map! :leader
-      :desc "Claude Code (agent-shell)" "o c" #'agent-shell-anthropic-start-claude-code
-      :desc "Claude Code, here"         "o C" #'+my/agent-shell-claude-here)
+      :desc "Agent (agent-shell)" "o c" #'+my/agent-shell-start
+      :desc "Agent, here"         "o C" #'+my/agent-shell-here)
 
-;; DRAWINGS FOR CLAUDE (see above): C-c C-d next to agent-shell's own C-c keys.
+;; DRAWINGS FOR THE AGENT (see above): C-c C-d next to agent-shell's own C-c keys.
 (map! :after agent-shell
       :map agent-shell-mode-map
       "C-c C-d" #'+my/agent-shell-excalidraw
       :localleader
-      :desc "Draw for Claude" "d" #'+my/agent-shell-excalidraw)
+      :desc "Draw for the agent" "d" #'+my/agent-shell-excalidraw)
 
-;; ISSUES FOR CLAUDE (see above): an issue into the prompt, from agent-shell
+;; ISSUES FOR THE AGENT (see above): an issue into the prompt, from agent-shell
 ;; or from Beads' list and issues.
 (map! :after agent-shell
       :map agent-shell-mode-map
       "C-c C-i" #'+my/agent-shell-beads-insert
       :localleader
-      :desc "Issue for Claude" "i" #'+my/agent-shell-beads-insert)
+      :desc "Issue for the agent" "i" #'+my/agent-shell-beads-insert)
 
 (map! :after beads-list
       :map beads-list-mode-map
       "C-c C-a" #'+my/agent-shell-beads-send
       :localleader
-      :desc "To Claude" "a" #'+my/agent-shell-beads-send)
+      :desc "To the agent" "a" #'+my/agent-shell-beads-send)
 
 (map! :after beads-detail
       :map (beads-detail-mode-map beads-detail-vui-mode-map)
       "C-c C-a" #'+my/agent-shell-beads-send
       :localleader
-      :desc "To Claude" "a" #'+my/agent-shell-beads-send)
+      :desc "To the agent" "a" #'+my/agent-shell-beads-send)
 
 (map! :map +my/agent-shell-excalidraw-mode-map
       "C-c C-c" #'+my/agent-shell-excalidraw-insert
@@ -204,21 +208,16 @@ KEYS above.")
 
 ;; ====== CODE ======
 
-;; AGENT-SHELL (Claude Code via ACP)
-;; Uses the Claude CLI login (run `claude` once in a terminal to log in).
+;; AGENT-SHELL (coding agents via ACP): which agent, and its login, are
+;; chosen in config.el.
 (use-package! agent-shell
-  :commands (agent-shell agent-shell-anthropic-start-claude-code)
+  :commands (agent-shell)
   :config
-  (setq agent-shell-anthropic-authentication
-        (agent-shell-anthropic-make-authentication :login t)
-        ;; New shells (e.g. from the Option+Enter Claude actions) start Claude
-        ;; Code without asking which agent to use.
-        agent-shell-preferred-agent-config 'claude-code
-        ;; AGENT BUFFERS: a session's buffer is named after its agent alone
-        ;; (config/agent-shell/name.el): "Claude", a second one "Claude<2>"
-        ;; (in any project: buffer names are Emacs's, not a project's), and
-        ;; so every agent ("Codex", "Gemini"...), not "Claude Agent @ doom".
-        agent-shell-buffer-name-format #'+my/agent-shell-buffer-name
+  ;; AGENT BUFFERS: a session's buffer is named after its agent alone
+  ;; (config/agent-shell/name.el): "Claude", a second one "Claude<2>" (in any
+  ;; project: buffer names are Emacs's, not a project's), and so every agent
+  ;; ("Codex", "Gemini"...), not "Claude Agent @ doom".
+  (setq agent-shell-buffer-name-format #'+my/agent-shell-buffer-name
         ;; Images (screenshots, charts) as wide as the window (beside a
         ;; reply's indent: config/agent-shell/images.el): agent-shell shrinks
         ;; them to 40% of it. Smaller ones keep their own size.

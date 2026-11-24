@@ -182,7 +182,7 @@ nothing is drawn in it; kept if something is, or once inserted."
           (set-buffer-modified-p nil)
           (kill-buffer))
         (should (equal (list name (file-exists-p file)) (list name kept)))))
-    ;; Not a drawing for Claude (the mode off): nothing deleted.
+    ;; Not a drawing for the agent (the mode off): nothing deleted.
     (let ((file (+test-ase--write (expand-file-name "other.excalidraw.svg" dir) (+test-ase--svg +test-ase--blank))))
       (+test-ase--drawing nil file
         (cl-letf (((symbol-function '+my/banner-close) #'ignore))
@@ -315,7 +315,7 @@ without one, a new window split off to the left of the shell's."
         (+my/agent-shell-excalidraw-mode 1)
         (should (eq (nth 0 shown) 'agent-shell-excalidraw))
         (should (equal (nth 1 shown)
-                       "For Claude: C-c C-c inserts, C-c C-k discards, M-p / M-n earlier drawings"))
+                       "Drawing: C-c C-c inserts, C-c C-k discards, M-p / M-n earlier drawings"))
         (should (equal (plist-get (nth 2 shown) :actions)
                        '(("Insert" . +my/agent-shell-excalidraw-insert)
                          ("Discard" . +my/agent-shell-excalidraw-discard))))
@@ -396,7 +396,7 @@ last change brought into the buffer first, then saved."
   (let* ((dir (+test-ase--dir))
          (file (+test-ase--write (expand-file-name "drawing-1.excalidraw.svg" dir)))
          (shell (+test-ase--shell)))
-    ;; Not a drawing for Claude.
+    ;; Not a drawing for the agent.
     (with-temp-buffer
       (should-error (+my/agent-shell-excalidraw-insert) :type 'user-error))
     ;; Its shell gone.

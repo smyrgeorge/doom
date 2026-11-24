@@ -1,7 +1,8 @@
 ;;; tests/unit/test-agent-shell.el -*- lexical-binding: t; -*-
-;; config/agent-shell.el: Claude Code in Emacs (agent-shell): the CLI login,
-;; Claude Code as the default agent, SPC o c / SPC o C (here), what Claude is
-;; told about Emacs (appended to its system prompt), image width.
+;; config/agent-shell.el: a coding agent in Emacs (agent-shell): no agent
+;; chosen (config.el chooses), SPC o c / SPC o C (here) starting yours, what
+;; every session is told about Emacs (its system prompt, or before its first
+;; message), image width.
 ;; No agent ever starts: agent-shell's starting points are mocked, and any
 ;; process started fails the test.
 
@@ -24,7 +25,6 @@
 (defconst +test-agent-shell--at-startup
   (list :loaded (featurep 'agent-shell)
         :agent-shell (symbol-function 'agent-shell)
-        :start-claude (symbol-function 'agent-shell-anthropic-start-claude-code)
         :preferred-bound (boundp 'agent-shell-preferred-agent-config))
   "What config/agent-shell.el left before agent-shell loaded.")
 
@@ -87,6 +87,8 @@ folder in the temp folder. `calls' collects (FUNCTION . ARGS) in order;
             (started (+test-buffer "Claude Agent @ new"))
             (agent-shell-prefer-viewport-interaction nil)
             (agent-shell-session-strategy 'prompt)
+            ;; Your agent, as config.el chooses it.
+            (agent-shell-preferred-agent-config 'claude-code)
             (agent-shell-cwd-function nil)
             (default-directory dir)
             (processes (process-list))
@@ -135,15 +137,13 @@ folder in the temp folder. `calls' collects (FUNCTION . ARGS) in order;
 ;; ====== KEYS ======
 
 (ert-deftest agent-shell/keys ()
-  (should (eq (lookup-key doom-leader-map (kbd "o c"))
-              #'agent-shell-anthropic-start-claude-code))
-  (should (eq (lookup-key doom-leader-map (kbd "o C")) #'+my/agent-shell-claude-here)))
+  (should (eq (lookup-key doom-leader-map (kbd "o c")) #'+my/agent-shell-start))
+  (should (eq (lookup-key doom-leader-map (kbd "o C")) #'+my/agent-shell-here)))
 
 (ert-deftest agent-shell/keys-described-for-which-key ()
   (let ((o (lookup-key doom-leader-map (kbd "o"))))
-    (should (equal (alist-get ?c (cdr o))
-                   '("Claude Code (agent-shell)" . agent-shell-anthropic-start-claude-code)))
-    (should (equal (alist-get ?C (cdr o)) '("Claude Code, here" . +my/agent-shell-claude-here)))))
+    (should (equal (alist-get ?c (cdr o)) '("Agent (agent-shell)" . +my/agent-shell-start)))
+    (should (equal (alist-get ?C (cdr o)) '("Agent, here" . +my/agent-shell-here)))))
 
 (ert-deftest agent-shell/keys-are-commands ()
   (should (commandp (lookup-key doom-leader-map (kbd "o c"))))
@@ -154,11 +154,10 @@ folder in the temp folder. `calls' collects (FUNCTION . ARGS) in order;
 (ert-deftest agent-shell/not-loaded-at-startup ()
   "The config doesn't load agent-shell: its commands are autoloads until used."
   (should-not (plist-get +test-agent-shell--at-startup :loaded))
-  (dolist (key '(:agent-shell :start-claude))
-    (let ((fn (plist-get +test-agent-shell--at-startup key)))
-      (should (autoloadp fn))
-      (should (equal (nth 1 fn) "agent-shell"))
-      (should (nth 3 fn)))))                ; interactive
+  (let ((fn (plist-get +test-agent-shell--at-startup :agent-shell)))
+    (should (autoloadp fn))
+    (should (equal (nth 1 fn) "agent-shell"))
+    (should (nth 3 fn))))                   ; interactive
 
 (ert-deftest agent-shell/settings-wait-for-the-package ()
   "Its settings are in `:config': nothing set before agent-shell loads (its
@@ -168,7 +167,8 @@ defcustoms would otherwise keep a value set too early, or be overridden)."
 ;; ====== SETTINGS ======
 
 (ert-deftest agent-shell/claude-cli-login ()
-  "Uses the Claude CLI login (no API key, no OAuth token)."
+  "Claude Code uses the Claude CLI login (no API key, no OAuth token):
+agent-shell's default, nothing set here."
   (should (equal agent-shell-anthropic-authentication '((:login . t))))
   (should (equal agent-shell-anthropic-authentication
                  (agent-shell-anthropic-make-authentication :login t))))
@@ -186,13 +186,20 @@ login is used), and no OAuth token."
       (should-not (seq-some (lambda (var) (string-prefix-p "CLAUDE_CODE_OAUTH_TOKEN" var)) env)))
     (should (equal (plist-get made :command) (car agent-shell-anthropic-claude-acp-command)))))
 
-(ert-deftest agent-shell/claude-code-is-the-default-agent ()
-  (should (eq agent-shell-preferred-agent-config 'claude-code))
+(ert-deftest agent-shell/no-agent-chosen-here ()
+  "The module chooses no agent: config.el does (Claude Code), as agent-shell
+would have it (none: it asks which)."
+  (should-not (default-value 'agent-shell-preferred-agent-config)))
+
+(ert-deftest agent-shell/your-agent-without-asking ()
+  "Your agent chosen (config.el's Claude Code): a new session's config is
+its, without asking which."
+  (let ((agent-shell-preferred-agent-config 'claude-code))
   (cl-letf (((symbol-function 'agent-shell-select-config)
              (lambda (&rest _) (error "Asked which agent to use"))))
     (let ((config (agent-shell--auto-preferred-config)))
       (should config)
-      (should (eq (map-elt config :identifier) 'claude-code)))))
+      (should (eq (map-elt config :identifier) 'claude-code))))))
 
 (ert-deftest agent-shell/buffers-named-after-the-agent ()
   "A session's buffer is named after its agent alone (\"Claude\", not
@@ -271,7 +278,7 @@ columns; a smaller share of the window, or a size in pixels, as it is."
   (let ((text +my/agent-shell-context))
     (should (stringp text))
     (should (string-prefix-p "You are running inside Emacs, in an agent-shell buffer" text))
-    (should (string-match-p "claude-agent-acp" text))
+    (should (string-match-p "through ACP" text))
     (should (string-match-p "not in a terminal" text))))
 
 (ert-deftest agent-shell/context-sections ()
@@ -653,6 +660,14 @@ ACP's systemPrompt (append) when it starts, resumes or loads a session."
     (+test-agent-shell--press "o c")
     (+test-agent-shell--press "o c")
     (should (= (length (+test-agent-shell--calls calls 'start)) 2))))
+
+(ert-deftest agent-shell/spc-o-c-asks-which-agent-without-one ()
+  "No agent chosen in config.el: SPC o c asks which (agent-shell's picker)."
+  (+test-agent-shell--mocked
+    (let ((agent-shell-preferred-agent-config nil))
+      (should-error (+test-agent-shell--press "o c"))
+      (should (+test-agent-shell--calls calls 'picker))
+      (should-not (+test-agent-shell--calls calls 'start)))))
 
 ;; ====== SPC o C ======
 

@@ -1,24 +1,24 @@
 ;;; $DOOMDIR/config/agent-shell/excalidraw.el -*- lexical-binding: t; -*-
-;; Drawings for Claude: drawn in Excalidraw, inserted into an agent-shell
-;; prompt as images (see DRAWINGS FOR CLAUDE there). Loaded from
+;; Drawings for the agent: drawn in Excalidraw, inserted into an agent-shell
+;; prompt as images (see DRAWINGS FOR THE AGENT there). Loaded from
 ;; config/agent-shell.el.
 
 (defvar-local +my/agent-shell-excalidraw--shell nil
-  "In a drawing for Claude: the agent-shell buffer it goes to.")
+  "In a drawing for the agent: the agent-shell buffer it goes to.")
 
 (defvar-local +my/agent-shell-excalidraw--earlier nil
-  "In a drawing for Claude: the earlier drawing shown instead of its own (M-p,
+  "In a drawing for the agent: the earlier drawing shown instead of its own (M-p,
 M-n), as (POSITION . OWN-TEXT); nil: its own.")
 
 (defvar-local +my/agent-shell-excalidraw--inserted nil
-  "In a drawing for Claude: non-nil once inserted (its file kept, blank or not).")
+  "In a drawing for the agent: non-nil once inserted (its file kept, blank or not).")
 
 (define-minor-mode +my/agent-shell-excalidraw-mode
-  "A drawing for Claude, inserted into an agent-shell prompt (see DRAWINGS FOR
-CLAUDE in config/agent-shell.el).
+  "A drawing for the agent, inserted into an agent-shell prompt (see DRAWINGS FOR
+THE AGENT in config/agent-shell.el).
 
 \\{+my/agent-shell-excalidraw-mode-map}"
-  :lighter " Claude"
+  :lighter " Agent"
   (if +my/agent-shell-excalidraw-mode
       (progn
         (+my/agent-shell-excalidraw--notice)
@@ -35,7 +35,7 @@ the buttons whole at 40."
     (+my/banner-show
      'agent-shell-excalidraw
      (substitute-command-keys
-      "\\<+my/agent-shell-excalidraw-mode-map>For Claude: \
+      "\\<+my/agent-shell-excalidraw-mode-map>Drawing: \
 \\[+my/agent-shell-excalidraw-insert] inserts, \
 \\[+my/agent-shell-excalidraw-discard] discards, \
 \\[+my/agent-shell-excalidraw-previous] / \\[+my/agent-shell-excalidraw-next] \
@@ -119,9 +119,9 @@ without one, in a new window split off to its left."
       (window . ,window))))
 
 (defun +my/agent-shell-excalidraw ()
-  "Draw for Claude: a new drawing on the left, inserted into this
+  "Draw for the agent: a new drawing on the left, inserted into this
 agent-shell's prompt with \\<+my/agent-shell-excalidraw-mode-map>\\[+my/agent-shell-excalidraw-insert] \
-\(see DRAWINGS FOR CLAUDE in config/agent-shell.el)."
+\(see DRAWINGS FOR THE AGENT in config/agent-shell.el)."
   (interactive)
   (let ((shell (+my/agent-shell-excalidraw--shell-here)))
     (unless (buffer-live-p shell)
@@ -152,10 +152,10 @@ it."
 
 (defun +my/agent-shell-excalidraw-insert ()
   "Insert the drawing into its agent-shell's prompt, as an image (see
-DRAWINGS FOR CLAUDE in config/agent-shell.el), and close it."
+DRAWINGS FOR THE AGENT in config/agent-shell.el), and close it."
   (interactive)
   (unless +my/agent-shell-excalidraw-mode
-    (user-error "Not a drawing for Claude"))
+    (user-error "Not a drawing for the agent"))
   (let ((shell +my/agent-shell-excalidraw--shell)
         (drawing (current-buffer)))
     (unless (buffer-live-p shell)
@@ -174,7 +174,7 @@ DRAWINGS FOR CLAUDE in config/agent-shell.el), and close it."
       png)))
 
 (defun +my/agent-shell-excalidraw--killed-h ()
-  "A drawing for Claude closed without being inserted (its tab, SPC b k): its
+  "A drawing for the agent closed without being inserted (its tab, SPC b k): its
 file deleted if nothing is drawn in it (it's saved blank as it opens), else
 each one closed so was left for M-p to list."
   (when (and buffer-file-name
@@ -187,7 +187,7 @@ each one closed so was left for M-p to list."
   "Close the drawing without inserting it; its files are deleted."
   (interactive)
   (unless +my/agent-shell-excalidraw-mode
-    (user-error "Not a drawing for Claude"))
+    (user-error "Not a drawing for the agent"))
   (let ((file buffer-file-name))
     (+my/agent-shell-excalidraw--close (current-buffer))
     (when file
@@ -201,7 +201,7 @@ each one closed so was left for M-p to list."
   "Show the earlier drawing STEP away (1: older, -1: newer); past the newest,
 the drawing's own again."
   (unless +my/agent-shell-excalidraw-mode
-    (user-error "Not a drawing for Claude"))
+    (user-error "Not a drawing for the agent"))
   (let* ((files (+my/agent-shell-excalidraw--earlier-files))
          (position (car +my/agent-shell-excalidraw--earlier))
          (next (if position (+ position step) (if (> step 0) 0 -1))))
@@ -230,7 +230,7 @@ the drawing's own again."
                       (file-name-nondirectory file)))))))
 
 (defun +my/agent-shell-excalidraw-previous ()
-  "An older drawing instead of this one (see DRAWINGS FOR CLAUDE in
+  "An older drawing instead of this one (see DRAWINGS FOR THE AGENT in
 config/agent-shell.el)."
   (interactive)
   (+my/agent-shell-excalidraw--step 1))

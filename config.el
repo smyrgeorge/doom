@@ -111,13 +111,20 @@
 ;; tiling.
 (setq +my/tiling-apps 'all)
 
-;; Claude Code's questions (its AskUserQuestion tool) as forms in the
+;; Your agent: Claude Code. SPC o c / SPC o C start it, as new shells (the
+;; Option+Enter actions') do, without asking which: another of agent-shell's
+;; (codex, gemini, opencode...: M-x agent-shell lists them) here, or nil to be
+;; asked each time. Claude Code logs in with the claude CLI's login
+;; (agent-shell's default: run `claude' once in a terminal to log in).
+(setq agent-shell-preferred-agent-config 'claude-code)
+
+;; An agent's questions (Claude Code's AskUserQuestion tool) as forms in the
 ;; conversation: 2 to 4 options, the agent waiting mid-turn for your answer
 ;; (agent-shell's elicitation). Still experimental in agent-shell: nil turns it
-;; off (Claude then asks in its replies, or on its canvas: Agent UI's choice).
+;; off (the agent then asks in its replies, or on its canvas: Agent UI's choice).
 (setq agent-shell-elicitation--experimental-feature-enabled t)
 
-;; What SPC o c / SPC o C carry into a new Claude Code session's prompt
+;; What SPC o c / SPC o C carry into a new session's prompt
 ;; (agent-shell's context): only what you chose, the selection, dired's marked
 ;; files, the image you're on. Add `error' and `line' for the error at point,
 ;; or else the line you're on (agent-shell's default: every new prompt started
@@ -183,7 +190,7 @@
 ;; functions and line numbers)
 (load! "config/lsp")
 
-;; AGENT-SHELL (Claude Code via ACP; SPC o c / SPC o C)
+;; AGENT-SHELL (your coding agent via ACP; SPC o c / SPC o C)
 (load! "config/agent-shell")
 
 ;; AGENT UI (what the agent shows beyond its replies: progress, tables, charts)

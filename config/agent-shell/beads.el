@@ -1,6 +1,6 @@
 ;;; $DOOMDIR/config/agent-shell/beads.el -*- lexical-binding: t; -*-
-;; Issues for Claude: a project's Beads issues (config/beads.el) in its
-;; sessions (see ISSUES FOR CLAUDE there). Loaded from config/agent-shell.el.
+;; Issues for the agent: a project's Beads issues (config/beads.el) in its
+;; sessions (see ISSUES FOR THE AGENT there). Loaded from config/agent-shell.el.
 
 ;; THE PROJECT'S ISSUES
 
@@ -65,7 +65,7 @@ only Claude Code reads Claude Code's settings."
 
 (defun +my/agent-shell-beads-context ()
   "For a session in a project tracking its issues with Beads: what its agent
-is told of them, Beads' guide after (see ISSUES FOR CLAUDE), unless it's
+is told of them, Beads' guide after (see ISSUES FOR THE AGENT), unless it's
 Claude Code and the project's Claude Code settings give it already (see
 above); else nil."
   (when-let* ((root (+my/agent-shell-beads--root))
@@ -169,7 +169,7 @@ first, then by priority."
 
 (defun +my/agent-shell-beads-insert ()
   "One of the project's open issues, picked, into this session's prompt (see
-ISSUES FOR CLAUDE in config/agent-shell.el)."
+ISSUES FOR THE AGENT in config/agent-shell.el)."
   (interactive)
   (let ((shell (if (derived-mode-p 'agent-shell-mode)
                    (current-buffer)
@@ -191,7 +191,7 @@ ISSUES FOR CLAUDE in config/agent-shell.el)."
 
 (defun +my/agent-shell-beads-send ()
   "The issue at point, or shown, into the prompt of the project's session (see
-ISSUES FOR CLAUDE in config/agent-shell.el)."
+ISSUES FOR THE AGENT in config/agent-shell.el)."
   (interactive)
   (let* ((issue (or (+my/agent-shell-beads--issue-here)
                     (user-error "No issue here")))

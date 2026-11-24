@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/agent-shell/images.el -*- lexical-binding: t; -*-
-;; Images in Claude Code's replies. Loaded from config/agent-shell.el.
+;; Images in an agent's replies. Loaded from config/agent-shell.el.
 
 ;; AS WIDE AS THE ROOM THEY HAVE
 ;; Images (and diagrams, config/agent-shell/mermaid.el) as wide as the window

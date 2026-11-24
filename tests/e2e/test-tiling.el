@@ -258,6 +258,7 @@ before a session is picked: each with a state keeping its subscriptions.
 `sessions' holds them, newest first; killed after."
   (declare (indent 0))
   `(let ((sessions nil)
+         (agent-shell-preferred-agent-config 'claude-code)
          (agent-shell-prefer-viewport-interaction nil)
          (agent-shell-session-strategy 'prompt))
      (cl-letf (((symbol-function 'agent-shell--start)
@@ -280,14 +281,14 @@ says so, its subscribers show it."
     (agent-shell--emit-event :event 'session-selected)))
 
 (ert-deftest e2e-tiling/spc-o-C-claude-code-here-once-a-session-is-picked ()
-  "SPC o C: Claude Code started as SPC o c starts it, shown once a session
+  "SPC o C: your agent started as SPC o c starts it, shown once a session
 is picked (after the command, agent-shell's prompt answered): in the pane
 you were in, the file there a tab under it, no new pane. SPC o c then: in a
 new pane."
   (+test-tiling
     (+test-tiling--starting-sessions
       (let ((here (selected-window)))
-        (+my/agent-shell-claude-here)
+        (+my/agent-shell-here)
         (should (= (length sessions) 1))
         ;; Not shown before a session's picked.
         (should (equal (+test-tiling--layout) '("a.txt")))
@@ -297,7 +298,7 @@ new pane."
           (should (equal (+test-tiling--layout) (list name)))
           (should (equal (+test-tiling--tabs here) (list "a.txt" name))))
         ;; SPC o c: a new pane.
-        (agent-shell-anthropic-start-claude-code)
+        (+my/agent-shell-start)
         (+test-tiling--session-picked (car sessions))
         (should-not (eq (selected-window) here))
         (should (equal (+test-tiling--layout) (reverse (mapcar #'buffer-name sessions))))))))
