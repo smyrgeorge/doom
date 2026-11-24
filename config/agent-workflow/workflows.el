@@ -109,12 +109,22 @@ PROBLEMS)), STAMP the files (its agents' too) and their times.")
 
 ;; ====== A WORKFLOW FILE ======
 
+(defvar yaml--string-values)
+
 (defun agent-workflow--yaml-parse (text)
   "TEXT parsed as YAML: mappings alists with string keys, sequences lists,
-true t, false :false, null :null."
+true t, false :false, null :null; a quoted scalar (\"true\", '42') or a
+block one (| >) a string, as YAML has it (yaml.el reads them as plain
+ones)."
   (require 'yaml)
-  (yaml-parse-string text :object-type 'alist :object-key-type 'string :sequence-type 'list
-                     :null-object :null :false-object :false))
+  (let ((event (symbol-function 'yaml--scalar-event)))
+    (cl-letf (((symbol-function 'yaml--scalar-event)
+               (lambda (style value)
+                 (let ((yaml--string-values (or yaml--string-values
+                                                (member style '("single" "double" "folded")))))
+                   (funcall event style value)))))
+      (yaml-parse-string text :object-type 'alist :object-key-type 'string :sequence-type 'list
+                         :null-object :null :false-object :false))))
 
 (defun agent-workflow--mapping-p (value)
   "Non-nil if VALUE is a YAML mapping, as read (an alist, maybe empty; not

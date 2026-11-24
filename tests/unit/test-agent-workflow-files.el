@@ -802,6 +802,23 @@ Build it on {branch}.
 
 ;; ====== A PROJECT'S ======
 
+(ert-deftest agent-workflow-files/quoted-scalars-are-strings ()
+  "A quoted scalar is a string, as YAML has it: run: 'true' a command,
+prompt: \"42\" a prompt, description: \"null\" one; a plain one still a
+boolean, a number, null (doom-38o.86)."
+  (should (equal (agent-workflow--yaml-parse "a: 'true'\nb: \"42\"\nc: \"null\"\nd: true\ne: 42\nf: null\ng: |\n  7\n")
+                 '(("a" . "true") ("b" . "42") ("c" . "null") ("d" . t) ("e" . 42) ("f" . :null) ("g" . "7\n"))))
+  (pcase-let ((`(,workflow . ,problems) (+test-awf--workflow "description: \"null\"
+jobs:
+  a:
+    run: 'true'
+  b:
+    agent: build
+    prompt: \"42\"
+")))
+    (should-not problems)
+    (should (equal (plist-get workflow :description) "null"))))
+
 (ert-deftest agent-workflow-files/where-they-come-from ()
   "The starters, the project's, yours: a later one replacing one of the same
 name, each saying where it's from; found from an agent's worktree too, read
