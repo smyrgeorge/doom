@@ -589,6 +589,15 @@ again (doom-3q5.5)."
                                   (with-temp-buffer (insert-file-contents agent-ui-panel-trust-file) (buffer-string))))
           (kill-buffer (agent-ui-open-panel "counted" root))
           (should (= asked 3))
+          ;; The same file in another repository: not trusted there, its
+          ;; scripts not the ones let run (doom-ht6.48).
+          (let* ((clone (file-name-as-directory (make-temp-file "clone-" t)))
+                 (other (expand-file-name (concat agent-ui-panel-directory "/counted.el") clone)))
+            (make-directory (file-name-directory other) t)
+            (copy-file file other)
+            (should (equal (agent-ui-panels--hash other) (agent-ui-panels--hash file)))
+            (should-not (agent-ui-panel-trusted-p other))
+            (delete-directory clone t))
           ;; Changed: asked again.
           (with-temp-file file (insert (+test-aup-fixture "counted") ";; changed\n"))
           (should-not (agent-ui-panel-trusted-p file))
