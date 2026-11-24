@@ -144,7 +144,8 @@ m.tex for LaTeX), its SVG on stdout."
   "Redraw the math elements showing KEY's formula, everywhere."
   (cl-flet ((mine-p (element)
               (and (equal (plist-get element :type) "math")
-                   (equal key (agent-ui-math--key (agent-ui-math--tool) (plist-get element :tex)
+                   ;; Its TeX as it's drawn: trimmed.
+                   (equal key (agent-ui-math--key (agent-ui-math--tool) (string-trim (plist-get element :tex))
                                                   (agent-ui-math--display element) (agent-ui-math--color))))))
     (dolist (canvas (agent-ui-canvases))
       (with-current-buffer canvas

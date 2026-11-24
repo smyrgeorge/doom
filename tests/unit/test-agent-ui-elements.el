@@ -3104,10 +3104,10 @@ read \"it failed\", under load)."
 
 (ert-deftest agent-ui-elements/math-redrawn-when-typeset ()
   "Typeset: the elements showing it marked to be drawn again (a panel's
-child too)."
+child too; one whose TeX has blanks around it, doom-ht6.54)."
   (+test-aue-canvas
     (+test-aue-math (list "true")
-      (agent-ui-show '(:id "f" :type "math" :tex "E = mc^2"))
+      (agent-ui-show '(:id "f" :type "math" :tex "E = mc^2\n"))
       (agent-ui-show '(:id "p" :type "panel" :children ((:id "g" :type "math" :tex "E = mc^2"))))
       (agent-ui-show '(:id "other" :type "math" :tex "x"))
       (with-current-buffer canvas (agent-ui--flush))
