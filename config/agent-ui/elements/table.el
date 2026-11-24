@@ -88,6 +88,9 @@ if there's no such column."
     ;; each a row's key cell (or its first; `agent-ui-table--row-answers').
     (when-let* ((select (plist-get props :select)))
       (agent-ui-ask-select-check "table" select)
+      ;; Its key cells as they're drawn: a number given for a number's.
+      (when (and (plist-get props :selected) (proper-list-p (plist-get props :selected)))
+        (setq props (plist-put props :selected (mapcar #'agent-ui-table--cell (plist-get props :selected)))))
       (agent-ui-ask-check "table" (plist-get props :selected) (agent-ui-table--answers props)
                           (eq (plist-get select :multiple) t)))
     props))

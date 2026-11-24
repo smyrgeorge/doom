@@ -3301,6 +3301,14 @@ with their first cell; in a still picture: marks, no buttons."
     (should-not (string-search "⏵" still))
     (should-not (string-search "Add a note" still))))
 
+(ert-deftest agent-ui-elements/table-select-a-number-s-key ()
+  "Rows whose key cells are numbers: picked before by their numbers, as
+given (doom-ht6.66)."
+  (let ((drawn (+test-aue-draw '(:type "table" :columns ("N" "Name") :key 0 :rows ((1 "a") (2 "b"))
+                                 :select (:question "Which?") :selected (2)))))
+    (should (string-search "(•)  2" drawn))
+    (should (string-search "( )  1" drawn))))
+
 (ert-deftest agent-ui-elements/table-select-rows-sharing-a-key ()
   "Two rows with the same key cell: picking one marks only it, the answer
 naming that row by its cells (both were marked, the answer their key);
