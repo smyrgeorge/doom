@@ -3820,6 +3820,19 @@ as many as were appended, or its width changed."
       (agent-ui--flush)
       (should (string-suffix-p "f\n\nbelow\n\n" (buffer-substring-no-properties (point-min) (point-max)))))))
 
+(ert-deftest agent-ui-elements/log-appended-past-its-cut ()
+  "A log drawn past `agent-ui-max-chars' (cut, what's left out said): a
+line appended, the same as drawn whole, no stale cut left (doom-ht6.69)."
+  (+test-aue-canvas
+    (with-current-buffer canvas
+      (agent-ui-show (list :id "log" :type "log" :show 300
+                           :lines (mapcar (lambda (i) (format "%04d %s" i (make-string 70 ?x))) (number-sequence 1 300))))
+      (agent-ui--flush)
+      (dolist (n '(301 302))
+        (agent-ui-append "log" (list :lines (list (format "%04d appended line" n))))
+        (agent-ui--flush)
+        (should (+test-aue--same-drawing-p (+test-aue--region "log") (+test-aue--drawn-whole "log")))))))
+
 (ert-deftest agent-ui-elements/table-appended-draws-only-its-rows ()
   "Rows appended to a table: their lines after the others (before what's
 left out), not drawn whole, the same as drawn whole; drawn whole when a

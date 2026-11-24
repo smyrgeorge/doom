@@ -372,13 +372,25 @@ new ones at the end. Nil if one kept takes more or fewer lines now."
              (kept (- (length new-drawn) added))
              (drop (- (length old-drawn) kept))
              (height (lambda (text) (1+ (cl-count ?\n text))))
-             (edits (list (list 'replace 0 (agent-ui-log--counts new-lines width (plist-get new :unit)
-                                                                 (plist-get new :right)))))
-             (line 1))
-        (when (> drop 0)
+             (counts (agent-ui-log--counts new-lines width (plist-get new :unit) (plist-get new :right)))
+             (edits (list (list 'replace 0 counts)))
+             (line 1)
+             ;; Its drawing's length, as `agent-ui--cap' would measure it.
+             (size (lambda (counts drawn)
+                     (+ (length counts) 1 (apply #'+ (mapcar #'length drawn)) (max 0 (1- (length drawn)))))))
+        ;; Either drawing past the cut (`agent-ui-max-chars'): what's in the
+        ;; buffer is cut, these edits aren't: drawn again whole.
+        (when (or (> (funcall size counts new-drawn) agent-ui-max-chars)
+                  (> (funcall size (agent-ui-log--counts (agent-ui-log--lines old) width (plist-get old :unit)
+                                                         (plist-get old :right))
+                                   old-drawn)
+                     agent-ui-max-chars))
+          (setq edits nil))
+        (when (and edits (> drop 0))
           (let ((count (apply #'+ (mapcar height (seq-take old-drawn drop)))))
             (when (> count 0) (push (list 'delete 1 count) edits))))
         (catch 'whole
+          (unless edits (throw 'whole nil))
           (cl-loop for was in (nthcdr drop old-drawn)
                    for is in new-drawn
                    do (cond ((equal-including-properties was is))
