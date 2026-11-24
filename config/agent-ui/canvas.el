@@ -871,21 +871,25 @@ error saying what's wrong. Its :type a string, as JSON gives it."
     (when-let* ((with (plist-get element :with)))
       (unless (and (stringp with) (string-match-p "\\`[A-Za-z0-9_.-]+\\'" with))
         (agent-ui--fail "with: the id of the question it's shown with, not %s" (agent-ui--show-value with))))
-    (let ((element (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type)))))
-      ;; Its files by their full names: drawn later, wherever the agent was.
-      (dolist (prop (agent-ui-type-props type))
-        (when (eq (agent-ui-prop-kind prop) 'file)
-          (let ((key (agent-ui-prop-key prop)))
-            (cond
-             ((plist-get element key)
-              (setq element (plist-put element key (expand-file-name (plist-get element key)
-                                                                     agent-ui-file-directory))))
-             ;; :here: the agent's directory, now (drawn later, elsewhere).
-             ((eq (agent-ui-prop-default prop) :here)
-              (setq element (plist-put element key
-                                       (file-name-as-directory
-                                        (expand-file-name (or agent-ui-file-directory default-directory))))))))))
-      (agent-ui--prepared element))))
+    (agent-ui--prepared (plist-put (copy-sequence element) :type (symbol-name (agent-ui-type-name type))))))
+
+(defun agent-ui--full-names (element)
+  "ELEMENT with its files by their full names, under the agent's directory
+\(`agent-ui-file-directory'): drawn later, wherever the canvas's directory
+is; a :here one with none given, that directory, now."
+  (let ((element (copy-sequence element)))
+    (dolist (prop (agent-ui-type-props (agent-ui-type (plist-get element :type))))
+      (when (eq (agent-ui-prop-kind prop) 'file)
+        (let ((key (agent-ui-prop-key prop)))
+          (cond
+           ((stringp (plist-get element key))
+            (setq element (plist-put element key (expand-file-name (plist-get element key)
+                                                                   agent-ui-file-directory))))
+           ((eq (agent-ui-prop-default prop) :here)
+            (setq element (plist-put element key
+                                     (file-name-as-directory
+                                      (expand-file-name (or agent-ui-file-directory default-directory))))))))))
+    element))
 
 (defun agent-ui--source-dir (element)
   "ELEMENT with its source's dir a full name, while `agent-ui-file-directory'
@@ -903,9 +907,11 @@ relative one under it, none it. Its source ran in its canvas's directory
       element)))
 
 (defun agent-ui--prepared (element)
-  "ELEMENT as it's kept: its type's :prepare, if it has one, its source's
+  "ELEMENT as it's kept: its files by their full names
+\(`agent-ui--full-names'), its type's :prepare, if it has one, its source's
 dir (`agent-ui--source-dir'); its panel's children's too."
   (let* ((type (agent-ui-type (plist-get element :type)))
+         (element (agent-ui--full-names element))
          (element (if-let* ((fn (agent-ui-type-prepare type))) (funcall fn element) element))
          (element (agent-ui--source-dir element))
          (children (plist-get element :children)))

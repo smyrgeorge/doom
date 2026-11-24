@@ -5306,6 +5306,19 @@ chart): one SVG still."
     (should-not (agent-ui-panel--inline-p (propertize "pic" 'display (list '(slice 0 0 20 16) '(image :type svg :data "<svg/>")))
                                           10 ctx))))
 
+(ert-deftest agent-ui-elements/panel-a-childs-files-by-full-names ()
+  "A panel's children's files, and their :here folders, by their full names
+in the agent's directory, as its own: a redraw elsewhere finds them
+\(doom-ht6.46)."
+  (+test-aue-canvas
+    (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "agent-dir-") t)))
+           (agent-ui-file-directory dir))
+      (agent-ui-show '(:id "p" :type "panel"
+                       :children ((:id "c" :type "code" :file "notes.txt")
+                                  (:id "f" :type "files" :files ("a.el")))))
+      (should (equal (plist-get (agent-ui-get "c") :file) (expand-file-name "notes.txt" dir)))
+      (should (equal (plist-get (agent-ui-get "f") :dir) dir)))))
+
 (ert-deftest agent-ui-elements/panel-a-child-without-an-id ()
   "A panel's child without an id: given one by its place (PANEL.N, its own
 children the same, not one taken), so its buttons and keys change it, not
