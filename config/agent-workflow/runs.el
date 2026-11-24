@@ -507,17 +507,32 @@ said."
                   (cons "issue.description" (plist-get info :description))
                   (cons "issue.acceptance" (plist-get info :acceptance))
                   (cons "issue.notes" (plist-get info :notes))
-                  (cons "try" "1") (cons "output" ""))
+                  (cons "diff.stat" (agent-workflow--diff-stat run)))
             (cl-loop for (job . state) in (agent-workflow-run-jobs run)
                      append (list (cons (format "jobs.%s.outcome" job) (or (plist-get state :outcome) ""))
                                   (cons (format "jobs.%s.notes" job) (or (plist-get state :notes) "")))))))
 
+(defun agent-workflow--diff-stat (run)
+  "RUN's branch's changes against its main branch, as git diff --stat says
+them (since where they part); "" if git can't say."
+  (let ((default-directory (agent-workflow--work-directory run)))
+    (if (not (file-directory-p default-directory))
+        ""
+      (string-join (agent-workflow--git-lines "diff" "--stat"
+                                              (concat (agent-workflow-main-branch (agent-workflow-run-project run))
+                                                      "...HEAD"))
+                   "\n"))))
+
 (defun agent-workflow--job-values (run job)
   "JOB of RUN's own variables' values: its round, the note it was sent
-back with."
+back with, its step's tries (the one failing, while it's fixed) and the
+output of the last that failed."
   (let ((state (agent-workflow--job run job)))
     (list (cons "round" (number-to-string (or (plist-get state :round) 1)))
-          (cons "note" (or (plist-get (plist-get state :back) :note) "")))))
+          (cons "note" (or (plist-get (plist-get state :back) :note) ""))
+          (cons "try" (number-to-string
+                       (max 1 (agent-workflow--tries run job (or (plist-get state :retry) (plist-get state :step) 0)))))
+          (cons "output" (agent-workflow--tail (or (plist-get state :output) "") 200)))))
 
 (defun agent-workflow--prompt (run job step)
   "What the agent of STEP (of JOB of RUN) is told to start with: the step's

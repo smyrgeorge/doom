@@ -76,6 +76,8 @@ the step's on-fail agent started, to fix it and say done (ALSO, what its
 script said, told too); the step then runs again. No agent to send: the
 run waits for you. Its pane redrawn either way (who fixes it, or the
 wait)."
+  ;; Its output: {output} for the agent fixing it.
+  (agent-workflow--job-set run job :output output)
   (if (and (not scripted)
            (plist-get (nth index (plist-get (agent-workflow--job-spec run job) :steps)) :on-fail-run))
       (agent-workflow--fix-script run job index output what)

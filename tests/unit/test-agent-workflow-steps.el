@@ -336,6 +336,29 @@ jobs:
       (should (equal (agent-workflow--back run "check") '("check")))
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)))))))
 
+(ert-deftest agent-workflow-steps/its-variables-filled ()
+  "{output} the failing step's output, {try} its tries, {diff.stat} the
+branch's changes against the main branch: filled for the agent fixing it
+\(doom-38o.80)."
+  (+test-awr "variables"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    run: test -f ok.txt || { echo missing ok.txt; exit 1; }
+    retries: 1
+    on-fail: build
+")
+    (let* ((issue (+test-awr--issue project "Variables"))
+           (run (agent-workflow-start-run project issue))
+           (agent (+test-awr--agent run "check"))
+           (values (agent-workflow--agent-values agent)))
+      (should (string-match-p "missing ok.txt" (cdr (assoc "output" values))))
+      (should (equal (cdr (assoc "try" values)) "1"))
+      (should (equal (cdr (assoc "diff.stat" values)) ""))
+      (+test-awr--commit (agent-workflow-worktree-directory project issue) "lexer.el" "Lexer")
+      (should (string-match-p "lexer.el | 1 +" (agent-workflow--diff-stat run))))))
+
 (ert-deftest agent-workflow-steps/an-on-fail-script ()
   "on-fail: {run: ...}: a failed step's script first, FAILED_STEP and
 FAILED_OUTPUT in its environment, its output a log of its own. Exit 0 it
