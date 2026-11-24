@@ -986,9 +986,12 @@ the id. Signals `agent-ui-error' if ELEMENT is wrong."
                                             :shown given :part agent-ui--in-part))
           (puthash key entry agent-ui--entries)
           (setq agent-ui--order (append agent-ui--order (list key)))
+          ;; Drawn first, then the canvas shown if it's in no window: what
+          ;; shows it sees what it shows (a session's views laid out by what
+          ;; they hold); drawn again at its window's width then.
+          (agent-ui--draw entry (agent-ui--context))
           (unless (agent-ui--window)
             (agent-ui--display (current-buffer)))
-          (agent-ui--draw entry (agent-ui--context))
           (agent-ui--section-counted section)
           (agent-ui--animate))))
       (run-hook-with-args 'agent-ui-shown-functions key element)

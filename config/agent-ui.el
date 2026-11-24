@@ -29,8 +29,10 @@
 ;; needs (no empty lines under its views), at most half the pane
 ;; (`agent-ui-pane-max-share').
 ;; Its views (the session's canvas, and its others: ask, tests...) are laid
-;; out there in a grid: as many columns as fit, `agent-ui-grid-min-width'
-;; each, up to the square root of their count, rows filled in turn. Each view
+;; out there to use the room (config/agent-ui/pane.el, THE LAYOUT): columns,
+;; each a stack of views, as many as fit (`agent-ui-grid-min-width' a view,
+;; `agent-ui-grid-wide-width' showing a wide type), the tallest dealt first
+;; into the emptiest column; laid out again when views open or close. Each view
 ;; is a window of its own, with a bar naming it; a bar under them says what
 ;; Agent UI is and its keys; the session's mode line stays under the
 ;; conversation. q closes a view (killed); a view's window closed (SPC w d)
@@ -190,7 +192,7 @@
 (load! "agent-ui/canvas")
 (load! "agent-ui/request")
 (load! "agent-ui/agent")
-;; In its session's pane: at the bottom, a grid of its views.
+;; In its session's pane: at the bottom, its views in columns.
 (load! "agent-ui/pane")
 (load! "agent-ui/persist")
 ;; What the elements that ask share (picking, a note, the answer).

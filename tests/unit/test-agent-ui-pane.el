@@ -108,24 +108,40 @@ needing more."
 
 ;; ====== THE GRID ======
 
-(ert-deftest agent-ui-pane/grid-shape ()
-  "As many columns as fit (40 each), up to the square root of the count:
-two side by side, three as two and one, four as two by two, five as three
-and two; a narrow pane, one column."
-  (should (equal (agent-ui--pane-grid-shape 1 115) '(1 . 1)))
-  (should (equal (agent-ui--pane-grid-shape 2 115) '(2 . 1)))
-  (should (equal (agent-ui--pane-grid-shape 3 115) '(2 . 2)))
-  (should (equal (agent-ui--pane-grid-shape 4 115) '(2 . 2)))
-  (should (equal (agent-ui--pane-grid-shape 5 120) '(3 . 2)))
-  (should (equal (agent-ui--pane-grid-shape 5 115) '(2 . 3)))
-  (should (equal (agent-ui--pane-grid-shape 4 70) '(1 . 4)))
-  (should (equal (agent-ui--pane-grid-shape 2 30) '(1 . 2))))
+(ert-deftest agent-ui-pane/the-layout-planned ()
+  "For each count of columns, the views dealt in: the session's own first in
+the first column, the others the tallest first, each into the column with
+the fewest lines (the leftmost of those), each column's in their order. Of
+those, the least height, then the least room left empty, then the fewest
+columns; each view at least its width; the room left across shared out; no
+column holding more views than its lines have room for."
+  ;; Four short views: a wide pane, side by side; 80 columns, two by two.
+  (should (equal (agent-ui--pane-plan '(4 4 4 4) '(40 40 40 40) 205 32)
+                 '(((0) (1) (2) (3)) (52 51 51 51) 4)))
+  (should (equal (car (agent-ui--pane-plan '(4 4 4 4) '(40 40 40 40) 80 32)) '((0 2) (1 3))))
+  ;; A tall view: the short ones stacked beside it, not each its own column;
+  ;; whatever their order.
+  (should (equal (car (agent-ui--pane-plan '(20 4 4) '(40 40 40) 205 32)) '((0) (1 2))))
+  (should (equal (car (agent-ui--pane-plan '(4 20 4) '(40 40 40) 205 32)) '((0 2) (1))))
+  (should (equal (agent-ui--pane-deal '(4 20 4 3) 2) '((0 2 3) (1))))
+  ;; A wide one (80): no room for three columns in 130; two.
+  (should (equal (agent-ui--pane-plan '(5 5 5) '(80 40 40) 130 32)
+                 '(((0 2) (1)) (85 45) 10)))
+  ;; None fits across.
+  (should-not (agent-ui--pane-plan '(4) '(80) 60 32))
+  ;; 6 lines: two views a column at most (3 lines each).
+  (should (equal (car (agent-ui--pane-plan '(3 3 3) '(40 40 40) 80 6)) '((0 2) (1))))
+  (should-not (agent-ui--pane-plan '(3 3 3) '(40 40 40) 40 6)))
 
-(ert-deftest agent-ui-pane/as-many-as-fit ()
-  "Each row at least 3 lines: the views that fit shown, the first ones."
-  (should (equal (agent-ui--pane-fitting '(a b c d) 6 40) '(a b)))
-  (should (equal (agent-ui--pane-fitting '(a b c d) 6 100) '(a b c d)))
-  (should (equal (agent-ui--pane-fitting '(a) 2 40) '(a))))
+(ert-deftest agent-ui-pane/a-wide-view-wider ()
+  "A view showing a wide type (a diff, code, a graph...): 80 columns at
+least; another, 40."
+  (+test-aup
+    (agent-ui-show '(:id "x" :type "text" :text "words") :canvas name)
+    (agent-ui-show '(:id "d" :type "diff" :diff "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-a\n+b\n")
+                   :canvas (agent-ui-sub-canvas name "diff"))
+    (should (= (agent-ui--pane-view-width (+test-aup-canvas name)) 40))
+    (should (= (agent-ui--pane-view-width (+test-aup-canvas name "diff")) 80))))
 
 ;; ====== IN THE SESSION'S PANE ======
 
@@ -162,11 +178,12 @@ keeps its mode line, the view has a bar instead (its name, the keys)."
         (agent-ui--pane-sync)
         (should (eq (car (agent-ui--pane-cells (selected-frame))) cell))))))
 
-(ert-deftest agent-ui-pane/its-views-in-a-grid ()
-  "The session's other canvases: views too, its own first, then by name; two
-side by side, a third under them across the width; each its name on its bar.
-Agent UI's bar under the bottom row: what it is on its leftmost view's mode
-line, the keys on its rightmost's; the others' none."
+(ert-deftest agent-ui-pane/its-views-in-columns ()
+  "The session's other canvases: views too, its own first. Two short ones
+side by side; a third as tall: dealt into the first column, under the
+session's own (80 columns: two at most), the other column across the whole
+height; each its name on its bar. Agent UI's bar under them: what it is
+under the leftmost column, the keys under the rightmost; the others' none."
   (+test-aup
     (+test-aup-show name)
     (+test-aup-show (agent-ui-sub-canvas name "tests"))
@@ -183,19 +200,20 @@ line, the keys on its rightmost's; the others' none."
     (+test-aup-show (agent-ui-sub-canvas name "logs"))
     (should (equal (+test-aup-cells)
                    (mapcar #'agent-ui-canvas-buffer-name
-                           (list name (agent-ui-sub-canvas name "logs") (agent-ui-sub-canvas name "tests")))))
+                           (list name (agent-ui-sub-canvas name "tests") (agent-ui-sub-canvas name "logs")))))
     (pcase-let ((`(,a ,b ,c) (agent-ui--pane-cells (selected-frame))))
-      (should (= (window-top-line a) (window-top-line b)))
-      (should (> (window-top-line c) (window-top-line a)))
-      (should (= (window-total-width c) (+ (window-total-width a) (window-total-width b))))
-      (should (string-prefix-p " logs" (+test-aup-bar b)))
-      (should (string-prefix-p " tests" (+test-aup-bar c)))
-      ;; The top row: no mode lines; the bottom one across: both ends.
+      ;; The first column: Agent UI, tests under it; logs beside them.
+      (should (= (window-left-column a) (window-left-column b)))
+      (should (> (window-top-line b) (window-top-line a)))
+      (should (> (window-left-column c) (window-left-column a)))
+      (should (= (window-top-line c) (window-top-line a)))
+      (should (= (window-total-height c) (+ (window-total-height a) (window-total-height b))))
+      (should (string-prefix-p " tests" (+test-aup-bar b)))
+      (should (string-prefix-p " logs" (+test-aup-bar c)))
+      ;; The bar under them: under tests (leftmost), under logs (the keys).
       (should (eq (window-parameter a 'mode-line-format) 'none))
-      (should (eq (window-parameter b 'mode-line-format) 'none))
-      (let ((under (+test-aup-bar c 'mode-line-format)))
-        (should (string-prefix-p " Agent UI · 3 views" under))
-        (should (string-search "q close a view" under))))
+      (should (string-prefix-p " Agent UI · 3 views" (+test-aup-bar b 'mode-line-format)))
+      (should (string-search "q close a view" (+test-aup-bar c 'mode-line-format))))
     ;; The conversation's window: only it, above them.
     (should (= (length (window-list nil 'nomini)) 4))))
 
@@ -412,9 +430,9 @@ again): shown from its top at the next sync, nothing hidden above it."
       (agent-ui--pane-sync)
       (should (= (window-start cell) (with-current-buffer (window-buffer cell) (point-min)))))))
 
-(ert-deftest agent-ui-pane/each-row-its-own-height ()
-  "Rows of different heights: each as high as its tallest view, no empty
-lines under the views of the short one."
+(ert-deftest agent-ui-pane/each-view-its-own-height ()
+  "Views of different heights: each as high as its content in its column (the
+short ones stacked beside the tall one), no empty lines under them."
   (+test-aup
     (let ((agent-ui-pane-min-lines 3))
       (+test-aup-show name)

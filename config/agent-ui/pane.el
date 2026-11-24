@@ -1,12 +1,13 @@
 ;;; $DOOMDIR/config/agent-ui/pane.el -*- lexical-binding: t; -*-
 ;; Agent UI in its session's pane: the pane split, the conversation on top,
 ;; Agent UI at the bottom, its views (the session's canvas and its others:
-;; ask, tests...) in a grid. Loaded from config/agent-ui.el, after agent.el.
-;; No Doom here (see docs/agent-ui.md).
+;; ask, tests...) laid out to use the room: columns, each a stack of views
+;; (see THE LAYOUT). Loaded from config/agent-ui.el, after agent.el. No Doom
+;; here (see docs/agent-ui.md).
 ;;
-;; - Its height: what its views need (its rows, each as high as its tallest
-;;   view, their bars and the bar under them), no empty lines under them; at
-;;   least `agent-ui-pane-min-lines', at most half the pane
+;; - Its height: what its views need (its tallest column: its views' text,
+;;   their bars and the bar under them), no empty lines under them; at least
+;;   `agent-ui-pane-min-lines', at most half the pane
 ;;   (`agent-ui-pane-max-share'). Fitted when an element changes and at each
 ;;   window change (views closed or opened), but only when what it needs
 ;;   changes: a bar moving every second leaves it as it is, at a height you
@@ -45,8 +46,18 @@ pane: in a pane too short for both, a view opens in a pane of its own."
   :type 'natnum :group 'agent-ui)
 
 (defcustom agent-ui-grid-min-width 40
-  "The narrowest column of Agent UI's grid: fewer columns in a narrower pane."
+  "The fewest columns a view of Agent UI gets (see THE LAYOUT)."
   :type 'natnum :group 'agent-ui)
+
+(defcustom agent-ui-grid-wide-width 80
+  "The fewest columns a view showing a wide type gets
+\(`agent-ui-grid-wide-types', see THE LAYOUT)."
+  :type 'natnum :group 'agent-ui)
+
+(defcustom agent-ui-grid-wide-types '("diff" "code" "graph" "mermaid" "heatmap" "timeline" "compare")
+  "The element types that want room across: a view showing one gets
+`agent-ui-grid-wide-width'."
+  :type '(repeat string) :group 'agent-ui)
 
 (defcustom agent-ui-pane-keys "q close"
   "The keys said on the bar under Agent UI's views, at its right (nil: none)."
@@ -71,6 +82,10 @@ its pane (the agent workspace's stage shows its crew's).")
 (defvar-local agent-ui--pane-dismissed nil
   "In a view: non-nil once its window was closed while it showed something:
 not shown again until something new is (see above).")
+
+(defvar-local agent-ui--pane-plan nil
+  "In a session: its Agent UI's columns as last planned, each a list of its
+views (canvases), top to bottom (see THE LAYOUT).")
 
 (defvar-local agent-ui--pane-height nil
   "In a session: the height its Agent UI was last given, in pixels, and its
@@ -164,43 +179,117 @@ another visible frame's; nil if it's in none."
                      (or (null session) (eq (agent-ui--pane-cell-session window) session))))
               (agent-ui--pane-windows frame)))
 
-;; ====== THE GRID ======
-;; Columns as many as fit, `agent-ui-grid-min-width' each, but no more than
-;; the square root of the views' count (two side by side, three as two and
-;; one, four as two by two); rows filled in turn, the last one's views
-;; sharing its width. Rows at equal heights, a row's views at equal widths.
+;; ====== THE LAYOUT ======
+;; A masonry: columns side by side, each a stack of views. For each count of
+;; columns, the views are dealt into them: the session's own first, in the
+;; first column; then the others, the tallest first, each into the column
+;; with the fewest lines so far (the leftmost of those); each column's views
+;; in their order. Of those layouts, each view at least its width
+;; (`agent-ui-grid-min-width'; showing a wide type, `agent-ui-grid-wide-width')
+;; and no column holding more views than it has room for (3 lines each), the
+;; one needing the least height (its tallest column's); then the least room
+;; left empty under its columns; then the fewest columns (wider views). The
+;; room left across is shared out between the columns. Planned when the views
+;; change (opened, closed), not when their content does: their heights only
+;; fitted then (see ITS HEIGHT), nothing moving around while the agent works.
+;; At most 10 views.
 
-(defun agent-ui--pane-grid-shape (count width)
-  "(COLUMNS . ROWS) of the grid of COUNT views in WIDTH columns (see above)."
-  (let ((columns (max 1 (min count (ceiling (sqrt count)) (/ width agent-ui-grid-min-width)))))
-    (cons columns (ceiling count columns))))
+(defun agent-ui--pane-view-width (view)
+  "The fewest columns VIEW needs (see above)."
+  (if (with-current-buffer view
+        (seq-some (lambda (key)
+                    (member (plist-get (agent-ui--entry-element (gethash key agent-ui--entries)) :type)
+                            agent-ui-grid-wide-types))
+                  agent-ui--order))
+      agent-ui-grid-wide-width
+    agent-ui-grid-min-width))
 
-(defun agent-ui--pane-grid (area count)
-  "AREA, a window, split into a grid of COUNT windows (see above), a window
-combination of its own; the windows, row by row, left to right."
-  (pcase-let* ((`(,columns . ,rows) (agent-ui--pane-grid-shape count (window-total-width area)))
+(defun agent-ui--pane-view-lines (view)
+  "The lines VIEW needs: its text (its dirty elements drawn first), its bar."
+  (with-current-buffer view
+    (agent-ui--flush)
+    (1+ (count-lines (point-min) (point-max)))))
+
+(defun agent-ui--pane-deal (lines count)
+  "The views (indices into LINES, their lines) dealt into COUNT columns (see
+above): lists of indices, each column's in their order."
+  (let ((sums (make-vector count 0))
+        (columns (make-vector count nil)))
+    (aset columns 0 (list 0))
+    (aset sums 0 (car lines))
+    ;; `sort' is stable: views as tall in their order.
+    (dolist (index (sort (number-sequence 1 (1- (length lines)))
+                         (lambda (a b) (> (nth a lines) (nth b lines)))))
+      (let ((target 0))
+        (dotimes (column count)
+          (when (< (aref sums column) (aref sums target))
+            (setq target column)))
+        (aset columns target (cons index (aref columns target)))
+        (aset sums target (+ (aref sums target) (nth index lines)))))
+    (mapcar (lambda (column) (sort column #'<)) (append columns nil))))
+
+(defun agent-ui--pane-plan (lines widths width most)
+  "The layout (see above) of views needing LINES (lines each, their bars)
+and WIDTHS (columns each) in WIDTH columns and MOST lines: (COLUMNS WIDTHS
+HEIGHT), each column a list of its views' indices, top to bottom, each
+column's width (WIDTH shared out), the tallest column's lines; nil if none
+fits."
+  (let (best best-key)
+    (cl-loop
+     for count from 1 to (min (length lines) (max 1 (/ width (max 1 agent-ui-grid-min-width))))
+     do (let* ((columns (agent-ui--pane-deal lines count))
+               (pick (lambda (list column) (mapcar (lambda (index) (nth index list)) column)))
+               (needs (mapcar (lambda (column) (apply #'max (funcall pick widths column))) columns))
+               (heights (mapcar (lambda (column) (apply #'+ (funcall pick lines column))) columns))
+               (height (apply #'max heights)))
+          (when (and (<= (apply #'+ needs) width)
+                     (<= (* 3 (apply #'max (mapcar #'length columns))) most))
+            ;; The least height, then the least room left empty, then the
+            ;; fewest columns.
+            (let ((key (list height (- (* height count) (apply #'+ heights)) count)))
+              (when (or (null best-key) (agent-ui--pane-key< key best-key))
+                (setq best (list columns needs height) best-key key))))))
+    (when best
+      (pcase-let* ((`(,columns ,needs ,height) best)
+                   (count (length columns))
+                   (left (- width (apply #'+ needs))))
+        (list columns
+              (cl-loop for need in needs
+                       for index from 0
+                       collect (+ need (/ left count) (if (< index (% left count)) 1 0)))
+              height)))))
+
+(defun agent-ui--pane-key< (a b)
+  "Non-nil if A comes before B, lists of numbers compared in order."
+  (catch 'done
+    (cl-loop for x in a
+             for y in b
+             do (cond ((< x y) (throw 'done t))
+                      ((> x y) (throw 'done nil))))
+    nil))
+
+(defun agent-ui--pane-build (area plan)
+  "AREA, a window, split as PLAN says (`agent-ui--pane-plan'): its columns
+at their widths, each its views stacked; the windows, column by column, top
+to bottom."
+  (pcase-let* ((`(,columns-planned ,widths ,_) plan)
+               (sizes (mapcar #'length columns-planned))
                (window-min-height 2)
                (window-min-width 4)
-               (row-windows (list area))
-               (cells nil)
-               (grid nil))
-    (dotimes (_ (1- rows))
-      (let ((window-combination-limit (null (cdr row-windows))))
-        (setq row-windows (append row-windows
-                                  (list (split-window (car (last row-windows)) nil 'below))))))
-    (when (cdr row-windows)
-      (setq grid (window-parent area)))
-    (let ((left count))
-      (dolist (row row-windows)
-        (let ((here (list row)))
-          (dotimes (_ (1- (min columns left)))
-            (setq here (append here (list (split-window (car (last here)) nil 'right)))))
-          (unless grid
-            (setq grid (and (cdr here) (window-parent row))))
-          (setq left (- left (length here))
-                cells (append cells here)))))
-    (when grid
-      (balance-windows grid))
+               (columns (list area))
+               (cells nil))
+    (dolist (width (butlast widths))
+      (let ((last (car (last columns))))
+        (setq columns (append columns (list (split-window last width 'right))))))
+    (cl-loop for column in columns
+             for size in sizes
+             do (let ((here (list column)))
+                  (dotimes (_ (1- size))
+                    ;; Its first split: a stack of its own (one column: not
+                    ;; beside the conversation in its pane's group).
+                    (let ((window-combination-limit (null (cdr here))))
+                      (setq here (append here (list (split-window (car (last here)) nil 'below))))))
+                  (setq cells (append cells here))))
     cells))
 
 ;; ====== ITS WINDOWS ======
@@ -214,12 +303,12 @@ combination of its own; the windows, row by row, left to right."
 ;; THE BAR UNDER ITS VIEWS
 ;; Agent UI's own, as the session's mode line is the conversation's: what it
 ;; is (its views, how many) and its keys (`agent-ui-pane-keys'). No window
-;; spans the grid: the bottom row's views' mode lines are drawn as one line,
-;; the leftmost's saying what it is, the rightmost's ending with the keys (one
-;; view across: both), the others' the bar only; in its own face, the same
-;; whichever window is selected.
+;; spans the layout: each column's last view's mode line (all at its bottom)
+;; drawn as one line, the leftmost's saying what it is, the rightmost's ending
+;; with the keys (one column: both), the others' the bar only; in its own
+;; face, the same whichever window is selected.
 (defun agent-ui--pane-footer (count left right)
-  "The mode line of a view in the grid's bottom row, COUNT views in all (see
+  "The mode line of a view at the layout's bottom, COUNT views in all (see
 above): LEFT, the leftmost (what Agent UI is); RIGHT, the rightmost (the
 keys)."
   (let ((keys (and right agent-ui-pane-keys (string-replace "%" "%%" agent-ui-pane-keys))))
@@ -238,8 +327,9 @@ keys)."
 
 (defun agent-ui--pane-decorate (window cells)
   "CELLS, the views' windows in WINDOW's pane (a session's): each its bar
-(its name), no tab line; the bottom row's mode lines Agent UI's bar (see
-above), the others none; closing one dismisses its view (see above)."
+(its name), no tab line; the mode lines of those at the bottom Agent UI's
+bar (see above), the others none; closing one dismisses its view (see
+above)."
   (let* ((bottom (nth 3 (window-edges (window-next-sibling window))))
          (row (sort (seq-filter (lambda (cell) (= (nth 3 (window-edges cell)) bottom)) cells)
                     (lambda (a b) (< (car (window-edges a)) (car (window-edges b)))))))
@@ -265,7 +355,7 @@ start)."
           (set-window-start cell (point-min) t))))))
 
 (defun agent-ui--pane-show-in (cell view)
-  "VIEW, a canvas, in CELL, a window of the grid."
+  "VIEW, a canvas, in CELL, a window of the layout."
   (set-window-dedicated-p cell nil)
   (set-window-buffer cell view)
   (set-window-prev-buffers cell nil)
@@ -278,23 +368,36 @@ part (as high as they need, see above) a grid of them, a group of their own. The
 windows; nil without room (WINDOW as it was)."
   (let* ((height (window-total-height window))
          (width (window-total-width window))
-         (views (agent-ui--pane-fitting views (agent-ui--pane-most height) width))
-         (lines (and views (agent-ui--pane-lines height views width))))
-    (when (and views (>= (- height lines) agent-ui-pane-min-lines))
-      (when-let* ((area (condition-case nil
-                            (let ((window-combination-limit t))
-                              (split-window window (- lines) 'below))
-                          (error nil))))
-        (let ((cells (agent-ui--pane-grid area (length views))))
-          (cl-mapc #'agent-ui--pane-show-in cells views)
-          (agent-ui--pane-decorate window cells)
-          (agent-ui--pane-tops cells)
-          (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
-          ;; Drawn at their width now: measured again then, as shown.
-          (with-current-buffer (window-buffer window)
-            (setq agent-ui--pane-height nil))
-          (agent-ui--pane-fit-soon (window-buffer window))
-          cells)))))
+         (most (agent-ui--pane-most height))
+         (views (seq-take views 10))
+         plan)
+    ;; More views than room: the last ones not shown.
+    (while (and views
+                (not (setq plan (agent-ui--pane-plan (mapcar #'agent-ui--pane-view-lines views)
+                                                     (mapcar #'agent-ui--pane-view-width views)
+                                                     width most))))
+      (setq views (butlast views)))
+    (let ((lines (and plan (min most (max agent-ui-pane-min-lines (1+ (nth 2 plan)))))))
+      (when (and plan (>= (- height lines) agent-ui-pane-min-lines))
+        (when-let* ((area (condition-case nil
+                              (let ((window-combination-limit t))
+                                (split-window window (- lines) 'below))
+                            (error nil))))
+          (let* ((cells (agent-ui--pane-build area plan))
+                 (session (window-buffer window))
+                 (columns (mapcar (lambda (column) (mapcar (lambda (index) (nth index views)) column))
+                                  (car plan))))
+            (cl-mapc #'agent-ui--pane-show-in cells (apply #'append columns))
+            (agent-ui--pane-decorate window cells)
+            (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
+            (with-current-buffer session
+              (setq agent-ui--pane-plan columns
+                    agent-ui--pane-height nil))
+            ;; As high as each needs now; again once drawn at their widths.
+            (agent-ui--pane-fit window session)
+            (agent-ui--pane-tops cells)
+            (agent-ui--pane-fit-soon session)
+            cells))))))
 
 ;; ====== ITS HEIGHT (see above) ======
 
@@ -304,38 +407,25 @@ conversation keeping its fewest."
   (max agent-ui-pane-min-lines
        (min (round (* agent-ui-pane-max-share pane)) (- pane agent-ui-pane-min-lines))))
 
-(defun agent-ui--pane-needs (views width)
-  "The lines VIEWS need in a grid WIDTH columns wide: its rows, each as high
-as its tallest view, its bar too, and the bar under them (their dirty
-elements drawn first)."
-  (let ((tallest 0))
-    (dolist (view views)
-      (with-current-buffer view
-        (agent-ui--flush)
-        (setq tallest (max tallest (1+ (count-lines (point-min) (point-max)))))))
-    (1+ (* (cdr (agent-ui--pane-grid-shape (length views) width)) tallest))))
-
-(defun agent-ui--pane-lines (pane views width)
-  "The lines Agent UI takes in a session's pane PANE lines high, showing
-VIEWS in a grid WIDTH wide (see above)."
-  (min (agent-ui--pane-most pane)
-       (max agent-ui-pane-min-lines (agent-ui--pane-needs views width))))
-
 ;; Once shown, measured in pixels, as Emacs shows them: each view's text
 ;; (charts and images as high as they're drawn), its bars, its divider. Each
-;; row as high as its tallest view; Agent UI the rows' sum, within its least
-;; and most (held at its most: the rows at equal heights).
+;; view as high as that in its column, the column's last one the rest; Agent
+;; UI as high as its tallest column, within its least and most (held at its
+;; most: a column's views each their share).
 
-(defun agent-ui--pane-rows (cells)
-  "CELLS, the views' windows of a grid, by row, top to bottom: lists."
-  (let (rows)
+(defun agent-ui--pane-columns (cells)
+  "CELLS, the views' windows of the layout, by column, left to right, each
+top to bottom: lists."
+  (let (columns)
     (dolist (cell cells)
-      (let* ((top (nth 1 (window-pixel-edges cell)))
-             (row (assq top rows)))
-        (if row
-            (setcdr row (append (cdr row) (list cell)))
-          (push (list top cell) rows))))
-    (mapcar #'cdr (sort rows (lambda (a b) (< (car a) (car b)))))))
+      (let* ((left (car (window-pixel-edges cell)))
+             (column (assq left columns)))
+        (if column
+            (setcdr column (append (cdr column) (list cell)))
+          (push (list left cell) columns))))
+    (mapcar (lambda (column)
+              (sort (cdr column) (lambda (a b) (< (nth 1 (window-pixel-edges a)) (nth 1 (window-pixel-edges b))))))
+            (sort columns (lambda (a b) (< (car a) (car b)))))))
 
 (defun agent-ui--pane-cell-need (cell)
   "The pixels CELL, a view's window, needs: its view's text as shown (its
@@ -347,40 +437,40 @@ dirty elements drawn first), and the bars and divider around it."
 
 (defun agent-ui--pane-fit (window session)
   "SESSION's Agent UI, in WINDOW's pane, as high as what it shows needs
-\(see above), each row as high as its tallest view, if that changed since
-it was last given its height."
+\(see above), each view as high as its own in its column, if that changed
+since it was last given its height."
   (when-let* ((area (window-next-sibling window))
               (cells (agent-ui--pane-cells (window-frame window) session))
               ((agent-ui--pane-in-place-p window cells)))
-    (let* ((rows (agent-ui--pane-rows cells))
-           (needs (mapcar (lambda (row) (apply #'max (mapcar #'agent-ui--pane-cell-need row))) rows))
+    (let* ((columns (agent-ui--pane-columns cells))
+           (needs (mapcar (lambda (column) (mapcar #'agent-ui--pane-cell-need column)) columns))
            (pane (+ (window-pixel-height window) (window-pixel-height area)))
            (line (frame-char-height (window-frame window)))
            (least (* agent-ui-pane-min-lines line))
            (most (max least (min (round (* agent-ui-pane-max-share pane)) (- pane least))))
-           (total (apply #'+ needs))
-           (height (min most (max least total)))
+           (height (min most (max least (apply #'max (mapcar (lambda (n) (apply #'+ n)) needs)))))
            (wanted (cons height needs)))
       (unless (equal wanted (buffer-local-value 'agent-ui--pane-height session))
         (with-current-buffer session
           (setq agent-ui--pane-height wanted))
         (let ((window-resize-pixelwise t)
-              ;; A row of a line and its bar is 2 lines: Emacs's least (4)
+              ;; A view of a line and its bar is 2 lines: Emacs's least (4)
               ;; left empty lines under it.
               (window-min-height 1)
               (delta (- height (window-pixel-height area))))
           (unless (zerop delta)
             (ignore-errors (window-resize area delta nil nil t)))
-          (if (and (cdr rows) (= height total))
-              ;; Each row its own height, the last one the rest.
-              (cl-loop for row in (butlast rows)
-                       for need in needs
-                       do (let ((row-window (if (cdr row) (window-parent (car row)) (car row))))
-                            (ignore-errors
-                              (adjust-window-trailing-edge
-                               row-window (- need (window-pixel-height row-window)) nil t))))
-            (when (cdr rows)
-              (balance-windows area))))))))
+          ;; In each column, each view its height, the last one the rest;
+          ;; more than there's room for, each its share.
+          (cl-loop for column in columns
+                   for column-needs in needs
+                   do (let* ((sum (apply #'+ column-needs))
+                             (scale (if (> sum height) (/ (float height) sum) 1.0)))
+                        (cl-loop for cell in (butlast column)
+                                 for need in column-needs
+                                 do (ignore-errors
+                                      (adjust-window-trailing-edge
+                                       cell (- (floor (* scale need)) (window-pixel-height cell)) nil t))))))))))
 
 (defvar agent-ui--pane-fit-timer nil)
 
@@ -413,14 +503,6 @@ to it again, soon."
     (agent-ui--pane-fit-soon agent-ui--session-buffer)))
 
 (add-hook 'agent-ui-changed-hook #'agent-ui--pane-changed-h)
-
-(defun agent-ui--pane-fitting (views lines width)
-  "The first of VIEWS that fit in a grid LINES high and WIDTH wide, each row
-at least 3 lines (its bar and two of its view's): the others not shown."
-  (while (and (cdr views)
-              (> (cdr (agent-ui--pane-grid-shape (length views) width)) (/ lines 3)))
-    (setq views (butlast views)))
-  views)
 
 (defun agent-ui--pane-unattach (cell)
   "CELL, a view's window that can't go (the frame's last): a window like
@@ -470,8 +552,8 @@ its views' windows deleted with it."
 
 (defun agent-ui--pane-in-place-p (window cells)
   "Non-nil if CELLS fill the part of WINDOW's pane below it, and nothing else
-does, in as many rows as a grid of them has (views closed: the others left
-in the rows they were in, laid out again)."
+does, in the columns last planned for its session (a view closed: the
+others left where they were, laid out again)."
   (when-let* ((area (window-next-sibling window)))
     (and (window-combined-p window)
          (null (window-next-sibling area))
@@ -479,8 +561,8 @@ in the rows they were in, laid out again)."
          (= (length cells)
             (seq-count (lambda (other) (agent-ui--pane-under-p other area))
                        (agent-ui--pane-windows (window-frame window))))
-         (= (length (delete-dups (mapcar #'window-top-line cells)))
-            (cdr (agent-ui--pane-grid-shape (length cells) (window-total-width area)))))))
+         (equal (mapcar (lambda (column) (mapcar #'window-buffer column)) (agent-ui--pane-columns cells))
+                (buffer-local-value 'agent-ui--pane-plan (window-buffer window))))))
 
 (defun agent-ui--pane-sync-window (window session)
   "SESSION's Agent UI in WINDOW's pane as it should be: its views in a grid
@@ -488,7 +570,7 @@ below it (made again if they aren't), or none. Non-nil if they're shown."
   (let ((views (agent-ui--pane-views session))
         (cells (agent-ui--pane-cells (window-frame window) session)))
     (if (and cells
-             (equal (mapcar #'window-buffer cells) views)
+             (seq-set-equal-p (mapcar #'window-buffer cells) views)
              (agent-ui--pane-in-place-p window cells))
         (progn
           (agent-ui--pane-decorate window cells)

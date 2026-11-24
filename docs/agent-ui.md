@@ -152,9 +152,11 @@ plists (`(:type progress :value 3)`), as `json-parse-string` makes them with `:o
 
 A session's Agent UI is shown in its session's pane: the conversation on top, Agent UI at the bottom, as high as what it
 shows needs (no empty lines under its views), at most half the pane. It grows and shrinks as its views and their
-elements come and go; a height you give it stays until what it shows needs another. The session's canvas and its other ones (`ask`, `tests`...) are **views**, laid out there as a grid: two side
-by side, three as two and one, four as two by two, as many columns as fit (40 columns each). Each view scrolls and is
-selected on its own, with a bar naming it (the session's own: `Agent UI`) instead of a mode line. A bar under them all
+elements come and go; a height you give it stays until what it shows needs another. The session's canvas and its other
+ones (`ask`, `tests`...) are **views**, laid out there to use the room: in columns, each a stack of views, as many
+columns as fit (40 columns a view; 80 for one showing a diff, code, a graph or diagram, a heatmap, a timeline or a
+comparison), the short views stacked beside a tall one, the session's own first. They're laid out again when views
+open or close, not while the agent updates them. Each view scrolls and is selected on its own, with a bar naming it (the session's own: `Agent UI`) instead of a mode line. A bar under them all
 says how many views there are and their keys; the session's mode line stays under the conversation.
 
 | Key | Action |
@@ -169,7 +171,7 @@ says how many views there are and their keys; the session's mode line stays unde
 - Hidden, Agent UI stays so while the agent shows things; a question shows it again (the session too, if it's in no
   window, as `C-c C-q` does).
 - A pane too short for both (6 lines each, `agent-ui-pane-min-lines`): the view opens in a pane of its own.
-  `agent-ui-pane-max-share` (0.5) and `agent-ui-grid-min-width` (40) are settings, in
+  `agent-ui-pane-max-share` (0.5), `agent-ui-grid-min-width` (40) and `agent-ui-grid-wide-width` (80) are settings, in
   `config.el`.
 
 ## Sections
@@ -649,7 +651,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/canvas.el` | The canvas: its buffer, elements, redraws; its sections, a canvas shown in one |
 | `config/agent-ui/request.el` | `agent-ui-request`: the command line's way in, finding the canvas |
 | `config/agent-ui/agent.el` | agent-shell's sessions: `AGENT_UI_SESSION`, finding a request's session, its canvas |
-| `config/agent-ui/pane.el` | A session's canvases in its session's pane: at the bottom, a grid of views |
+| `config/agent-ui/pane.el` | A session's canvases in its session's pane: at the bottom, views in columns |
 | `config/agent-ui/persist.el` | Kept with the session: saved as it changes, back when it's resumed |
 | `config/agent-ui/ask.el` | What the elements that ask share: picking, a note, the answer into the session's prompt, locked once given |
 | `config/agent-ui/snapshot.el` | In the conversation: an element as an SVG for the agent's reply, into the prompt |
