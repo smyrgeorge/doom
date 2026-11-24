@@ -668,7 +668,8 @@ branch, issue or session). It walks the workflow as the engine would, wave by wa
 would wait and why, what its `if` skips, what an outcome sends back (counted against `max-rounds`), a script fixed and
 run again, and where the run would stop and ask you; or, once it ends, what happens to its branch. You choose the agents' outcomes, a round each
 (`review=changes,approved`), and the scripts' exit codes, a try each (`build.2=1,0`); none chosen: done, and 0. Its
-`if` reads the issue you give, or one of the first type the workflow is for.
+`if` reads the issue you give, or one of the first type the workflow is for. A project's workflow you don't trust yet
+(see [Trust](#trust)) has its `if` not evaluated, its Lisp not run: taken as true, said.
 
 ```sh
 cmd/agent-workflow dry-run feature --outcome review=changes,approved --exit build.2=1,0

@@ -361,7 +361,8 @@ DIRECTORY's project): the reply."
                             collect (cons (substring (symbol-name key) 1) (append value nil)))))
          (result (agent-workflow--dry-run spec :info info :outcomes (funcall chosen (plist-get payload :outcomes))
                                          :exits (funcall chosen (plist-get payload :exits))
-                                         :definitions (agent-workflow-agent-definitions project))))
+                                         :definitions (agent-workflow-agent-definitions project)
+                                         :project project)))
     (list :ok t
           :waves (vconcat (mapcar #'vconcat (plist-get result :waves)))
           :end (cl-loop for (job . status) in (plist-get result :end)

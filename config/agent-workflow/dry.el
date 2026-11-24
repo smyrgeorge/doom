@@ -25,7 +25,7 @@
 (defvar agent-workflow-max-rounds)
 (defvar agent-workflow-kind)
 
-(cl-defun agent-workflow--dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) definitions)
+(cl-defun agent-workflow--dry-run (workflow &key info outcomes exits (pool agent-workflow-pool) definitions project)
   "WORKFLOW (a plist, as read) walked, nothing run: a plist (:waves :end
 :stopped :branch), :waves a list of waves, each a list of lines (what
 happened), :end the jobs' statuses, :stopped why it would stop, or nil,
@@ -35,8 +35,14 @@ issue its if: reads (a plist, as `agent-workflow-issue' gives it).
 OUTCOMES: ((JOB . (OUTCOME...)) ...), an agent job's outcome each round
 \(none: done). EXITS: ((\"JOB.N\" . (CODE...))...), step N's (from 1)
 exit code each try (none: 0). POOL: the agents at once. DEFINITIONS: the
-project's (to tell the jobs that edit; default: the current project's)."
+project's (to tell the jobs that edit; default: the current project's).
+PROJECT (default: the current one): a workflow of its own, not trusted
+\(`agent-workflow-trusted-p'), has its if: not evaluated (its Lisp would
+run), taken as true, said."
   (let* ((jobs (plist-get workflow :jobs))
+         (lisp (or (not (eq (plist-get workflow :origin) 'project))
+                   (let ((project (or project (agent-workflow-project))))
+                     (and project (agent-workflow-trusted-p project)))))
          (definitions (or definitions (agent-workflow-agent-definitions (agent-workflow-project))))
          (state (mapcar (lambda (job) (list (car job) :status 'pending :round 1)) jobs))
          (counts nil) (total 0)
@@ -56,6 +62,8 @@ project's (to tell the jobs that edit; default: the current project's)."
          (holds (job)
            (let ((form (plist-get (spec job) :if)))
              (or (null form)
+                 ;; Not trusted: its Lisp not run.
+                 (not lisp)
                  (cl-letf (((symbol-function 'issue-id) (lambda () (plist-get info :id)))
                            ((symbol-function 'issue-type) (lambda () (intern (or (plist-get info :type) "task"))))
                            ((symbol-function 'issue-labels) (lambda () (plist-get info :labels)))
@@ -150,6 +158,11 @@ project's (to tell the jobs that edit; default: the current project's)."
           (unless startable
             (setq stopped "nothing more can start: a job's needs aren't done"))
           (dolist (job (and (not stopped) startable))
+            (when (and (not lisp) (plist-get (spec job) :if) (not (get job :if-said)))
+              (put job :if-said t)
+              (push (format "%s: its if not evaluated (the project's workflows aren't trusted: its Lisp would run), taken as true"
+                            job)
+                    (car lines)))
             (cond
              ((not (holds job))
               (put job :status 'skipped)
@@ -268,7 +281,8 @@ buffer."
          (info (agent-workflow--dry-info project spec issue))
          (result (agent-workflow--dry-run spec :info info :outcomes (agent-workflow--parse-chosen outcomes)
                                          :exits (agent-workflow--parse-chosen exits)
-                                         :definitions (agent-workflow-agent-definitions project)))
+                                         :definitions (agent-workflow-agent-definitions project)
+                                         :project project))
          (buffer (get-buffer-create "*agent-workflow dry run*")))
     (with-current-buffer buffer
       (let ((inhibit-read-only t))

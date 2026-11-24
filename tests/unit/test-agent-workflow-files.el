@@ -1247,6 +1247,31 @@ run again, a review's changes sending build back, the merge; nothing run."
     (should (member "merge: merged, the issue closed" lines))
     (should (equal (cdr (assoc "merge" (plist-get result :end))) 'done))))
 
+(ert-deftest agent-workflow-files/a-dry-run-of-a-project-not-trusted ()
+  "A dry run of a project's workflow, the project not trusted: its if: not
+evaluated (its Lisp would run), taken as true, said; trusted, evaluated
+\(doom-38o.69)."
+  (let* ((marker (+test-tmp-file (format "dry-marker-%d" (random 100000))))
+         (project (file-name-as-directory (make-temp-file (+test-tmp-file "dry-project-") t)))
+         (agent-workflow-trust-file (+test-tmp-file (format "trusted-%d.el" (random 100000))))
+         (workflow (append (list :origin 'project)
+                           (car (+test-awf--workflow (format "description: x
+jobs:
+  a:
+    if: (progn (write-region \"x\" nil %S) nil)
+    run: echo a
+" marker))))))
+    (should (plist-get (alist-get "a" (plist-get workflow :jobs) nil nil #'equal) :if))
+    (let ((result (agent-workflow--dry-run workflow :info '(:id "demo-1" :type "task") :project project)))
+      (should-not (file-exists-p marker))
+      (should (member "a: its if not evaluated (the project's workflows aren't trusted: its Lisp would run), taken as true"
+                      (+test-awf--dry-lines result)))
+      (should (equal (cdr (assoc "a" (plist-get result :end))) 'done)))
+    (agent-workflow-trust project)
+    (let ((result (agent-workflow--dry-run workflow :info '(:id "demo-1" :type "task") :project project)))
+      (should (file-exists-p marker))
+      (should (equal (cdr (assoc "a" (plist-get result :end))) 'skipped)))))
+
 (ert-deftest agent-workflow-files/a-dry-run-says-its-agent-s-kind ()
   "A step's agent on another kind than `agent-workflow-kind' (its step's,
 else its agent file's): said."
