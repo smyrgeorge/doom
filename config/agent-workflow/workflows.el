@@ -699,6 +699,28 @@ this file). As `agent-workflow--job-read' for the rest."
 
 ;; ====== A PROJECT'S WORKFLOWS ======
 
+(defun agent-workflow--workflow-read-with (file definitions)
+  "FILE read as a workflow of a project whose agents are DEFINITIONS (an
+alist of names and definitions), as the project reads it: (WORKFLOW .
+PROBLEMS), WORKFLOW nil if it's refused. Its agents' kinds, models and
+efforts known from their files; one that runs in your checkout with an
+agent of another kind than Claude Code refused."
+  (pcase-let ((`(,workflow . ,problems) (let ((agent-workflow--reading-definitions definitions))
+                                          (agent-workflow-workflow-read file (mapcar #'car definitions)))))
+    ;; One that runs in your checkout: its agents Claude Code (it alone
+    ;; kept from editing what runs them there).
+    (when-let* ((workflow)
+                ((plist-get workflow :checkout))
+                (other (car (agent-workflow--other-kinds workflow definitions))))
+      (setq problems
+            (append problems
+                    (list (agent-workflow--problem
+                           'error file (agent-workflow--key-line file "runs-in")
+                           "runs-in checkout: %s's agent runs on %s, not Claude Code: in your checkout, nothing keeps it from editing .agent-workflow/ (what runs it)"
+                           (car other) (cdr other))))
+            workflow nil))
+    (cons workflow problems)))
+
 (defun agent-workflow--workflows-read (project)
   "PROJECT's workflows and their problems, read again if a file changed
 \(its agents' too): (WORKFLOWS . PROBLEMS), WORKFLOWS an alist of a name
@@ -713,23 +735,10 @@ of its name it replaced."
          (cached (gethash key agent-workflow--workflows-cache)))
     (if (equal (car cached) stamp)
         (cadr cached)
-      (let ((names (mapcar #'car definitions)) workflows problems)
+      (let (workflows problems)
         (dolist (file files)
-          (pcase-let ((`(,workflow . ,found) (let ((agent-workflow--reading-definitions definitions))
-                                               (agent-workflow-workflow-read (cdr file) names))))
+          (pcase-let ((`(,workflow . ,found) (agent-workflow--workflow-read-with (cdr file) definitions)))
             (setq problems (append problems found))
-            ;; One that runs in your checkout: its agents Claude Code (it
-            ;; alone kept from editing what runs them there).
-            (when-let* ((workflow)
-                        ((plist-get workflow :checkout))
-                        (other (car (agent-workflow--other-kinds workflow definitions))))
-              (setq problems
-                    (append problems
-                            (list (agent-workflow--problem
-                                   'error (cdr file) (agent-workflow--key-line (cdr file) "runs-in")
-                                   "runs-in checkout: %s's agent runs on %s, not Claude Code: in your checkout, nothing keeps it from editing .agent-workflow/ (what runs it)"
-                                   (car other) (cdr other))))
-                    workflow nil))
             (when workflow
               (let* ((name (plist-get workflow :name))
                      (replaced (alist-get name workflows nil nil #'equal)))

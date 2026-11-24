@@ -9,10 +9,11 @@
 
 (defun agent-workflow--check-file (file project)
   "FILE checked alone, as a workflow (.yml, .yaml) or an agent (.md):
-its problems, a workflow's against PROJECT's agents."
+its problems, a workflow's against PROJECT's agents, as the project reads
+it (`agent-workflow--workflow-read-with')."
   (cond
    ((string-match-p "\\.ya?ml\\'" file)
-    (cdr (agent-workflow-workflow-read file (mapcar #'car (agent-workflow-agent-definitions project)))))
+    (cdr (agent-workflow--workflow-read-with file (agent-workflow-agent-definitions project))))
    ((string-match-p "\\.md\\'" file) (cdr (agent-workflow-definition-read file)))
    (t (user-error "%s: a workflow (.yml) or an agent (.md)" (abbreviate-file-name file)))))
 

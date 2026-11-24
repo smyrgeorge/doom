@@ -524,7 +524,12 @@ naming the job and the kind, the workflow left out."
                                          (abbreviate-file-name (expand-file-name ".agent-workflow/workflows/other.yml" dir)))
                                  (format "%s:3: runs-in checkout: check's agent runs on codex, not Claude Code: in your checkout, nothing keeps it from editing .agent-workflow/ (what runs it)"
                                          (abbreviate-file-name (expand-file-name ".agent-workflow/workflows/fixed.yml" dir))))
-                           #'string<))))))
+                           #'string<))))
+    ;; Checked alone (cmd/agent-workflow check FILE): the same (doom-38o.79).
+    (should (equal (mapcar (lambda (problem) (nth 4 problem))
+                           (agent-workflow-check-problems project (expand-file-name ".agent-workflow/workflows/fixed.yml" dir)))
+                   '("runs-in checkout: check's agent runs on codex, not Claude Code: in your checkout, nothing keeps it from editing .agent-workflow/ (what runs it)")))
+    (should-not (agent-workflow-check-problems project (expand-file-name ".agent-workflow/workflows/here.yml" dir)))))
 
 (ert-deftest agent-workflow-files/a-job-s-approve-beside-its-steps ()
   "A job's approve: true beside its steps: read, its last step's result
