@@ -239,7 +239,7 @@ counting down, until closed (q)."
         (should-not agent-ui-closes-with)
         (should-not (and agent-ui--closing (gethash "run/jobs" agent-ui--closing)))
         (should-not (string-search "closing in" (buffer-string)))
-        (should (equal (+test-awp--figure (agent-ui-get "run" :canvas pane) "State") '("✓ done" "no commit" "success"))))
+        (should (equal (+test-awp--figure (agent-ui-get "run" :canvas pane) "State") '("✓ done" nil "success"))))
       (kill-buffer pane)
       (should-not (agent-workflow-run-pane run)))))
 
@@ -771,8 +771,8 @@ times not counting on."
 
 (ert-deftest agent-workflow-pane/waiting-for-an-agent ()
   "A running job whose next agent step waits for a free agent (the pool
-full): not drawn running (no spinner, no time), saying why; its run's state
-line too."
+full): not drawn running (no spinner, no time), saying why; its run's State
+tile its state alone."
   (let* ((workflow '(:name "w" :jobs (("a" :name "a" :steps ((:kind agent :agent "build")
                                                              (:kind run :run "make")
                                                              (:kind agent :agent "review"))))))
@@ -789,7 +789,7 @@ line too."
       (should (string-match-p "waits: a: waiting for an agent: 3 of 3 work" (plist-get item :detail)))
       (should (equal (mapcar (lambda (step) (plist-get step :status)) (plist-get item :steps)) '("done" "done" "pending")))
       (should-not (plist-get (nth 2 (plist-get item :steps)) :started)))
-    (should (equal (agent-workflow--pane-state run) '("● running" "a: waiting for an agent: 3 of 3 work" "accent")))))
+    (should (equal (agent-workflow--pane-state run) '("● running" "accent")))))
 
 (ert-deftest agent-workflow-pane/a-step-s-try ()
   "A running job's line: its step's first try says no try; its second, try
@@ -1028,9 +1028,9 @@ after its files were shown (a run's first commit): still above them."
       (kill-buffer pane))))
 
 (ert-deftest agent-workflow-pane/what-it-is-at ()
-  "Running, its State tile says what it's at: each running job's step and
-its number (its job's name alone if it has one step); near its budget, said
-too."
+  "Running, its State tile says its state alone: not what it's at (each
+running job's step: its checklist says it), nor near its budget (its Log):
+a line more grew its tile."
   (let* ((workflow '(:name "github"
                      :jobs (("green" :name "green"
                              :steps ((:kind run :run "check.sh" :name "check")
@@ -1041,11 +1041,10 @@ too."
                                         :workflow workflow :spent '(:cost 0 :tokens 0) :active 60
                                         :jobs (list (cons "green" (list :status 'running :step 2))
                                                     (cons "docs" (list :status 'pending))))))
-    (should (equal (agent-workflow--pane-state run) '("● running" "watch, step 3 of 3" "accent")))
+    (should (equal (+test-awp--figure (agent-workflow--pane-header run) "State") '("● running" nil "accent")))
     (setf (alist-get "docs" (agent-workflow-run-jobs run) nil nil #'equal) (list :status 'running :step 0))
-    (should (equal (cadr (agent-workflow--pane-state run)) "watch, step 3 of 3 · docs"))
     (setf (agent-workflow-run-warned run) t)
-    (should (equal (cadr (agent-workflow--pane-state run)) "watch, step 3 of 3 · docs · near its budget"))
+    (should (equal (+test-awp--figure (agent-workflow--pane-header run) "State") '("● running" nil "accent")))
     (should (equal (+test-awp--figure (agent-workflow--pane-header run) "Jobs") '("0 / 2" "done" nil)))
     ;; Its header without its name (its tab's, its buffer's); a ticket's
     ;; run, its issue's title.
@@ -1056,7 +1055,7 @@ too."
     (should (equal (plist-get (agent-workflow--pane-header run) :title) "Lexer escapes"))))
 
 (ert-deftest agent-workflow-pane/a-failed-run ()
-  "A run that failed: its State tile says why, red; its job failed (✗, an
+  "A run that failed: its State tile says it, red (why: its Log); its job failed (✗, an
 error in the graph), its steps done up to the one that failed, named, what
 each does after its name."
   (let* ((workflow '(:name "github"
@@ -1069,7 +1068,7 @@ each does after its name."
                                         :workflow workflow :spent '(:cost 0 :tokens 0) :active 60
                                         :jobs (list (cons "green" (list :status 'failed :step 1))))))
     (should (equal (+test-awp--figure (agent-workflow--pane-header run) "State")
-                   '("✗ failed" "green: its step 2, push (push.sh): refused" "error")))
+                   '("✗ failed" nil "error")))
     (let ((node (car (plist-get (agent-workflow--pane-graph run) :nodes))))
       (should (equal (plist-get node :label) "green ✗"))
       (should (equal (plist-get node :status) "error")))

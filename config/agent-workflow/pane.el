@@ -584,44 +584,22 @@ merge takes too)."
       (format "$%d" (truncate dollars))
     (format "$%.2f" (or dollars 0))))
 
-(defun agent-workflow--pane-now (run)
-  "What RUN is at now, in a few words: each running job's step (watch, step
-3 of 3), its job's name alone if it has one step; nil if none runs."
-  (let ((now (cl-loop for (job . state) in (agent-workflow-run-jobs run)
-                      when (eq (plist-get state :status) 'running)
-                      collect (let* ((steps (plist-get (agent-workflow--job-spec run job) :steps))
-                                     (index (plist-get state :step))
-                                     (step (and (numberp index) (nth index steps))))
-                                (if (and step (> (length steps) 1))
-                                    (format "%s, step %d of %d" (agent-workflow--pane-step-name step)
-                                            (1+ index) (length steps))
-                                  job)))))
-    (and now (string-join now " · "))))
-
 (defun agent-workflow--pane-state (run)
-  "RUN's state as its header's first tile: (VALUE DETAIL FACE), its mark
-and state, what it waits for or why it ended (else what it's at now), the
-colour of its state: running accent (blue, as its graph's running jobs),
-needs you warning, done success, failed error, queued and cancelled muted."
-  (let* ((state (agent-workflow-run-state run))
-         (why (agent-workflow-run-why run))
-         ;; A job's next agent step waiting for one: said.
-         (pool (seq-some (lambda (job) (and (eq (plist-get (cdr job) :status) 'running)
-                                            (plist-get (cdr job) :pool)
-                                            (plist-get (cdr job) :why)))
-                         (agent-workflow-run-jobs run)))
-         (near (and (agent-workflow-run-warned run) "near its budget")))
-    (pcase state
-      ('waiting (list "◆ needs you" (or why near) "warning"))
-      ('queued (list "○ queued" why "muted"))
-      ('done (list "✓ done" (and (plist-get (agent-workflow-run-where run) :empty) "no commit") "success"))
-      ('cancelled (list "✗ cancelled" why "muted"))
-      ('failed (list "✗ failed" why "error"))
-      (_ (list "● running" (string-join (delq nil (list (or pool (agent-workflow--pane-now run)) near)) " · ")
-               "accent")))))
+  "RUN's state as its header's first tile: (VALUE FACE), its mark and state
+alone (what it's at, waits for or ended by are below: its checklist, Needs
+you, its Log; a line more grew its tile), the colour of its state: running
+accent (blue, as its graph's running jobs), needs you warning, done
+success, failed error, queued and cancelled muted."
+  (pcase (agent-workflow-run-state run)
+    ('waiting (list "◆ needs you" "warning"))
+    ('queued (list "○ queued" "muted"))
+    ('done (list "✓ done" "success"))
+    ('cancelled (list "✗ cancelled" "muted"))
+    ('failed (list "✗ failed" "error"))
+    (_ (list "● running" "accent"))))
 
 (defun agent-workflow--pane-figures (run)
-  "RUN's header as tiles: its state (what it's at), its time, what it spent
+  "RUN's header as tiles: its state, its time, what it spent
 and its tokens (each against its budget, if it has one; tokens only if it
 has a budget of them or spent some), its jobs done."
   (let* ((spent (agent-workflow-run-spent-now run))
@@ -629,11 +607,9 @@ has a budget of them or spent some), its jobs done."
          (cost (or (plist-get spent :cost) 0))
          (tokens (or (plist-get spent :tokens) 0))
          (jobs (agent-workflow-run-jobs run)))
-    (pcase-let ((`(,value ,detail ,face) (agent-workflow--pane-state run)))
+    (pcase-let ((`(,value ,face) (agent-workflow--pane-state run)))
       (delq nil
-            (list (append (list :label "State" :value value :good "none")
-                          (and detail (not (string-empty-p detail)) (list :change detail))
-                          (and face (list :face face)))
+            (list (list :label "State" :value value :good "none" :face face)
                   (append (list :label "Time" :value (agent-workflow--duration-words (plist-get spent :time)) :good "none")
                           (and (plist-get budget :time)
                                (list :change (concat "of " (agent-workflow--duration-words (plist-get budget :time))))))

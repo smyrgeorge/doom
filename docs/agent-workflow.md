@@ -364,10 +364,10 @@ review asks: Should the escape table also cover Unicode escapes?
 13:13  review  waits for you: its agent asks you: Should the escape table …
 ```
 
-- **Its state**, as tiles: State, coloured by it: ● running (what it's at: each running job's step, `watch, step 3
-  of 3`), ◆ needs you, ○ queued (why), ✓ done (`no commit`, its branch got none), ✗ cancelled, ✗ failed (why); Time,
+- **Its state**, as tiles: State, coloured by it, its state alone: ● running, ◆ needs you, ○ queued, ✓ done,
+  ✗ cancelled, ✗ failed (what it's at, waits for, or why it ended are below: its checklist, Needs you, its Log); Time,
   how long it ran; Cost, what it spent; Tokens (if it has a budget of them, or spent some), each against its budget if
-  it has one; Jobs, how many are done of all. Near its budget, State says it.
+  it has one; Jobs, how many are done of all. Near its budget, its Log says it.
   Under it, while the run isn't over (running, waiting, queued), **Cancel**: asked first (what it stops, what it keeps:
   its branch and worktree), as `M-x agent-workflow-cancel`.
 - **Where its work is** (git): ⎇ its branch, the branch and commit of your checkout it started from → what its merge
