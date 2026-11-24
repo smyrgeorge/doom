@@ -738,6 +738,9 @@ a failure said in its room. In `agent-workspace-renamed-functions'."
          (name (agent-workspace-agent-name agent))
          (doing (agent-workspace--bd-now project was (list "list" "--status" "in_progress" "--assignee" was
                                                          "--json" "--limit" "0"))))
+    ;; A fetch started before its issues are its new name's (it says the
+    ;; old one): not taken to say its issue is another's.
+    (puthash agent (float-time) agent-workspace--issue-noted)
     (when (eql (car doing) 0)
       (dolist (issue (ignore-errors (json-parse-string (cdr doing) :object-type 'alist :array-type 'list
                                                        :null-object nil :false-object nil)))
@@ -749,7 +752,8 @@ a failure said in its room. In `agent-workspace-renamed-functions'."
                                   (agent-workspace--bd-why (cdr done))))))
               (message "%s %s" name text)
               (when (fboundp 'agent-workspace-room-post)
-                (agent-workspace-room-post project :kind 'note :agent name :text text)))))))))
+                (agent-workspace-room-post project :kind 'note :agent name :text text)))))))
+    (puthash agent (float-time) agent-workspace--issue-noted)))
 
 (add-hook 'agent-workspace-renamed-functions #'agent-workspace--bd-renamed-h)
 

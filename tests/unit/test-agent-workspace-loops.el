@@ -603,6 +603,10 @@ is ann's in bd, and her loop waits on it, taking no other (doom-pbk.64)."
       (+test-awl--quiet ada)
       (agent-workspace-rename ada "ann")
       (should (equal (funcall assignee held) "ann"))
+      ;; A fetch started before, saying ada's: she keeps it (doom-pbk.179).
+      (agent-workspace--issues-mine-h root (list :started (- (float-time) 0.5)
+                                                 :issues (list (list :id held :status 'in_progress :assignee "ada"))))
+      (should (equal (agent-workspace-agent-issue ada) held))
       (should (+test-awl--wait (lambda () (memq (agent-workspace-agent-state ada) '(desk done))) 20))
       (agent-workspace--loop-look-all root)
       (+test-awl--quiet ada)
