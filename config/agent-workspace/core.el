@@ -903,9 +903,12 @@ as when it's killed (`agent-workspace--give-back')."
       (unless (gethash key agent-workspace--crews)
         (remhash key agent-workspace--crews)
         (agent-workspace--crew-lock-release key)))
-    (when (eq how 'remove)
-      (agent-workspace-worktree-remove agent))
-    (agent-workspace--changed agent 'forgotten)))
+    ;; Out of the crew, said so whatever its worktree's removal does (its
+    ;; bar, crew.json): that failing is said after.
+    (unwind-protect
+        (when (eq how 'remove)
+          (agent-workspace-worktree-remove agent))
+      (agent-workspace--changed agent 'forgotten))))
 
 (defun agent-workspace-recolour (agent colour)
   "Give AGENT COLOUR, one of `agent-workspace-colours'."

@@ -927,6 +927,15 @@ you say so, else removed when it holds nothing of its own."
       (should (equal (agent-workspace-agents) (list grace)))
       (should-not (buffer-live-p (agent-workspace-agent-buffer ada)))
       (should (file-directory-p (expand-file-name ".agent-shell/worktrees/builder-ada/" project)))
+      ;; Its worktree's removal failing: forgotten all the same, said, the
+      ;; failure after (doom-pbk.174).
+      (let ((linus (+test-aws--create "linus"))
+            (whats nil))
+        (cl-letf (((symbol-function 'agent-workspace-worktree-remove) (lambda (_) (error "git refused")))
+                  (agent-workspace-change-functions (list (lambda (_agent what) (push what whats)))))
+          (should-error (agent-workspace-forget linus 'remove))
+          (should (eq (car whats) 'forgotten))
+          (should (equal (agent-workspace-agents) (list grace)))))
       (agent-workspace-forget grace)
       (should-not (agent-workspace-crews))
       (should-not (file-exists-p (expand-file-name ".agent-shell/worktrees/builder-grace/" project))))))
