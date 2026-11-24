@@ -14,7 +14,8 @@
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
 (+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/stripe"
             "config/editor" "config/merge" "config/agent-ui" "config/beads" "config/webkit"
-            "config/mermaid" "config/agent-shell" "config/agent-workspace" "config/examples")
+            "config/mermaid" "config/agent-shell" "config/agent-workspace" "config/agent-workflow"
+            "config/examples")
 (require 'mermaid-mode)
 (require 'so-long)
 (require 'tab-line)
@@ -154,7 +155,7 @@ images/, always that name."
 config/examples.el's list and docs/examples.md's table; the docs name the
 picker (M-x +my/example) too."
   (should (equal (sort (+my/examples) #'string<)
-                 '("agent-ui" "agent-workspace" "banner" "excalidraw" "image" "issues" "markdown" "merge" "mermaid"
+                 '("agent-ui" "agent-workflow" "agent-workspace" "banner" "excalidraw" "image" "issues" "markdown" "merge" "mermaid"
                    "panel" "pdf" "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
@@ -502,6 +503,43 @@ it's closed."
       (kill-buffer canvas)
       (should-not +my/example-agent-ui--timer)
       (kill-buffer conversation))))
+
+(ert-deftest examples/agent-workflow-a-run-s-pane ()
+  "A run's pane in the frame's two windows (its top; its live boxes down),
+drawn from its journal: its tiles, its
+branch with its commits and the file not committed, its flow, its jobs, its
+Log; its live boxes moving on (the e2e script's output, docs's agent's
+actions); q closes it, its script and timer stopped, its folder gone."
+  (+test-examples
+    (let* ((pane (+my/example-agent-workflow))
+           (dir (car (buffer-local-value '+my/example--closing pane))))
+      (should (equal (buffer-name pane) "Agent UI: demo-1 · feature"))
+      (should (eq (window-buffer (selected-window)) pane))
+      ;; Beside its top, the same pane from its live boxes down.
+      (should (equal (mapcar #'window-buffer (window-list)) (list pane pane)))
+      (should (> (window-start (next-window)) (window-start (selected-window))))
+      (should (+test-wait-for #'+my/example-agent-workflow-ready 20))
+      (let ((header (agent-ui-get "run" :canvas pane)))
+        (should (equal (plist-get header :title) "Lexer: strings with escapes")))
+      (should (string-prefix-p "⎇ feat/demo-1-lexer-escapes" (plist-get (agent-ui-get "git" :canvas pane) :text)))
+      (should (equal (plist-get (agent-ui-get "commits" :canvas pane) :caption) "2 commits"))
+      (should (equal (plist-get (agent-ui-get "jobs" :canvas pane :section "run") :caption) "5 jobs · 1 done"))
+      (should (member "↻ test unit failed · its agent fixes it"
+                      (mapcar #'+test-examples--log-line
+                              (plist-get (agent-ui-get "log" :canvas pane :section "log") :lines))))
+      (should (equal (plist-get (agent-ui-get "now-test" :canvas pane :section "run") :label) "e2e"))
+      (should (equal (plist-get (agent-ui-get "now-docs" :canvas pane :section "run") :label) "agent docs"))
+      (should (timerp +my/example-agent-workflow--timer))
+      (kill-buffer pane)
+      (should-not +my/example-agent-workflow--timer)
+      (should-not (get-process "example-e2e"))
+      (should-not (file-exists-p dir)))))
+
+(defun +test-examples--log-line (line)
+  "LINE of a run's Log as words: MARK JOB TEXT."
+  (let ((text (plist-get line :text)))
+    (concat (plist-get line :mark) " " (or (plist-get line :source) "·") " "
+            (if (stringp text) text (mapconcat (lambda (piece) (if (stringp piece) piece (plist-get piece :text))) text "")))))
 
 (ert-deftest examples/agent-workspace-a-crew-offline ()
   "Three stand-in agents in their crew's app, each in its worktree, the

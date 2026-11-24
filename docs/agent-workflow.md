@@ -10,6 +10,10 @@ parallel, and their steps. A step is a script, Lisp, a built-in, or an **agent**
 what it may do and its instructions a Markdown file of `agents/` (`agent: review`: `agents/review.md`). A session of
 the pool has no role of its own: the step brings its agent.
 
+![A run's pane: how it stands, its branch, its flow and jobs; beside it, what its jobs run now, its agents' notes, its Log](../examples/agent-workflow.png)
+
+Try it: `M-x +my/example-agent-workflow`, a run's [pane](#following-a-run) as it runs, offline.
+
 ## Where they are
 
 | Place | Committed | What |

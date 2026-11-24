@@ -48,7 +48,8 @@ not selected (a hollow box in the panes), a cursor that doesn't blink."
   (+test-load "config/childframe" "config/banner" "config/window" "config/editor"
               "config/webkit" "config/pdf" "config/image" "config/markdown" "config/mermaid"
               "config/excalidraw" "config/stripe" "config/tiling" "config/merge" "config/agent-ui"
-              "config/beads" "config/agent-shell" "config/agent-workspace" "config/examples")
+              "config/beads" "config/agent-shell" "config/agent-workspace" "config/agent-workflow"
+              "config/examples")
   (require 'mermaid-mode)               ; *.mmd in it (its autoloads)
   ;; PDF.js, Excalidraw and mermaid.js: copies of Doom's, not downloaded again.
   (+test-pdfjs-dir)

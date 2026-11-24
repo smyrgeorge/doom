@@ -32,6 +32,8 @@
 ;;               cpu panel, filled every second
 ;;   agent-workspace  an agent crew in its app (config/agent-workspace.el):
 ;;               three stand-in agents, offline, each in its worktree
+;;   agent-workflow  a run's pane (config/agent-workflow.el) as it runs: its
+;;               flow, its jobs, its live boxes, its Log, from its journal
 ;; An example may define `+my/example-NAME-ready': non-nil once it's drawn
 ;; (a WebKit page loaded...), which the screenshots wait for.
 (defvar +my/examples-dir (expand-file-name "examples/" doom-user-dir)
