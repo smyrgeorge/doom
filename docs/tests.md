@@ -57,7 +57,9 @@ log:`); with `TEST_LOGS=DIR`, it's copied to `DIR` too, as `KIND-NAME.txt` (`uni
   the first time (~15 minutes), then from its cached layers. Tests needing what only the host built (ghostel's native module) skip there.
 - `tests/fixtures/` holds what tests load: `diff-emacs.el` is the Emacs that `cmd/diff` starts in `test-cmd.el`.
   The agent workspace's tests run real sessions with `examples/agent-workspace/stand-in.el`, a stand-in coding agent
-  speaking ACP as Claude Code's adapter does, run by a batch Emacs.
+  speaking ACP as Claude Code's adapter does (a system prompt from Emacs, its modes and effort; or, with
+  `MOCK_ACP_NO_SYSTEM_PROMPT`, as an agent taking no system prompt), run by a batch Emacs; the agent workflow's and
+  agent workspace's tests run it as Claude Code, or as another kind of agent.
 
 A failing or flaky test is a bug to fix in the config, not a test to relax.
 

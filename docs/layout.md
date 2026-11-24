@@ -4,7 +4,7 @@
 |---|---|
 | `init.el`, `packages.el` | Doom modules and extra packages |
 | `config.el` | The main config; loads `config/` |
-| `config/agent-shell.el`, `agent-shell/` | [Claude Code](agent-shell.md), drawing for it, its issues |
+| `config/agent-shell.el`, `agent-shell/` | [Your agent](agent-shell.md) (Claude Code, Codex...), drawing for it, its issues |
 | `config/agent-ui.el`, `agent-ui/` | [Agent UI](agent-ui.md): what the agent shows beyond its replies (being built) |
 | `config/agent-workspace.el`, `agent-workspace/` | [Agent workspace](agent-workspace.md): a crew of agents on one project, each in its own worktree (being built) |
 | `config/agent-workflow.el`, `agent-workflow/` | [Agent workflow](agent-workflow.md): the work on an issue in jobs and steps, some an LLM (being built) |

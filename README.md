@@ -18,7 +18,7 @@ own ([Examples](docs/examples.md)).
 
 Your agent keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
 test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
-place. It draws them with `cmd/agent-ui`, which its system prompt tells it about ([more](docs/agent-ui.md)).
+place. It draws them with `cmd/agent-ui`, which it's told about, whichever agent it is ([more](docs/agent-ui.md)).
 
 ![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
 
@@ -137,10 +137,10 @@ emacs-plus Emacs.app (it replaces Homebrew's terminal-only `emacs`). On Linux it
 `/usr/local`, with WebKit for PDFs, drawings and the preview (`XWIDGETS=no` builds without it). When Emacs's version
 changes, Doom's packages are rebuilt for it.
 
-**`tools.sh`** installs Doom's own tools, the language servers, formatters and linters of the modules `init.el`
-enables, the config's fonts, and your coding agent's adapter: the one `config.el` chooses (Claude Code), or those
-`AGENTS` names (`AGENTS="codex gemini-cli" scripts/tools.sh`). A table at its top lists every tool and why it's there. If `init.el` enables a module
-the table doesn't know, the script stops and names it, so a new language never goes without its tools.
+**`tools.sh`** installs Doom's own tools, the language servers, formatters and linters of the modules `init.el` enables,
+the config's fonts, and your coding agent's adapter: the one `config.el` chooses (Claude Code), or those `AGENTS` names
+(`AGENTS="codex gemini-cli" scripts/tools.sh`). A table at its top lists every tool and why it's there. If `init.el`
+enables a module the table doesn't know, the script stops and names it, so a new language never goes without its tools.
 `tools.sh --check` only reports what's installed and what's missing. It needs Emacs, so run `emacs.sh` first.
 
 ### Keeping it up to date

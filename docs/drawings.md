@@ -24,6 +24,6 @@ On Linux `Ctrl+G` stays Emacs's (quit), and Emacs reads `Ctrl+[` as `Esc`: group
 selection's right-click menu there.
 
 The library is shared by all drawings. In Markdown or Org, `Option+Enter` (Linux: `Alt+Enter`) → **Insert a new
-drawing** links a new one at point. In a Claude Code buffer, `C-c C-d` draws for Claude: see
-[Drawing for Claude](agent-shell.md#drawing-for-the-agent). Drawings need an Emacs with xwidgets (see [PDFs](pdf.md));
+drawing** links a new one at point. In a session's buffer, `C-c C-d` draws for the agent: see
+[Drawing for the agent](agent-shell.md#drawing-for-the-agent). Drawings need an Emacs with xwidgets (see [PDFs](pdf.md));
 without it a drawing opens as its file (an `.excalidraw.svg` as an image).
