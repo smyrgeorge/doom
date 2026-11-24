@@ -34,15 +34,17 @@
   "What AGENT's session spent so far: (:cost N :tokens N :unknown BOOL),
 its tokens its turns' (`agent-workflow--turn-tokens'); :unknown, its cost
 not known (an agent other than Claude Code that reports none, its cost
-counted 0)."
+counted 0). A cost is reported once one came with its currency:
+agent-shell starts every session's at 0.0."
   (let ((buffer (agent-workflow-agent-buffer agent))
         (tokens (or (agent-workflow-agent-tokens agent) 0)))
     (if (and buffer (buffer-live-p buffer))
         (with-current-buffer buffer
           (let* ((usage (and (local-variable-p 'agent-shell--state) (map-elt agent-shell--state :usage)))
-                 (cost (map-elt usage :cost-amount)))
+                 (cost (map-elt usage :cost-amount))
+                 (reported (and cost (map-elt usage :cost-currency))))
             (list :cost (or cost 0) :tokens tokens
-                  :unknown (and (not cost) (not (agent-workflow--agent-claude-code-p agent))))))
+                  :unknown (and (not reported) (not (agent-workflow--agent-claude-code-p agent))))))
       (list :cost 0 :tokens tokens))))
 
 (defun agent-workflow--agent-claude-code-p (agent)

@@ -306,6 +306,24 @@ Claude Code."
       ;; One that isn't: an error, nothing started.
       (should-error (+test-awp--start project "demo-3" "build" :kind 'nothing)))))
 
+(ert-deftest agent-workflow-pool/a-cost-not-reported-is-unknown ()
+  "An agent other than Claude Code whose session reported no cost (agent-shell
+starts it at 0.0, no currency): its cost unknown; one reported: known. Claude
+Code's: known (doom-38o.73)."
+  (+test-awp--with-project "cost"
+    (let ((agent-workflow-kinds (append agent-workflow-kinds
+                                        '((other :config agent-shell-mock-agent-make-agent-config)))))
+      (let ((other (+test-awp--start project "demo-1" "build" :kind 'other)))
+        (should (plist-get (agent-workflow--agent-usage other) :unknown))
+        (with-current-buffer (agent-workflow-agent-buffer other)
+          (let ((usage (copy-alist (map-elt agent-shell--state :usage))))
+            (setf (alist-get :cost-amount usage) 0.5
+                  (alist-get :cost-currency usage) "USD")
+            (map-put! agent-shell--state :usage usage)))
+        (should-not (plist-get (agent-workflow--agent-usage other) :unknown))
+        (should (equal (plist-get (agent-workflow--agent-usage other) :cost) 0.5)))
+      (should-not (plist-get (agent-workflow--agent-usage (+test-awp--start project "demo-2" "build")) :unknown)))))
+
 (ert-deftest agent-workflow-pool/another-kind-s-rules ()
   "An agent other than Claude Code: its tools, ending its step, its deny and
 what runs it answer its permission requests (Claude Code's: in its

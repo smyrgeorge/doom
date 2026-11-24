@@ -100,7 +100,9 @@ workflow it started with: a run, or nil if it can't be."
            :order (or (plist-get saved :order) (cl-incf agent-workflow--run-count))
            :total (or (plist-get saved :total) 0)
            :spent (let ((spent (plist-get saved :spent)))
-                    (list :cost (or (plist-get spent :cost) 0) :tokens (or (plist-get spent :tokens) 0)))
+                    (append (list :cost (or (plist-get spent :cost) 0) :tokens (or (plist-get spent :tokens) 0))
+                            ;; An agent's cost not known: still so.
+                            (and (plist-get spent :cost-unknown) (list :cost-unknown t))))
            :active (or (plist-get (plist-get saved :spent) :time) 0)
            :more (plist-get saved :more)
            :warned (plist-get saved :warned)

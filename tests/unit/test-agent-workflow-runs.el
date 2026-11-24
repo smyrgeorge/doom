@@ -592,9 +592,12 @@ continued then (doom-38o.75)."
       (should (+test-awr--wait (lambda () (agent-workflow-agent-session (+test-awr--agent run "build")))))
       (agent-workflow--job-set run "build" :status 'waiting
                                :agent-asks (list :kind 'permission :what "npm install" :why "build: its agent asks"))
+      ;; An agent's cost not known: still so, read back (doom-38o.73).
+      (setf (agent-workflow-run-spent run) (list :cost 1 :tokens 2 :cost-unknown t))
       (agent-workflow--quit-h)
       (setq agent-workflow--runs nil)
       (let ((back (car (agent-workflow-restore project))))
+        (should (plist-get (agent-workflow-run-spent back) :cost-unknown))
         (should (equal (agent-workflow--interrupted back) '("build")))
         (should-not (plist-get (agent-workflow--job back "build") :agent-asks))
         (should (equal (agent-workflow-run-why back)
