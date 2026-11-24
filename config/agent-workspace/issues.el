@@ -658,7 +658,9 @@ an --if- condition not met, its answer."
 (defun agent-workspace--bd-now (project actor args)
   "Run bd with ARGS in PROJECT as ACTOR (BEADS_ACTOR), waiting for it, at
 most `agent-workspace-claim-timeout' seconds: (STATUS . OUTPUT), STATUS
-its exit status, or `timeout' (stopped). nil without bd or Beads there.
+its exit status, or `timeout' (stopped); OUTPUT what it printed, only its
+standard output when it succeeded (its JSON, no warning of its mixed in),
+its errors first when it failed. nil without bd or Beads there.
 Run again, a moment after, when it fails for a moment
 \(`agent-workspace--bd-for-a-moment-p'), `agent-workspace-bd-tries' times
 at most, within those seconds: ARGS are ones that can be (a claim, an
@@ -672,21 +674,36 @@ assignee, a list)."
                      (with-temp-buffer
                        (let* ((default-directory project)
                               (process-environment (cons (concat "BEADS_ACTOR=" actor) process-environment))
+                              (errors (generate-new-buffer " *agent-workspace-bd-errors*" t))
+                              (stderr (make-pipe-process :name "agent-workspace-bd-now errors" :buffer errors
+                                                         :noquery t :sentinel #'ignore))
                               ;; Done once its sentinel ran: Emacs reads what
                               ;; it said first. It's not live as soon as it
                               ;; exits, maybe before that's read (a busy
                               ;; machine): bd's answer lost, run again.
                               (process (make-process :name "agent-workspace-bd-now" :buffer (current-buffer)
                                                      :command (cons "bd" args)
-                                                     :connection-type 'pipe :noquery t
+                                                     :connection-type 'pipe :noquery t :stderr stderr
                                                      :sentinel (lambda (process _event)
                                                                  (unless (process-live-p process)
                                                                    (process-put process 'done t))))))
-                         (while (and (not (process-get process 'done)) (< (float-time) end))
-                           (accept-process-output process 0.05))
-                         (if (process-live-p process)
-                             (progn (delete-process process) (cons 'timeout ""))
-                           (cons (process-exit-status process) (buffer-string))))))
+                         (unwind-protect
+                             (progn
+                               (while (and (not (process-get process 'done)) (< (float-time) end))
+                                 (accept-process-output process 0.05))
+                               (if (process-live-p process)
+                                   (progn (delete-process process) (cons 'timeout ""))
+                                 ;; Its errors, read to their end.
+                                 (let ((until (+ (float-time) 0.5)))
+                                   (while (and (process-live-p stderr) (< (float-time) until))
+                                     (accept-process-output stderr 0.05)))
+                                 (let ((status (process-exit-status process)))
+                                   (cons status (if (eql status 0)
+                                                    (buffer-string)
+                                                  (concat (with-current-buffer errors (buffer-string))
+                                                          (buffer-string)))))))
+                           (delete-process stderr)
+                           (kill-buffer errors)))))
                (and (agent-workspace--bd-for-a-moment-p result)
                     (> (setq tries (1- tries)) 0)
                     (< (+ (float-time) 0.3) end)))

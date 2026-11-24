@@ -762,6 +762,7 @@ case \"$MODE:$n\" in
   silent:*) exit 1;;
   claimed:*) echo \"Error updating $2: issue already claimed by ken\" >&2; exit 1;;
   condition:*) exit 13;;
+  warned:*) echo \"warning: before\" >&2; echo '[{\"id\":\"demo-1\"}]'; echo \"warning: after\" >&2; exit 0;;
 esac
 "
   "A stand-in bd failing as $MODE says, its runs counted in bd.count.")
@@ -795,6 +796,9 @@ condition not met) is an answer: not run again."
                      '("bd failed" 3)))
       (should (equal (run "condition" (lambda () (agent-workspace--bd-now project "ada" '("update" "demo-1" "--if-assignee=ada"))))
                      '((13 . "") 1)))
+      ;; Its warnings not in its JSON (doom-pbk.171).
+      (should (equal (run "warned" (lambda () (agent-workspace--bd-now project "ada" '("list" "--json"))))
+                     '((0 . "[{\"id\":\"demo-1\"}]\n") 1)))
       ;; Emacs busy (reading nothing) as bd answers and exits: its answer
       ;; still read, not taken for nothing said and run again.
       (let ((busy (lambda (make &rest args)
