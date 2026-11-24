@@ -7,7 +7,7 @@
 ;; own): shown, redirected in Emacs, a link to another page in the browser;
 ;; typed at M-x. A changed file: opened again or reverted, its new page.
 
-(+test-load "config/childframe" "config/window" "config/webkit" "config/html")
+(+test-load "config/emacs" "config/webkit" "config/html")
 
 (defconst +test-html-page
   "<!doctype html><html><head><title>Report</title></head><body><p>87%</p></body></html>")

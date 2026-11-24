@@ -9,7 +9,7 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/window" "config/editor" "config/merge")
+(+test-load "config/emacs" "config/editor" "config/merge")
 (require 'magit)
 (require 'magit-ediff)
 (require 'ultra-scroll)

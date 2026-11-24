@@ -2,7 +2,7 @@
 ;; SPC w SPC, SPC w a, SPC w RET, resizing (SPC w ] / [) and the strategy
 ;; chosen (SPC w e, SPC w TAB). Loaded from config/tiling.el.
 
-(defvar +my/focus-new-windows)          ; config/window.el
+(defvar +my/focus-new-windows)          ; config/emacs.el
 
 ;; COMMANDS (see config/tiling.el)
 (defun +my/tiling-split ()
@@ -27,7 +27,7 @@
       (set-window-prev-buffers new nil)
       (set-window-next-buffers new nil)
       (set-window-parameter new 'tab-line-buffers nil)
-      ;; New panes take focus (config/window.el).
+      ;; New panes take focus (config/emacs/window.el).
       (when (or (not (boundp '+my/focus-new-windows)) +my/focus-new-windows)
         (select-window new))
       new)))

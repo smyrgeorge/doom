@@ -386,13 +386,25 @@ above)."
 
 ;; ====== LOADING THE CONFIG ======
 
+;; Nothing compiled behind a test's back: config/emacs/compile.el's pass, once
+;; Emacs is idle, byte-compiles this config's functions in place (a test's
+;; stand-ins too) and takes its time. Stopped as it loads (with config/emacs),
+;; but in its own tests.
+(defvar +test-compile nil
+  "Non-nil: config/emacs/compile.el's pass runs (tests/unit/test-compile.el).")
+
 (defun +test-load (&rest files)
   "Load FILES of this config (\"config/tiling\"...), as Doom does: `map!'
-binds keys (Doom's does nothing in batch mode)."
+binds keys (Doom's does nothing in batch mode). config/emacs/compile.el's
+pass stopped, unless `+test-compile'."
   (dolist (file files)
     (let ((noninteractive nil)
           (inhibit-message t))
-      (load (expand-file-name file +test-root) nil t))))
+      (load (expand-file-name file +test-root) nil t)))
+  (unless +test-compile
+    (when (timerp (bound-and-true-p +my/compile--timer))
+      (cancel-timer +my/compile--timer))
+    (remove-hook 'after-load-functions '+my/compile-pending-h)))
 
 ;; What config.el loads first, which the other files use (config/emacs/os.el,
 ;; config/emacs.el's first part); the apps it starts only recorded (see NOTHING
@@ -896,7 +908,8 @@ report), and exit with their status."
      ;; E2E_WINDOW=front: all of it on screen, focused (to watch the tests),
      ;; each a step down and right of the one before.
      (set-frame-parameter nil 'z-group 'above)
-     (set-frame-parameter nil 'fullscreen nil) ; config/window.el maximizes
+     ;; Not maximized, as config/emacs/window.el has it.
+     (set-frame-parameter nil 'fullscreen nil)
      (+test-e2e-frame-reset)
      (let* ((slots (max 1 (string-to-number (or (getenv "E2E_SLOTS") "1"))))
             (slot (min (1- slots) (max 0 (string-to-number (or (getenv "E2E_SLOT") "0"))))))

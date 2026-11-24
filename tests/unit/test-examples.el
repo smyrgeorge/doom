@@ -12,7 +12,7 @@
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
-(+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/stripe"
+(+test-load "config/emacs" "config/banner" "config/tiling" "config/stripe"
             "config/editor" "config/merge" "config/agent-ui" "config/beads" "config/webkit"
             "config/mermaid" "config/agent-shell" "config/agent-workspace" "config/agent-workflow"
             "config/examples")

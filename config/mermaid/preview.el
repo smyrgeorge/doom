@@ -400,7 +400,7 @@ one was asked is dropped."
        (with-current-buffer +my/mermaid-preview--buffer
          (derived-mode-p '+my/mermaid-preview-page-mode))))
 
-(defvar +my/focus-new-windows)          ; config/window.el
+(defvar +my/focus-new-windows)          ; config/emacs.el
 
 (defun +my/mermaid-preview--display (preview)
   "Show PREVIEW beside the Mermaid buffer, half its window's width. The cursor

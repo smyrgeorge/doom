@@ -10,7 +10,7 @@
 ;;
 ;; DOOM_EMACS_DIR (default ~/.config/emacs) is Doom's folder.
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit"
+(+test-load "config/emacs" "config/banner" "config/editor" "config/webkit"
             "config/pdf" "config/excalidraw" "config/mermaid")
 
 (let ((etc (expand-file-name ".local/etc/" +test-doom-emacs-dir)))

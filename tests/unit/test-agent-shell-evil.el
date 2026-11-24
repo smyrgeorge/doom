@@ -10,7 +10,7 @@
 (defvar doom-disabled-packages nil)
 
 (require 'evil)
-(+test-load "config/childframe" "config/banner" "config/webkit" "config/excalidraw"
+(+test-load "config/emacs/childframe" "config/banner" "config/webkit" "config/excalidraw"
             "config/agent-shell")
 (require 'agent-shell)
 (require 'agent-shell-diff)

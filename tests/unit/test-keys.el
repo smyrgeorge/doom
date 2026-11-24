@@ -12,7 +12,7 @@
 (require 'image-mode)
 
 (defconst +test-keys--files
-  '("config/window" "config/tiling" "config/childframe" "config/banner" "config/editor" "config/search"
+  '("config/emacs" "config/tiling" "config/banner" "config/editor" "config/search"
     "config/webkit" "config/markdown" "config/html" "config/pdf" "config/image" "config/merge")
   "The files binding the keys below, in config.el's order.")
 

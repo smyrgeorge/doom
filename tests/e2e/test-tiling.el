@@ -17,7 +17,7 @@
   (dolist (package '("magit" "magit-section" "magit-delta" "magit-todos" "ghostel"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit"
+(+test-load "config/emacs" "config/banner" "config/editor" "config/webkit"
             "config/markdown" "config/excalidraw" "config/git" "config/agent-shell" "config/tiling")
 (require 'markdown-mode)
 (require 'agent-shell)

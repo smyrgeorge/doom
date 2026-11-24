@@ -4,7 +4,7 @@
 ;; (its label shortened) and past the scroll arrows; short labels as they
 ;; are.
 
-(+test-load "config/window" "config/editor")
+(+test-load "config/emacs" "config/editor")
 (require 'tab-line)
 ;; Tabs' icons, as in Doom.
 (require 'nerd-icons nil t)

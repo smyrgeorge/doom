@@ -12,7 +12,7 @@
 
 (require 'evil)
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
-(+test-load "config/childframe" "config/banner" "config/webkit" "config/excalidraw"
+(+test-load "config/emacs/childframe" "config/banner" "config/webkit" "config/excalidraw"
             "config/agent-shell" "config/beads")
 (require 'agent-shell)
 (require 'beads)

@@ -16,7 +16,7 @@
 ;; lsp-mode as Doom has it: built for plists, and Doom says so at startup.
 (setenv "LSP_USE_PLISTS" "1")
 (require 'lsp-mode)
-(+test-load "config/window" "config/webkit" "config/markdown")
+(+test-load "config/emacs" "config/webkit" "config/markdown")
 
 ;; ====== FAKE WEBKIT ======
 
@@ -105,8 +105,8 @@
 (defmacro +test-md (&rest body)
   "BODY with WebKit faked, the live preview working (`+my/webkit-p' t, pandoc
 faked), temp files in the test's folder, as from a command (new windows
-would get focus: config/window.el); from one window on *scratch*, and again
-after."
+would get focus: config/emacs/window.el); from one window on *scratch*, and
+again after."
   (declare (indent 0))
   `(+test-md--with-fakes
      (let ((temporary-file-directory
@@ -507,7 +507,7 @@ the preview on its right; another pane as it was."
 
 (ert-deftest markdown/new-windows-would-take-focus ()
   "Control for the test above: here, a command's new window is selected (once
-the command ends: config/window.el)."
+the command ends: config/emacs/window.el)."
   (+test-md
     (let ((window (selected-window)))
       (display-buffer (+test-buffer "other") '(display-buffer-in-direction (direction . right)))

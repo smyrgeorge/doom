@@ -8,7 +8,7 @@
 
 (require 'json)
 (require 'xwidget)                      ; before faking its functions
-(+test-load "config/window" "config/webkit" "config/mermaid")
+(+test-load "config/emacs" "config/webkit" "config/mermaid")
 (require 'mermaid-mode)
 (load (expand-file-name "../helper-mermaid" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 

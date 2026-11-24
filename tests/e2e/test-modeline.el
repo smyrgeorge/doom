@@ -5,7 +5,7 @@
 ;; name, the position and the check; a narrow pane not selected gets the
 ;; narrow layout; 40 and 30 columns still show the name and the position.
 
-(+test-load "config/window" "config/editor")
+(+test-load "config/emacs" "config/editor")
 (require 'doom-modeline)
 (require 'flymake)
 

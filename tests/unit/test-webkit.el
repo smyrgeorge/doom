@@ -84,7 +84,8 @@
                 (lambda (xw type) (+test-webkit--log 'xwidget-webkit-callback xw type))))
        ,@body)))
 
-;; Cover frames (config/childframe.el's, faked): symbols with their settings.
+;; Cover frames (config/emacs/childframe.el's, faked): symbols with their
+;; settings.
 (defvar +test-webkit--frames nil "The cover frames made, latest first.")
 
 (defun +test-webkit--fake-frame-p (frame)

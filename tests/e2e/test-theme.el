@@ -6,7 +6,7 @@
 ;; (The WebKit pages: their own files' THE THEME tests.)
 
 (setq-default truncate-lines t)          ; as Doom
-(+test-load "config/window" "config/editor" "config/childframe" "config/banner"
+(+test-load "config/emacs" "config/editor" "config/banner"
             "config/stripe" "config/merge" "config/image")
 (require 'doom-themes)
 (add-to-list 'custom-theme-load-path (file-name-directory (locate-library "doom-themes")))

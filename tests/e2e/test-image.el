@@ -6,7 +6,7 @@
 ;; clipboard not touched), git's HEAD beside the image, a file changed on disk.
 
 (require 'image-mode)
-(+test-load "config/childframe" "config/banner" "config/image")
+(+test-load "config/emacs/childframe" "config/banner" "config/image")
 
 ;; ====== SETUP ======
 

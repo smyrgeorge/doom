@@ -5,7 +5,7 @@
 ;; files as tabs in the panes of files, a pane closed with its last tab. A
 ;; layout kept whole (an atomic window: a merge's) left as it is.
 
-(+test-load "config/window" "config/tiling" "config/merge")
+(+test-load "config/emacs" "config/tiling" "config/merge")
 (require 'magit)
 
 ;; ====== HELPERS ======
@@ -20,7 +20,7 @@
 
 (defmacro +test-tiling (&rest body)
   "BODY from one window on buffer A (B, C, D also there), as a command would
-run (`this-command' set: new windows get focus, config/window.el)."
+run (`this-command' set: new windows get focus, config/emacs/window.el)."
   (declare (indent 0))
   `(+test-with-reset
      (let ((this-command 'test)

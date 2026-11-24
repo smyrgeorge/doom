@@ -4,7 +4,7 @@
 ;; scrolling, the reading place kept as a pane is resized, closing.
 ;; run.sh: slow (~30 s beside the others: started first).
 
-(+test-load "config/childframe" "config/window" "config/webkit")
+(+test-load "config/emacs" "config/webkit")
 
 ;; ====== A TEST PAGE ======
 

@@ -1,9 +1,9 @@
 ;;; tests/unit/test-window.el -*- lexical-binding: t; -*-
-;; config/window.el: new windows get focus (evil's splits, and windows that
-;; `display-buffer' opens for a command), a wider right fringe, the frame
+;; config/emacs/window.el: new windows get focus (evil's splits, and windows
+;; that `display-buffer' opens for a command), a wider right fringe, the frame
 ;; maximized at startup.
 
-(+test-load "config/window")
+(+test-load "config/emacs")
 
 ;; ====== HELPERS ======
 
@@ -21,7 +21,7 @@ set), new windows getting focus."
   (run-hooks 'post-command-hook))
 
 (defun +test-window--fringe-mode-args (&rest bindings)
-  "What config/window.el gives `fringe-mode' when loaded, BINDINGS
+  "What config/emacs/window.el gives `fringe-mode' when loaded, BINDINGS
 \((FUNCTION . DEFINITION)...) standing in meanwhile; :none if not called."
   (let ((got :none)
         (saved (mapcar (lambda (b) (cons (car b) (symbol-function (car b)))) bindings)))
@@ -29,7 +29,7 @@ set), new windows getting focus."
         (progn
           (dolist (b bindings) (fset (car b) (cdr b)))
           (cl-letf (((symbol-function 'fringe-mode) (lambda (value) (setq got value))))
-            (+test-load "config/window")))
+            (+test-load "config/emacs/window")))
       (dolist (s saved) (fset (car s) (cdr s))))
     got))
 
@@ -395,11 +395,14 @@ terminal, nor with no padding."
 
 ;; ====== LOADED ======
 
-(ert-deftest window/config-el-loads-it ()
-  (with-temp-buffer
-    (insert-file-contents (expand-file-name "config.el" +test-root))
-    (let (forms)
-      (condition-case nil
-          (while t (push (read (current-buffer)) forms))
-        (end-of-file))
-      (should (member '(load! "config/window") forms)))))
+(ert-deftest window/config-emacs-loads-it ()
+  "config.el loads config/emacs.el, which loads this file."
+  (dolist (check '(("config.el" load! "config/emacs")
+                   ("config/emacs.el" load! "emacs/window")))
+    (with-temp-buffer
+      (insert-file-contents (expand-file-name (car check) +test-root))
+      (let (forms)
+        (condition-case nil
+            (while t (push (read (current-buffer)) forms))
+          (end-of-file))
+        (should (member (cdr check) forms))))))

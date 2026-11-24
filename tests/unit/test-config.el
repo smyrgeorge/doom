@@ -5,6 +5,7 @@
 
 (defvar doom-disabled-packages nil)     ; Doom's `use-package!' reads it
 (setq native-comp-enable-subr-trampolines nil) ; mocking primitives compiles none
+(setq +test-compile t)                  ; its pass runs, as in Emacs (tests/helper.el)
 
 ;; ====== LOADING IT ======
 
@@ -338,10 +339,12 @@ and drawings built on it (config/markdown.el binds its clicks as it loads)."
   (should (eq (lookup-key +my/mermaid-preview-page-mode-map [down-mouse-1]) #'+my/webkit-mouse-select)))
 
 (ert-deftest config/order-childframe-before-its-users ()
-  "config/childframe.el before the notices, the error stripe and WebKit's
-cover, which make their frames with it."
+  "config/emacs/childframe.el (config/emacs.el's) before the notices, the
+error stripe and WebKit's cover, which make their frames with it."
+  (should (member "config/emacs/childframe"
+                  (+test-config--parts "config/emacs")))
   (dolist (name '("config/banner" "config/stripe" "config/webkit"))
-    (should (< (+test-config--load-position "config/childframe")
+    (should (< (+test-config--load-position "config/emacs")
                (+test-config--load-position name)))))
 
 (ert-deftest config/order-actions-before-pdf ()
@@ -358,8 +361,10 @@ puts its last."
                    +my/context-actions-excalidraw))))
 
 (ert-deftest config/order-window-before-tiling ()
-  "Window behaviour (new windows get focus) is set up before tiling uses it."
-  (should (< (+test-config--load-position "config/window")
+  "Window behaviour (new windows get focus: config/emacs/window.el, part of
+config/emacs.el) is set up before tiling uses it."
+  (should (member "config/emacs/window" (+test-config--parts "config/emacs")))
+  (should (< (+test-config--load-position "config/emacs")
              (+test-config--load-position "config/tiling"))))
 
 (ert-deftest config/order-emacs-first ()

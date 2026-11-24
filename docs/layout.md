@@ -11,9 +11,8 @@
 | `config/notify.el`, `notify/` | [Notifications](notifications.md) on the desktop while Emacs isn't in front |
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
-| `config/childframe.el` | Frames laid over a window: notices, the error stripe |
 | `config/editor.el`, `editor/` | [The editor](editor.md): tabs, `Option+Enter`, `Cmd+B`, the sticky header, spelling |
-| `config/emacs.el`, `emacs/` | Emacs itself: what differs between macOS and Linux ([the keys](keybindings.md), other apps, the clipboard's images, notifications), garbage collection, [profiling](agent-shell.md#profiling-emacs), this config byte-compiled when Emacs is idle |
+| `config/emacs.el`, `emacs/` | Emacs itself: what differs between macOS and Linux ([the keys](keybindings.md), other apps, the clipboard's images, notifications), the frame, fringes, focus of new windows, frames laid over a window (notices, the error stripe), Emacs [in a terminal](terminal.md), garbage collection, [profiling](agent-shell.md#profiling-emacs), this config byte-compiled when Emacs is idle |
 | `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
 | `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |
@@ -26,11 +25,9 @@
 | `config/projectile.el`, `projectile/` | [Projects](search.md#projects) |
 | `config/search.el`, `search/` | [Search](search.md) |
 | `config/stripe.el`, `stripe/` | [Error stripe](editor.md#error-stripe) |
-| `config/terminal.el` | [Terminal](terminal.md) |
 | `config/tiling.el`, `tiling/` | [Tiling](editor.md#tiling) |
 | `config/treemacs.el`, `treemacs/` | [Sidebar](sidebar.md) |
 | `config/webkit.el`, `webkit/` | Web pages in Emacs: PDFs, drawings, the Markdown preview |
-| `config/window.el` | The frame, fringes, focus of new windows |
 | `skills/` | [Agent skills](ai-agents.md): `emacs-profiling` reads a profile, `agent-ui` shows things on the canvas |
 | `cmd/` | [Shell commands](cmd.md) |
 | `dict/tech.txt` | Programming words for spelling, built by `scripts/dict.sh` |

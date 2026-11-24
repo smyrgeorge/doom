@@ -1,12 +1,12 @@
 ;;; tests/unit/test-childframe.el -*- lexical-binding: t; -*-
-;; config/childframe.el: child frames laid over a window (the notices, the
+;; config/emacs/childframe.el: child frames laid over a window (the notices, the
 ;; error stripe, WebKit's cover): a frame's parameters and buffer, deleting it
 ;; (its buffer killed however it goes), a frame per window synced with the
 ;; windows, syncing soon. Batch Emacs can't make frames: they're stood in for
 ;; here (config/banner.el's and config/stripe.el's tests use them through their
 ;; own).
 
-(+test-load "config/childframe")
+(+test-load "config/emacs/childframe")
 
 (defvar +test-childframe--frames nil "A feature's (WINDOW FRAME) list.")
 

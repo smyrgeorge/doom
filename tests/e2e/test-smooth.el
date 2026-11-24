@@ -5,7 +5,7 @@
 ;; leaves it cut. At a buffer's end (Claude Code's prompt): above it, Emacs
 ;; scrolls by itself.
 
-(+test-load "config/childframe" "config/stripe" "config/editor")
+(+test-load "config/emacs/childframe" "config/stripe" "config/editor")
 (require 'ultra-scroll)
 (ultra-scroll-mode 1)
 

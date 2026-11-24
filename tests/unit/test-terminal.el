@@ -1,14 +1,14 @@
 ;;; tests/unit/test-terminal.el -*- lexical-binding: t; -*-
-;; config/terminal.el: terminal (tty) frames: the terminal's background painted
-;; with the theme's (OSC 11), once it's set up, its own asked first (OSC 11 ?)
-;; and given back (OSC 11 with it; else OSC 111) on exit, when an emacsclient
-;; -t frame closes and while suspended (C-x C-z), as a terminal Emacs on a pty
-;; shows; no menu bar; no tty-tip-mode.
+;; config/emacs/terminal.el: terminal (tty) frames: the terminal's background
+;; painted with the theme's (OSC 11), once it's set up, its own asked first
+;; (OSC 11 ?) and given back (OSC 11 with it; else OSC 111) on exit, when an
+;; emacsclient -t frame closes and while suspended (C-x C-z), as a terminal
+;; Emacs on a pty shows; no menu bar; no tty-tip-mode.
 
 ;; As Doom has it, before this config.
 (add-hook 'tty-setup-hook #'tty-tip-mode)
 
-(+test-load "config/terminal")
+(+test-load "config/emacs/terminal")
 
 ;; The batch Emacs's frame is a terminal one, its terminal the test's output:
 ;; no escape codes there when it exits.
@@ -100,7 +100,7 @@ drew their tips the terminal's way."
   (should-not (memq 'tty-tip-mode tty-setup-hook))
   ;; Loading again: still off, the hooks there once.
   (add-hook 'tty-setup-hook #'tty-tip-mode)
-  (+test-load "config/terminal")
+  (+test-load "config/emacs/terminal")
   (should-not (memq 'tty-tip-mode tty-setup-hook))
   (should (= (cl-count '+my/tty-sync-bg-h tty-setup-hook) 1)))
 
@@ -204,10 +204,23 @@ needs term/xterm.el): not painted then; tty-setup-hook paints it."
 iTerm2 ignores)."
   (+test-terminal
     (+test-terminal--frames '((tty1 t "#282c34") (gui ns "#282c34") (tty2 t "#282c34"))
+      (+my/tty-sync-bg-h)                 ; painted
+      (setq +test-terminal--sent nil)
       (set-terminal-parameter 'tty1-terminal '+my/tty-bg "rgb:1111/2222/3333")
       (+my/tty-reset-bg-h)
       (should (equal (reverse +test-terminal--sent)
                      '(("\e]11;rgb:1111/2222/3333\a" tty1-terminal) ("\e]111\a" tty2-terminal)))))))
+
+(ert-deftest terminal/nothing-given-back-to-a-terminal-never-painted ()
+  "A terminal never painted (never set up: a batch Emacs's, its output) gets
+nothing on exit, when its frame closes or while suspended."
+  (+test-terminal
+    (+test-terminal--frames '((tty t "#282c34"))
+      (cl-letf (((symbol-function 'frame-live-p) (lambda (_) t)))
+        (+my/tty-reset-bg-h)
+        (+my/tty-reset-frame-bg-h 'tty)
+        (+my/tty-suspend-h 'tty-terminal)
+        (should-not +test-terminal--sent)))))
 
 (defun +test-terminal--nw (reply &optional suspend)
   "Run a terminal Emacs (this config's terminal.el, Doom's theme) on a pty,
@@ -216,7 +229,7 @@ as tmux), quit it (C-x C-c) once it painted the theme's; SUSPEND: suspend it
 first (C-x C-z; on this pty it's back at once, nothing to stop it), quit once
 it painted it again. What it wrote."
   (let* ((home (make-temp-file (+test-tmp-file "nw-home-") t))
-         (setup (format "(progn (run-at-time 30 nil #'kill-emacs 3) (require 'doom-themes) (+test-load \"config/terminal\") (load-theme 'doom-one t) (run-hooks 'doom-load-theme-hook))"))
+         (setup (format "(progn (run-at-time 30 nil #'kill-emacs 3) (require 'doom-themes) (+test-load \"config/emacs/terminal\") (load-theme 'doom-one t) (run-hooks 'doom-load-theme-hook))"))
          (process-environment (append (list "TERM=xterm-256color" "COLORTERM=truecolor"
                                             (concat "TEST_TMP=" (file-name-as-directory home)))
                                       process-environment))
@@ -270,7 +283,7 @@ given its own colour back."
   (let* ((home (make-temp-file (+test-tmp-file "server-home-") t))
          ;; A name, not a path: a socket's path has at most ~104 characters.
          (socket (format "doom-test-tty-%d-%d" (emacs-pid) (random 100000)))
-         (setup "(progn (run-at-time 60 nil #'kill-emacs 3) (require 'doom-themes) (+test-load \"config/terminal\") (load-theme 'doom-one t) (run-hooks 'doom-load-theme-hook))")
+         (setup "(progn (run-at-time 60 nil #'kill-emacs 3) (require 'doom-themes) (+test-load \"config/emacs/terminal\") (load-theme 'doom-one t) (run-hooks 'doom-load-theme-hook))")
          (emacs (expand-file-name invocation-name invocation-directory))
          ;; COLORTERM the server's own: Emacs reads it from its environment
          ;; for a client's terminal too (24-bit colour, the theme's #RRGGBB;
@@ -370,6 +383,8 @@ terminal; none for a GUI frame's."
   "emacsclient -t: its frame closing gives its terminal its colour back."
   (+test-terminal
     (+test-terminal--frames '((tty t "#282c34") (gui ns "#282c34"))
+      (+my/tty-sync-bg-h)                 ; painted
+      (setq +test-terminal--sent nil)
       (cl-letf (((symbol-function 'frame-live-p) (lambda (frame) (memq frame '(tty gui)))))
         (+my/tty-reset-frame-bg-h 'tty)
         (should (equal +test-terminal--sent '(("\e]111\a" tty-terminal))))
@@ -391,6 +406,8 @@ theme's background; the last one gives it back."
         (+my/tty-reset-frame-bg-h 'one)
         (should-not +test-terminal--sent)))
     (+test-terminal--frames '((two t "#282c34" shared) (elsewhere t "#282c34"))
+      (+my/tty-sync-bg-h)                 ; painted
+      (setq +test-terminal--sent nil)
       (cl-letf (((symbol-function 'frame-live-p) (lambda (_) t)))
         (+my/tty-reset-frame-bg-h 'two)
         (should (equal +test-terminal--sent '(("\e]111\a" shared))))))))
@@ -440,11 +457,14 @@ theme's background; the last one gives it back."
 
 ;; ====== LOADED ======
 
-(ert-deftest terminal/config-el-loads-it ()
-  (with-temp-buffer
-    (insert-file-contents (expand-file-name "config.el" +test-root))
-    (let (forms)
-      (condition-case nil
-          (while t (push (read (current-buffer)) forms))
-        (end-of-file))
-      (should (member '(load! "config/terminal") forms)))))
+(ert-deftest terminal/config-emacs-loads-it ()
+  "config.el loads config/emacs.el, which loads this file."
+  (dolist (check '(("config.el" load! "config/emacs")
+                   ("config/emacs.el" load! "emacs/terminal")))
+    (with-temp-buffer
+      (insert-file-contents (expand-file-name (car check) +test-root))
+      (let (forms)
+        (condition-case nil
+            (while t (push (read (current-buffer)) forms))
+          (end-of-file))
+        (should (member (cdr check) forms))))))

@@ -4,7 +4,7 @@
 ;; away from and back, and through workspaces saved to a file (readable) and
 ;; loaded again (doom-djc.14).
 
-(+test-load "config/window" "config/editor")
+(+test-load "config/emacs" "config/editor")
 (require 'tab-line)
 (global-tab-line-mode 1)
 ;; As Doom: workspaces persp-mode's, their windows kept with its default

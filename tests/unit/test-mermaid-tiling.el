@@ -3,7 +3,7 @@
 ;; in a pane of its own; closed, by SPC m p or q, its pane closes with it,
 ;; but for the tabs under it. mmdc is a stand-in (tests/helper-mermaid.el).
 
-(+test-load "config/window" "config/tiling" "config/webkit" "config/mermaid")
+(+test-load "config/emacs" "config/tiling" "config/webkit" "config/mermaid")
 (require 'mermaid-mode)
 (load (expand-file-name "../helper-mermaid" (file-name-directory (or load-file-name buffer-file-name))) nil t)
 

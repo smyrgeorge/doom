@@ -49,8 +49,8 @@ those say closed too."
 
 ;; LSP PANELS
 ;; SPC c X (errors) and SPC c S (symbols) open their panel at the bottom; new
-;; windows get the cursor (config/window.el) but these are side windows, so it
-;; stayed in the code and the arrows moved there. Go to the panel.
+;; windows get the cursor (config/emacs/window.el) but these are side windows,
+;; so it stayed in the code and the arrows moved there. Go to the panel.
 (defadvice! +my/lsp-treemacs-select-panel-a (&rest _)
   :after '(lsp-treemacs-errors-list lsp-treemacs-symbols)
   (when-let* ((window (seq-find (lambda (w)

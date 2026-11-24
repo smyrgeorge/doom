@@ -9,7 +9,7 @@
 ;; config/mermaid.el; what Claude is told.
 
 (defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's)
-(+test-load "config/agent-shell" "config/window" "config/webkit" "config/mermaid")
+(+test-load "config/agent-shell" "config/emacs" "config/webkit" "config/mermaid")
 (require 'agent-shell)
 (require 'mermaid-mode)                 ; autoloaded in Doom: blocks highlighted
 (load (expand-file-name "../helper-mermaid" (file-name-directory (or load-file-name buffer-file-name))) nil t)

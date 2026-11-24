@@ -123,7 +123,7 @@ frame's pixels (as a child frame is placed)."
           (window-body-height window t))))
 
 (defun +my/stripe--make-frame (parent)
-  "A child frame of PARENT for a strip (config/childframe.el)."
+  "A child frame of PARENT for a strip (config/emacs/childframe.el)."
   (let ((frame (+my/childframe-make
                 parent "+my/stripe"
                 `((+my/stripe . t)

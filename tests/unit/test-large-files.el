@@ -6,7 +6,7 @@
 ;; and stripe off, a notice with Open normally. Generated files, in the temp
 ;; folder; Doom's MODE-local-vars-hook runner stood in for.
 
-(+test-load "config/childframe" "config/banner" "config/editor")
+(+test-load "config/emacs/childframe" "config/banner" "config/editor")
 (require 'so-long)
 (require 'markdown-mode)
 

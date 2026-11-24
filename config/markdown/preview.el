@@ -63,7 +63,7 @@ preview off."
   (+md-preview--paint-background)
   (add-hook 'kill-buffer-hook #'+md-preview--closed-h nil t))
 
-(defvar +my/focus-new-windows)          ; config/window.el
+(defvar +my/focus-new-windows)          ; config/emacs.el
 
 (defun +md-preview--display (preview)
   "Show PREVIEW beside the Markdown file, half its window's width (a float

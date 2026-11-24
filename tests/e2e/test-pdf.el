@@ -9,7 +9,7 @@
 ;; window over it or another Space shown, its waits wait (tests/helper.el's
 ;; A PAGE HIDDEN).
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit" "config/pdf")
+(+test-load "config/emacs" "config/banner" "config/editor" "config/webkit" "config/pdf")
 
 ;; ====== SETUP ======
 

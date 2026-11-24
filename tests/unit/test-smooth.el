@@ -11,7 +11,7 @@
   (setq ultra-scroll-throttle-mode-line t))
 
 ;; As config.el: the stripe (its scroll limit), then the editor.
-(+test-load "config/childframe" "config/stripe" "config/editor")
+(+test-load "config/emacs/childframe" "config/stripe" "config/editor")
 
 (require 'mwheel)
 (require 'ultra-scroll)

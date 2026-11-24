@@ -10,7 +10,7 @@
 (load (expand-file-name "beads-autoloads"
                         (file-name-directory (locate-library "beads")))
       nil t)
-(+test-load "config/window" "config/tiling" "config/childframe" "config/banner" "config/beads")
+(+test-load "config/emacs" "config/tiling" "config/banner" "config/beads")
 
 (defconst +test-beads--loaded-before (featurep 'beads)
   "Whether loading config/beads.el loaded beads.el (it mustn't).")

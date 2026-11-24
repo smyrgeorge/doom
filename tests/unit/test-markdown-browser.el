@@ -8,7 +8,7 @@
 
 (require 'json)
 (require 'markdown-mode)
-(+test-load "config/window" "config/webkit" "config/markdown" "config/mermaid")
+(+test-load "config/emacs" "config/webkit" "config/markdown" "config/mermaid")
 
 (defconst +test-md-browser--doc
   (concat "# Diagrams\n\n"

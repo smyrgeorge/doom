@@ -15,7 +15,7 @@
 (defvar +test-stripe--bitmaps nil
   "(NAME ARGS...) of the `define-fringe-bitmap' calls made as flycheck loaded.")
 
-(+test-load "config/childframe" "config/stripe")
+(+test-load "config/emacs/childframe" "config/stripe")
 
 (cl-letf* ((define (symbol-function 'define-fringe-bitmap))
            ((symbol-function 'define-fringe-bitmap)
@@ -2098,7 +2098,7 @@ padded already."
                       (_ (funcall parameter frame name))))))
         (+my/stripe--pad)
         (should (equal (list left-fringe-width right-fringe-width) '(16 16)))
-        (setq right 16)                         ; config/window.el's padding
+        (setq right 16)                 ; config/emacs/window.el's padding
         (+my/stripe--pad)
         (should (equal (list left-fringe-width right-fringe-width) '(16 16)))
         (let ((+my/stripe-padding 2))

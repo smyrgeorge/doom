@@ -1,7 +1,7 @@
-;;; $DOOMDIR/config/childframe.el -*- lexical-binding: t; -*-
+;;; $DOOMDIR/config/emacs/childframe.el -*- lexical-binding: t; -*-
 ;; Child frames laid over a window: the notices (config/banner.el), the error
 ;; stripe (config/stripe.el), WebKit's cover while a page loads
-;; (config/webkit.el). Loaded from config.el, before them.
+;; (config/webkit.el). Loaded from config/emacs.el, before them.
 
 ;; ====== CODE ======
 

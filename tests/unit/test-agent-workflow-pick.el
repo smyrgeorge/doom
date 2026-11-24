@@ -11,7 +11,7 @@
 (let ((build (file-name-directory (directory-file-name (file-name-directory (locate-library "vertico"))))))
   (dolist (package '("vertico" "orderless"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
-(+test-load "config/window" "config/tiling" "config/childframe" "config/banner" "config/beads"
+(+test-load "config/emacs" "config/tiling" "config/banner" "config/beads"
             "config/agent-workflow")
 
 (require 'vertico)

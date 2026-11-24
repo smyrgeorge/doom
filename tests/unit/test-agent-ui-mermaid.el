@@ -6,7 +6,7 @@
 ;; markdown type's ```mermaid blocks drawn the same; its example right.
 
 (defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's)
-(+test-load "config/agent-shell" "config/window" "config/webkit" "config/mermaid" "config/agent-ui")
+(+test-load "config/agent-shell" "config/emacs" "config/webkit" "config/mermaid" "config/agent-ui")
 (require 'agent-shell)
 (require 'mermaid-mode)
 (load (expand-file-name "../helper-mermaid" (file-name-directory (or load-file-name buffer-file-name))) nil t)

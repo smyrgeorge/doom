@@ -144,29 +144,22 @@
 ;; ====== CODE ======
 
 ;; EMACS (what differs between macOS and Linux: keys, other apps, which the
-;; files below use; garbage collection; profiling: SPC h T starts the profiler,
+;; files below use; the frame maximized, new windows get focus; child frames
+;; laid over a window: the notices, the error stripe, WebKit's cover; Emacs in
+;; a terminal; garbage collection; profiling: SPC h T starts the profiler,
 ;; again writes a profile for an agent, who reads skills/emacs-profiling first;
 ;; this config's functions byte-compiled when Emacs is idle)
 (load! "config/emacs")
 
-;; WINDOW (maximized frame; new windows get focus)
-(load! "config/window")
-
 ;; TILING (SPC w SPC: a new pane where the tiling strategy puts it; tiling first:
 ;; applications in new panes, files as tabs; without it, as they open alone)
 (load! "config/tiling")
-
-;; CHILD FRAMES (laid over a window: the notices, the error stripe, WebKit's cover)
-(load! "config/childframe")
 
 ;; BANNERS (notices at the top of a window, with actions)
 (load! "config/banner")
 
 ;; ERROR STRIPE (marks for git changes and errors at the right edge)
 (load! "config/stripe")
-
-;; TERMINAL
-(load! "config/terminal")
 
 ;; TREEMACS (project view)
 (load! "config/treemacs")

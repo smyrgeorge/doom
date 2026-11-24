@@ -6,7 +6,7 @@
 ;; run.sh: slow (~20 s beside the others: started first).
 
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
-(+test-load "config/childframe" "config/banner" "config/window" "config/tiling" "config/beads")
+(+test-load "config/emacs" "config/banner" "config/tiling" "config/beads")
 (require 'beads)
 
 (defun +test-beads-e2e--run (program &rest args)

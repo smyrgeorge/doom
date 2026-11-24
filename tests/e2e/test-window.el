@@ -1,10 +1,10 @@
 ;;; tests/e2e/test-window.el -*- lexical-binding: t; -*-
-;; config/window.el in a GUI Emacs, its commands run by the command loop (keys
-;; typed): a command's new window selected once it ends; TAB's *Completions*
-;; leaving the focus in the minibuffer, typing going on there; the right
-;; fringe following the font.
+;; config/emacs/window.el in a GUI Emacs, its commands run by the command loop
+;; (keys typed): a command's new window selected once it ends; TAB's
+;; *Completions* leaving the focus in the minibuffer, typing going on there;
+;; the right fringe following the font.
 
-(+test-load "config/window")
+(+test-load "config/emacs")
 
 (defvar +test-window--map (make-sparse-keymap)
   "Keys for the commands below, typed.")

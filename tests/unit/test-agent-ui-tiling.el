@@ -2,7 +2,7 @@
 ;; config/agent-ui with config/tiling: where a canvas's pane opens, as the
 ;; tiling strategy has it. No agent runs: the session is a buffer.
 
-(+test-load "config/window" "config/tiling" "config/agent-ui")
+(+test-load "config/emacs" "config/tiling" "config/agent-ui")
 
 ;; ====== HELPERS ======
 

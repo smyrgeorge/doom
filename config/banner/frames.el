@@ -2,8 +2,8 @@
 ;; The frames laying notices over the header line. Loaded from config/banner.el.
 
 ;;; The notices' frames
-;; A child frame (config/childframe.el) over the header line of each window
-;; with notices.
+;; A child frame (config/emacs/childframe.el) over the header line of each
+;; window with notices.
 
 (defvar +my/banner--frames nil
   "(WINDOW FRAME KEY) for each window that shows (or showed) notices: FRAME

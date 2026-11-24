@@ -5,6 +5,7 @@
 ;; they call became a macro (its package loaded), go back to their source.
 
 (setq native-comp-enable-subr-trampolines nil) ; mocking `input-pending-p' compiles none
+(setq +test-compile t)                  ; its pass runs (tests/helper.el)
 (+test-load "config/emacs")
 
 ;; ====== HELPERS ======

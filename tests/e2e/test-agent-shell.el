@@ -5,7 +5,7 @@
 ;; A stand-in session (agent-shell's mode, no agent).
 
 (defvar doom-disabled-packages nil)     ; `use-package!' reads it (Doom's)
-(+test-load "config/window" "config/agent-shell")
+(+test-load "config/emacs" "config/agent-shell")
 (require 'agent-shell)
 
 ;; ====== HELPERS ======

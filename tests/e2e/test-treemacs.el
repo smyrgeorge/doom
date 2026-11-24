@@ -11,7 +11,7 @@
 (setq treemacs-persist-file (+test-tmp-file "treemacs/persist")
       treemacs-last-error-persist-file (+test-tmp-file "treemacs/last-error"))
 
-(+test-load "config/window" "config/treemacs")
+(+test-load "config/emacs" "config/treemacs")
 
 (require 'treemacs)
 (require 'treemacs-evil)                ; as Doom: j / k in the sidebar

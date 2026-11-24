@@ -5,7 +5,7 @@
 ;; the GUI's notices' frames (child frames: stood in for here, batch Emacs can't
 ;; make frames); theme colours. The long lines notice: test-long-lines.el.
 
-(+test-load "config/childframe" "config/banner")
+(+test-load "config/emacs/childframe" "config/banner")
 
 ;; Loading tinted the rows (no theme yet: nothing to do) and asked for a sync.
 (defconst +test-banner--theme-at-load +my/banner--theme)

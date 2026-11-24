@@ -5,7 +5,7 @@
 ;; the strip's frame drawn anew) only when the strip changes.
 
 (setq-default truncate-lines t)          ; as Doom
-(+test-load "config/window" "config/childframe" "config/banner" "config/stripe")
+(+test-load "config/emacs" "config/banner" "config/stripe")
 (require 'diff-hl)
 
 ;; ====== HELPERS ======

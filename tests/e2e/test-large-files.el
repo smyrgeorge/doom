@@ -6,7 +6,7 @@
 ;; run.sh: alone. Its seconds are the clock's: beside other GUI Emacsen (on
 ;; GitHub's macOS runner, 3 cores, 4 at once) a 0.07 s opening took over 1 s.
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/editor")
+(+test-load "config/emacs" "config/banner" "config/editor")
 (require 'so-long)
 (require 'markdown-mode)
 (global-so-long-mode 1)

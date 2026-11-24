@@ -1,5 +1,6 @@
-;;; $DOOMDIR/config/terminal.el -*- lexical-binding: t; -*-
-;; Terminal (tty) Emacs tweaks. Loaded from config.el.
+;;; $DOOMDIR/config/emacs/terminal.el -*- lexical-binding: t; -*-
+;; Emacs in a terminal (tty): its background, no menu bar, no tooltips
+;; (config/emacs.el, EMACS IN A TERMINAL). Loaded from config/emacs.el.
 
 ;; TERMINAL
 ;; Paint the terminal's own background (the strip below the echo area) with the
@@ -10,7 +11,9 @@
 ;; answer: iTerm2 ignores 111, and the theme's colour stayed after Emacs (after
 ;; cmd/diff, emacs -nw). Only once the terminal is set up (its
 ;; term/xterm.el loaded, which makes the query): `emacs -nw' loads Doom's
-;; theme before that, and tty-setup-hook paints then.
+;; theme before that, and tty-setup-hook paints then. Only a terminal it
+;; painted gets its own back: one never set up (a batch Emacs's, its output)
+;; gets nothing.
 (defun +my/tty--query (frame query handler)
   "Send QUERY to FRAME's terminal; HANDLER reads the reply (after its first
 characters, \e]11;). Asynchronous: the reply is read with the input, nothing
@@ -43,12 +46,13 @@ BEL), and keep the colour to give back."
       (set-terminal-parameter terminal '+my/tty-bg (match-string 0 reply)))))
 
 (defun +my/tty--give-back-bg (terminal)
-  "Give TERMINAL its own background back (see above)."
-  (send-string-to-terminal
-   (if-let* ((bg (terminal-parameter terminal '+my/tty-bg)))
-       (format "\e]11;%s\a" bg)
-     "\e]111\a")
-   terminal))
+  "Give TERMINAL its own background back, if it was painted (see above)."
+  (when (terminal-parameter terminal '+my/tty-bg-asked) ; painted
+    (send-string-to-terminal
+     (if-let* ((bg (terminal-parameter terminal '+my/tty-bg)))
+         (format "\e]11;%s\a" bg)
+       "\e]111\a")
+     terminal)))
 
 (defun +my/tty--paint-bg (frame)
   "Paint FRAME's terminal with the theme's background, if it's a terminal

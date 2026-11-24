@@ -16,7 +16,7 @@
 
 (require 'agent-shell)
 (require 'nerd-icons)
-(+test-load "config/window" "config/treemacs" "config/agent-ui" "config/agent-workspace")
+(+test-load "config/emacs" "config/treemacs" "config/agent-ui" "config/agent-workspace")
 (require 'treemacs)
 (treemacs-git-mode -1)
 (treemacs-filewatch-mode -1)

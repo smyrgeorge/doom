@@ -9,7 +9,7 @@
 (require 'xwidget)
 (require 'json)
 (require 'markdown-mode)
-(+test-load "config/window" "config/webkit" "config/markdown" "config/mermaid")
+(+test-load "config/emacs" "config/webkit" "config/markdown" "config/mermaid")
 
 ;; doom-one's colours, as faces give them (no others).
 (defmacro +test-md-mermaid (&rest body)

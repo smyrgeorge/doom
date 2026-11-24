@@ -5,7 +5,7 @@
 ;; (with notices), the keys. Shown images: tests/e2e/test-image.el.
 
 (require 'image-mode)
-(+test-load "config/childframe" "config/banner" "config/image")
+(+test-load "config/emacs/childframe" "config/banner" "config/image")
 
 ;; ====== HELPERS ======
 

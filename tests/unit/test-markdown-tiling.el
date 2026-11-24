@@ -5,7 +5,7 @@
 ;; never started (no redisplay in batch); pandoc not run.
 
 (require 'markdown-mode)
-(+test-load "config/window" "config/tiling" "config/webkit" "config/markdown")
+(+test-load "config/emacs" "config/tiling" "config/webkit" "config/markdown")
 
 (defmacro +test-md-tiling (&rest body)
   "BODY from one window, tiling (tall), the live preview working, its temp

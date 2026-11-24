@@ -255,9 +255,10 @@ are: moved, the window scrolled them away."
 ;; NO WHITE FLASH
 ;; WebKit's view is white until its page has loaded. A view only starts once
 ;; its window shows the page (nothing shown until then, in the theme's colour),
-;; under a borderless frame (config/childframe.el) in the page's background
-;; colour (`+my/webkit-background'), fitted to the window as the view is: it
-;; goes once WebKit says the page has loaded, or after 2 s (e.g. offline).
+;; under a borderless frame (config/emacs/childframe.el) in the page's
+;; background colour (`+my/webkit-background'), fitted to the window as the
+;; view is: it goes once WebKit says the page has loaded, or after 2 s (e.g.
+;; offline).
 (defun +my/webkit--uncover (xwidget)
   "Take the cover off XWIDGET's view. Killed already (a timer's, its view
 closed as it loaded: its cover went then): nothing, as Linux's Emacs can't

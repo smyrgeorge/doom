@@ -12,7 +12,7 @@
 ;; Doom's `use-package!' reads it (Doom's package manager defines it).
 (defvar doom-disabled-packages nil)
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/editor" "config/webkit" "config/excalidraw"
+(+test-load "config/emacs" "config/banner" "config/editor" "config/webkit" "config/excalidraw"
             "config/agent-shell")
 (require 'markdown-mode)
 

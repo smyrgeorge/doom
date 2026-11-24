@@ -13,7 +13,7 @@
   (dolist (package '("magit" "magit-section"))
     (load (expand-file-name (format "%s/%s-autoloads" package package) build) t t)))
 
-(+test-load "config/childframe" "config/banner" "config/window" "config/editor"
+(+test-load "config/emacs" "config/banner" "config/editor"
             "config/webkit" "config/pdf" "config/image" "config/markdown" "config/excalidraw" "config/stripe"
             "config/tiling" "config/merge" "config/agent-ui" "config/mermaid" "config/examples")
 (require 'mermaid-mode)

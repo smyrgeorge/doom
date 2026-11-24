@@ -4,7 +4,7 @@
 ;; (config/banner.el's) saying so; its actions wrap the lines, or open the file
 ;; normally.
 
-(+test-load "config/childframe" "config/banner" "config/editor")
+(+test-load "config/emacs/childframe" "config/banner" "config/editor")
 (require 'so-long)
 
 ;; ====== HELPERS ======
