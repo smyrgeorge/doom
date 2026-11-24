@@ -100,4 +100,5 @@ data is older than its `:every`, and the command answers once its queries end (1
 `agent-ui check NAME` (the MCP tool `check`) checks the file as you write it, nothing shown, nothing run: its `:ui` as
 `show` would, its code compiled. The reply has the compiler's `warnings`, and `blocking`: calls that wait
 (`shell-command-to-string`, `call-process`, `process-lines`, `sleep-for`...), Emacs frozen while they run. Fix them
-all; check again until both are empty.
+all; check again until both are empty. Compiling runs its macros: code the user hasn't let run yet isn't compiled,
+the reply's `not-compiled` saying so (its `warnings` the compiler's once they have).

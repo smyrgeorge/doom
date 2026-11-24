@@ -126,8 +126,8 @@ as show has it; its form evaluated later gives its script, :ui quoted."
 ;; ====== CHECKING ONE ======
 
 (ert-deftest agent-ui-panels/checked ()
-  "Checked as the agent writes one, nothing run: read, compiled (its
-warnings), its calls that wait found (not in comments or strings, nor
+  "Checked as the agent writes one, nothing run: read, compiled (its code
+trusted; its warnings), its calls that wait found (not in comments or strings, nor
 accept-process-output with a timeout)."
   (+test-aup `(("service" . ,+test-aup-service)
                ("slow" . ,(+test-aup-panel ":fetch (lambda (_panel)
@@ -140,24 +140,40 @@ accept-process-output with a timeout)."
                ("warned" . ,(+test-aup-panel ":fetch (lambda (_panel) (agent-ui-panels--no-such-function))"))
                ("broken" . ,(+test-aup-panel ":fetch (lambda (_panel) (cond 1))"))
                ("plain" . "(agent-ui-panel :ui (:type \"text\" :id \"t\" :text \"x\"))\n"))
-    (let ((reply (agent-ui-panel-check (agent-ui-panel-file "service"))))
-      (should (equal (plist-get reply :panel) "service"))
-      (should (equal (plist-get reply :type) "panel"))
-      (should (equal (plist-get reply :every) 30))
-      (should (equal (plist-get reply :warnings) []))
-      (should (equal (plist-get reply :blocking) [])))
-    (should (equal (plist-get (agent-ui-panel-check (agent-ui-panel-file "slow")) :blocking)
-                   ["line 5: shell-command-to-string waits, Emacs frozen meanwhile: use agent-ui-panel-run"
-                    "line 9: call-process waits, Emacs frozen meanwhile: use agent-ui-panel-run"
-                    "line 10: accept-process-output waits, Emacs frozen meanwhile: use agent-ui-panel-run"]))
-    (should (seq-some (lambda (w) (string-match-p "agent-ui-panels--no-such-function.*not known to be defined" w))
-                      (plist-get (agent-ui-panel-check (agent-ui-panel-file "warned")) :warnings)))
-    (should (string-match-p "panel broken: it doesn't compile"
-                            (agent-ui-error-message
-                             (should-error (agent-ui-panel-check (agent-ui-panel-file "broken"))
-                                           :type 'agent-ui-error))))
-    (should (string-match-p "no -\\*- lexical-binding"
-                            (aref (plist-get (agent-ui-panel-check (agent-ui-panel-file "plain")) :warnings) 0)))))
+    (cl-letf (((symbol-function 'agent-ui-panel-trusted-p) (lambda (_file) t)))
+      (let ((reply (agent-ui-panel-check (agent-ui-panel-file "service"))))
+        (should (equal (plist-get reply :panel) "service"))
+        (should (equal (plist-get reply :type) "panel"))
+        (should (equal (plist-get reply :every) 30))
+        (should (equal (plist-get reply :warnings) []))
+        (should (equal (plist-get reply :blocking) [])))
+      (should (equal (plist-get (agent-ui-panel-check (agent-ui-panel-file "slow")) :blocking)
+                     ["line 5: shell-command-to-string waits, Emacs frozen meanwhile: use agent-ui-panel-run"
+                      "line 9: call-process waits, Emacs frozen meanwhile: use agent-ui-panel-run"
+                      "line 10: accept-process-output waits, Emacs frozen meanwhile: use agent-ui-panel-run"]))
+      (should (seq-some (lambda (w) (string-match-p "agent-ui-panels--no-such-function.*not known to be defined" w))
+                        (plist-get (agent-ui-panel-check (agent-ui-panel-file "warned")) :warnings)))
+      (should (string-match-p "panel broken: it doesn't compile"
+                              (agent-ui-error-message
+                               (should-error (agent-ui-panel-check (agent-ui-panel-file "broken"))
+                                             :type 'agent-ui-error))))
+      (should (string-match-p "no -\\*- lexical-binding"
+                              (aref (plist-get (agent-ui-panel-check (agent-ui-panel-file "plain")) :warnings) 0))))))
+
+(ert-deftest agent-ui-panels/not-compiled-untrusted ()
+  "A panel whose code isn't trusted: not compiled (its macros and
+eval-when-compile would run), said; read and its waiting calls found all
+the same (doom-ht6.42)."
+  (let ((marker (+test-tmp-file (format "ran-at-check-%d" (random 100000)))))
+    (+test-aup `(("evil" . ,(+test-aup-panel
+                             (format ":fetch (lambda (_panel) (eval-when-compile (write-region \"ran\" nil %S)) (sleep-for 1))"
+                                     marker))))
+      (let ((reply (agent-ui-panel-check (agent-ui-panel-file "evil"))))
+        (should-not (file-exists-p marker))
+        (should (equal (plist-get reply :panel) "evil"))
+        (should (string-match-p "isn't trusted yet" (plist-get reply :not-compiled)))
+        (should (equal (plist-get reply :warnings) []))
+        (should (= (length (plist-get reply :blocking)) 1))))))
 
 (ert-deftest agent-ui-panels/checked-as-asked ()
   "agent-ui check NAME, in the agent's directory: the reply; no name, the

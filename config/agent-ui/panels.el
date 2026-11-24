@@ -213,22 +213,29 @@ isn't looked at (its warnings unsaid)."
 
 (defun agent-ui-panel-check (file)
   "FILE, a panel's, checked as the agent writes it, nothing run: read (its
-:ui as show checks it), compiled (an error refuses it; its warnings said),
-its waiting calls found. Returns (:ok t :panel NAME :file FILE :type TYPE
-:every N :warnings [...] :blocking [...]); an error saying what's wrong."
+:ui as show checks it), compiled if its code may run (an error refuses it;
+its warnings said), its waiting calls found. Compiling runs its macros
+\(`eval-when-compile' too): one not trusted (`agent-ui-panel-trusted-p') is
+not compiled, :not-compiled saying why. Returns (:ok t :panel NAME :file
+FILE :type TYPE :every N :warnings [...] :blocking [...] :not-compiled
+WHY); an error saying what's wrong."
   (let* ((panel (agent-ui-panel-read file))
          (name (plist-get panel :name))
+         (trusted (agent-ui-panel-trusted-p file))
          (cookie (with-temp-buffer
                    (insert-file-contents file nil 0 300)
                    (string-match-p "lexical-binding: *t" (buffer-substring (point-min) (line-end-position)))))
          (warnings (append (unless cookie
                              (list "line 1: no -*- lexical-binding: t; -*- there (its code is read so anyway)"))
-                           (agent-ui-panels--compile file name))))
+                           (when trusted (agent-ui-panels--compile file name)))))
     (append (list :ok t :panel name :file file
                   :type (format "%s" (plist-get (plist-get panel :ui) :type)))
             (when (plist-get panel :every) (list :every (plist-get panel :every)))
             (list :warnings (vconcat warnings)
-                  :blocking (vconcat (agent-ui-panels--blocking file))))))
+                  :blocking (vconcat (agent-ui-panels--blocking file)))
+            (unless trusted
+              (list :not-compiled
+                    "compiling runs its macros, and its code isn't trusted yet: compiled once the user lets it run")))))
 
 (declare-function agent-ui--byte-compile "staging")
 

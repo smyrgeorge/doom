@@ -483,7 +483,8 @@ form: what it shows and the code filling it, so its elements' ids are written an
 evaluated: drawn before its code is trusted. `:every` is the seconds between fetches; `:fetch` fills it, `:start`
 and `:stop` run when it opens and closes; `:version` is 1. `agent-ui check NAME` (the MCP tool `check`) checks a file
 as it's written, nothing run: its `:ui` as `show` would, its code compiled (its warnings), and the calls in it that
-wait, freezing Emacs (`shell-command-to-string`, `call-process`, `sleep-for`...).
+wait, freezing Emacs (`shell-command-to-string`, `call-process`, `sleep-for`...). Compiling runs its macros
+(`eval-when-compile` too): code you haven't let run (below) isn't compiled, the reply saying so.
 
 Its code runs as Emacs itself, and comes from a repository: before it first runs, you're asked: `y` run it, `p` trust
 the project, `v` view its file first (read-only, then asked again), `n` not now (drawn, nothing run, said on it; `gR`
