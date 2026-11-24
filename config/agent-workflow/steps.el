@@ -316,14 +316,17 @@ functions of no argument saying whether it ran out of time, and its timer."
                              (write-region output nil log nil 'silent))
                            (agent-workflow--job-set run job :process nil)
                            (unless (process-get process 'agent-workflow-stopped)
-                             (agent-workflow--journal run event :job job :step index
-                                                      :exit (if (eq status 'timeout) "timeout" status)
-                                                      :log (file-relative-name log (agent-workflow-run-dir run))
-                                                      :tail (agent-workflow--tail output 20))
-                             ;; Out of the sentinel: what follows may send an
-                             ;; agent a message, which agent-shell can't from
-                             ;; inside one.
-                             (run-at-time 0 nil on-exit status output)))))))
+                             ;; Its end goes on even if its journal can't be
+                             ;; written.
+                             (unwind-protect
+                                 (agent-workflow--journal run event :job job :step index
+                                                          :exit (if (eq status 'timeout) "timeout" status)
+                                                          :log (file-relative-name log (agent-workflow-run-dir run))
+                                                          :tail (agent-workflow--tail output 20))
+                               ;; Out of the sentinel: what follows may send an
+                               ;; agent a message, which agent-shell can't from
+                               ;; inside one.
+                               (run-at-time 0 nil on-exit status output))))))))
 
 (defun agent-workflow--step-done-or-failed (run job index status output what)
   "Step INDEX of JOB of RUN ended with STATUS (its exit, or timeout),

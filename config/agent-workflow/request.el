@@ -420,7 +420,15 @@ its reply written to DIR/reply. Return t."
                                                      "run, done, back, confirm, approve, reject, continue, cancel, pause, unpause, dry-run, check, logs, status")))))
             (json-parse-error (list :ok :false :error (format "not JSON: %s" (error-message-string err))))
             (error (list :ok :false :error (error-message-string err))))))
-    (let ((coding-system-for-write 'utf-8-unix))
+    (let ((coding-system-for-write 'utf-8-unix)
+          ;; One that can't be written as JSON: an error said, not none.
+          (json (condition-case err
+                    (json-serialize (agent-workflow--json-clean reply))
+                  (error (json-serialize
+                          (list :ok :false
+                                :error (agent-workflow--json-string
+                                        (format "its reply couldn't be written as JSON: %s"
+                                                (error-message-string err)))))))))
       (with-temp-file (expand-file-name "reply" dir)
-        (insert (json-serialize reply) "\n")))
+        (insert json "\n")))
     t))

@@ -286,6 +286,33 @@ jobs:
       (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done))))
       (should-not (plist-get (agent-workflow--job run "check") :fix-script)))))
 
+(ert-deftest agent-workflow-steps/a-script-printing-what-isnt-utf-8 ()
+  "A script printing what isn't UTF-8: its step ends all the same, its
+journal and state written, the bytes as U+FFFD (doom-38o.71)."
+  (+test-awr "raw-bytes"
+    (+test-aws--workflow project "description: x
+for: [feature]
+jobs:
+  check:
+    run: printf 'bad \\377\\376 bytes\\n'
+  later:
+    needs: check
+    run: printf 'cut \\342\\234'; exit 1
+")
+    (let* ((issue (+test-awr--issue project "Raw bytes"))
+           (run (agent-workflow-start-run project issue)))
+      (should (+test-awr--wait (lambda () (eq (+test-awr--job run "check") 'done))))
+      (should (+test-awr--wait (lambda () (plist-get (agent-workflow--job run "later") :ask))))
+      (let ((journal (with-temp-buffer
+                       (insert-file-contents (expand-file-name "journal.jsonl" (agent-workflow-run-dir run)))
+                       (buffer-string)))
+            (state (with-temp-buffer
+                     (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))
+                     (json-parse-buffer :object-type 'plist :null-object nil))))
+        (should (string-search "bad \uFFFD\uFFFD bytes" journal))
+        (should (string-search "cut \uFFFD"
+                               (plist-get (plist-get (aref (plist-get state :jobs) 1) :ask) :output)))))))
+
 (ert-deftest agent-workflow-steps/an-on-fail-script ()
   "on-fail: {run: ...}: a failed step's script first, FAILED_STEP and
 FAILED_OUTPUT in its environment, its output a log of its own. Exit 0 it

@@ -244,10 +244,33 @@ too (:name), if it has one."
                   nil (expand-file-name "journal.jsonl" (agent-workflow-run-dir run)) t 'silent))
   (run-hook-with-args 'agent-workflow-journal-functions run event data))
 
+(defun agent-workflow--json-string (string)
+  "STRING as `json-serialize' takes it: what isn't a character of Unicode
+(raw bytes, from a script printing what isn't UTF-8 or cut in the middle
+of a character, a surrogate) as U+FFFD; a unibyte one read as UTF-8."
+  (if (not (string-match-p "[^\0-\177]" string))
+      string
+    (let ((string (if (multibyte-string-p string) string (decode-coding-string string 'utf-8))))
+      (if (ignore-errors (json-serialize string) t)
+          string
+        (apply #'string (mapcar (lambda (c) (if (or (> c #x10FFFF) (<= #xD800 c #xDFFF)) #xFFFD c))
+                                string))))))
+
+(defun agent-workflow--json-clean (value)
+  "VALUE with each of its strings (in its lists and vectors too) as
+`agent-workflow--json-string' has it."
+  (cond
+   ((stringp value) (agent-workflow--json-string value))
+   ((vectorp value) (vconcat (mapcar #'agent-workflow--json-clean value)))
+   ((proper-list-p value) (mapcar #'agent-workflow--json-clean value))
+   ((consp value) (cons (agent-workflow--json-clean (car value)) (agent-workflow--json-clean (cdr value))))
+   (t value)))
+
 (defun agent-workflow--json-ready (plist)
-  "PLIST with its nil values as JSON's null."
+  "PLIST with its nil values as JSON's null, its strings as JSON takes
+them (`agent-workflow--json-clean')."
   (cl-loop for (key value) on plist by #'cddr
-           append (list key (if (null value) :null value))))
+           append (list key (if (null value) :null (agent-workflow--json-clean value)))))
 
 (defun agent-workflow--to-json (value)
   "VALUE as JSON takes it: a plist an object, a list an array, a symbol
@@ -255,7 +278,8 @@ its name, nil null, t true; an alist of numbers ((0 . 2)) an object."
   (cond
    ((null value) :null)
    ((eq value t) t)
-   ((or (stringp value) (numberp value)) value)
+   ((stringp value) (agent-workflow--json-string value))
+   ((numberp value) value)
    ((keywordp value) (substring (symbol-name value) 1))
    ((symbolp value) (symbol-name value))
    ((and (consp value) (keywordp (car value)))
