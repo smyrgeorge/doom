@@ -54,7 +54,18 @@ to the session's folder (/x from there too; //x absolute); ** any folders,
     (should-not (+my/agent-shell-rule-matches-p "Edit(docs/**)" code "/p/"))
     (should (+my/agent-shell-rule-matches-p "Edit(src/*.el)" code "/p/"))
     ;; None to match: no path, nothing matched.
-    (should-not (+my/agent-shell-rule-matches-p "Edit(docs/**)" (+test-asp--call "edit") "/p/"))))
+    (should-not (+my/agent-shell-rule-matches-p "Edit(docs/**)" (+test-asp--call "edit") "/p/")))
+  ;; As Claude Code writes them: ~/x your home's, ./x the folder's, **/ any
+  ;; folders, none too (doom-djc.28).
+  (cl-flet ((edit (path) (+test-asp--call "edit" :raw-input `((file_path . ,path)))))
+    (should (+my/agent-shell-rule-matches-p "Edit(~/.ssh/**)" (edit (expand-file-name "~/.ssh/k")) "/w/"))
+    (should-not (+my/agent-shell-rule-matches-p "Edit(~/.ssh/**)" (edit "/w/.ssh/k") "/w/"))
+    (should (+my/agent-shell-rule-matches-p "Edit(./secrets/**)" (edit "/w/secrets/k") "/w/"))
+    (should (+my/agent-shell-rule-matches-p "Edit(**/.env)" (edit "/w/.env") "/w/"))
+    (should (+my/agent-shell-rule-matches-p "Edit(**/.env)" (edit "/w/a/b/.env") "/w/"))
+    (should (+my/agent-shell-rule-matches-p "Edit(docs/**/*.md)" (edit "/w/docs/a.md") "/w/"))
+    (should (+my/agent-shell-rule-matches-p "Edit(docs/**/*.md)" (edit "/w/docs/x/y/a.md") "/w/"))
+    (should-not (+my/agent-shell-rule-matches-p "Edit(docs/**/*.md)" (edit "/w/docsa.md") "/w/"))))
 
 (ert-deftest agent-shell-permissions/deny-first-then-tools ()
   "A deny rule matching: reject; else a tools one: allow; else nil (asked)."

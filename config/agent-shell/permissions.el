@@ -55,8 +55,9 @@ BUFFER, as RET on it does. Nil if there's none of that label."
 ;; the request's kind (ACP's) and what it acts on: Bash(git push:*) a command
 ;; starting with git push, Bash(git -C * push) one with * anything (a command
 ;; line by its simple commands: each allowed, or any refused), Edit
-;; (docs/**) a path under docs/ (relative to the session's folder; /x from
-;; there, //x absolute), Read, Grep, Glob, WebFetch, WebSearch by kind alone.
+;; (docs/**) a path under docs/ (relative to the session's folder; /x and ./x
+;; from there, //x absolute, ~/x your home's; **/ any folders, none too),
+;; Read, Grep, Glob, WebFetch, WebSearch by kind alone.
 ;; Weaker than Claude Code's: a tool can't be hidden, and an agent in a mode
 ;; that asks nothing (its own auto) is refused nothing.
 (defvar-local +my/agent-shell-permission-rules nil
@@ -96,13 +97,20 @@ list), else its title: a string, or nil."
                                (append (map-elt tool-call :locations) nil)))))))
 
 (defun +my/agent-shell--glob-regexp (glob &optional paths)
-  "GLOB as an anchored regexp: * anything (in PATHS: but /), ** anything."
-  (let ((parts (split-string glob "\\*\\*")))
-    (concat "\\`"
-            (mapconcat (lambda (part)
-                         (mapconcat #'regexp-quote (split-string part "\\*") (if paths "[^/]*" ".*")))
-                       parts ".*")
-            "\\'")))
+  "GLOB as an anchored regexp: * anything (in PATHS: but /), ** anything;
+in PATHS, **/ any folders, none too (**/.env the top's, docs/**/*.md
+docs/a.md)."
+  (let ((i 0) (n (length glob)) (out nil))
+    (while (< i n)
+      (cond
+       ((and paths (string-prefix-p "**/" (substring glob i)))
+        (push "\\(?:.*/\\)?" out) (cl-incf i 3))
+       ((string-prefix-p "**" (substring glob i))
+        (push ".*" out) (cl-incf i 2))
+       ((eq (aref glob i) ?*)
+        (push (if paths "[^/]*" ".*") out) (cl-incf i))
+       (t (push (regexp-quote (string (aref glob i))) out) (cl-incf i))))
+    (concat "\\`" (apply #'concat (nreverse out)) "\\'")))
 
 (defun +my/agent-shell--command-parts (command)
   "COMMAND's simple commands, split where the shell would run another (;
@@ -212,11 +220,16 @@ command: each of its simple commands matching (see
                  (seq-some
                   (lambda (path)
                     (let* ((path (expand-file-name path dir))
-                           (absolute (string-prefix-p "//" pattern))
+                           ;; //x and ~/x: absolute; /x and ./x: from the
+                           ;; session's folder, as x.
+                           (absolute (or (string-prefix-p "//" pattern) (string-prefix-p "~/" pattern)))
                            (target (cond (absolute path)
                                          ((and dir (string-prefix-p dir path)) (substring path (length dir)))
                                          (t path)))
-                           (glob (cond (absolute (substring pattern 1))
+                           (glob (cond ((string-prefix-p "//" pattern) (substring pattern 1))
+                                       ((string-prefix-p "~/" pattern)
+                                        (concat (expand-file-name "~/") (substring pattern 2)))
+                                       ((string-prefix-p "./" pattern) (substring pattern 2))
                                        ((string-prefix-p "/" pattern) (substring pattern 1))
                                        (t pattern))))
                       (string-match-p (+my/agent-shell--glob-regexp glob t) target)))
