@@ -25,7 +25,7 @@
 ;; ====== ALL OF THEM ======
 
 (ert-deftest agent-ui-elements/the-types ()
-  (should (equal (agent-ui-types) '(chart choice code compare confirm countdown diff files form gauge graph heatmap html image log markdown math mermaid panel progress rank slider stats steps table tags text timeline todo)))
+  (should (equal (agent-ui-types) '(activity chart choice code compare confirm countdown diff files form gauge graph heatmap html image log markdown math mermaid panel progress rank slider stats steps table tags text timeline todo)))
   ;; Each with an example (checked when defined), drawn without an error.
   (dolist (name (agent-ui-types))
     (let* ((type (agent-ui-type name))
@@ -45,7 +45,7 @@
 (ert-deftest agent-ui-elements/no-issues-board ()
   "The issues board is gone (Beads' own list shows the same): an issues
 element is refused as any unknown type, and nothing of it is left."
-  (should (string-match-p "\\`unknown type \"issues\"; types: chart, "
+  (should (string-match-p "\\`unknown type \"issues\"; types: activity, chart, "
                           (+test-aue-error '(:type "issues" :parent "doom-ht6"))))
   (should-not (apropos-internal "\\`agent-ui-issues"
                                 (lambda (symbol) (or (fboundp symbol) (boundp symbol))))))
@@ -3979,6 +3979,60 @@ checked; a pause given alone."
   (should (equal (plist-get (agent-ui-append-to '(:type "log" :lines ("a") :right "x") '(:lines ("b") :right "y")) :right) "y"))
   (should (string-match-p "only lines" (agent-ui-error-message
                                         (should-error (agent-ui-append-to '(:type "log") '(:unit "x")) :type 'agent-ui-error)))))
+
+;; ====== ACTIVITY ======
+
+(ert-deftest agent-ui-elements/activity ()
+  "An activity: its header a line (its mark in its face, its owner in its
+colour as a log's sources, its label, its detail muted, its right at its
+end), its last lines on a rail, each cut to the width, a line's mark and
+level as a log's (a plain one's found by its words), its footer closing
+them (text muted, or pieces); none, its empty said."
+  (let ((element '(:type "activity" :label "watch.sh" :owner "green" :sources ("build" "green")
+                   :detail "step 2 of 3" :right "1m 15s" :show 3
+                   :lines ("old line" (:mark "❯" :mark-face "muted" :level "debug" :text "watch.sh --all")
+                           "step two"
+                           "error: refused, and a tail of words too long for the box's width")
+                   :footer ("the last 3 of 9 lines · " (:text "1 error" :face "error")))))
+    (should (equal (+test-aue-draw element)
+                   (concat "●  green  watch.sh · step 2 of 3                      1m 15s\n"
+                           "   │ ❯ watch.sh --all\n"
+                           "   │ step two\n"
+                           "   │ error: refused, and a tail of words too long for the b…\n"
+                           "   ╰ the last 3 of 9 lines · 1 error")))
+    (should (eq (+test-aue-face-at element "●") 'agent-ui-accent))
+    (should (eq (+test-aue-face-at element "green") (nth 1 agent-ui-log-source-faces)))
+    (should-not (+test-aue-face-at element "watch.sh ·"))
+    (should (eq (+test-aue-face-at element " · step 2") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at element "1m 15s") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at element "   │") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at element "watch.sh --all") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at element "error: refused") 'agent-ui-error))
+    (should (eq (+test-aue-face-at element "the last") 'agent-ui-muted))
+    (should (eq (+test-aue-face-at element "1 error") 'agent-ui-error)))
+  ;; Asking: its mark and right as given; no lines, its empty said.
+  (let ((element '(:type "activity" :label "agent review" :mark "◆" :mark-face "warning"
+                   :right "asks you" :right-face "warning" :empty "Nothing done yet.")))
+    (should (equal (+test-aue-draw element :width 40)
+                   (concat "◆  agent review                 asks you\n"
+                           "   │ Nothing done yet.")))
+    (should (eq (+test-aue-face-at element "asks you" :width 40) 'agent-ui-warning)))
+  ;; Narrow: its label cut short, its right kept while 8 columns are left
+  ;; for what's before it; fewer, its right left out.
+  (should (equal (+test-aue-draw '(:type "activity" :label "a-long-script-name.sh" :right "1h 2m") :width 20)
+                 "●  a-long-sc…  1h 2m"))
+  (should (equal (+test-aue-draw '(:type "activity" :label "a-long-script-name.sh" :right "1h 2m") :width 12)
+                 "●  a-long-s…")))
+
+(ert-deftest agent-ui-elements/activity-wrong ()
+  (should (string-match-p "activity: mark-face \"pink\" is none of plain, muted"
+                          (+test-aue-error '(:type "activity" :mark-face "pink"))))
+  (should (string-match-p "activity: show must be 0 or more"
+                          (+test-aue-error '(:type "activity" :show -1))))
+  (should (string-match-p "log: line 1 must be text"
+                          (+test-aue-error '(:type "activity" :lines ((:level "info"))))))
+  (should (string-match-p "piece's face \"loud\""
+                          (+test-aue-error '(:type "activity" :footer ("a" (:text "b" :face "loud")))))))
 
 ;; ====== TIMELINE ======
 

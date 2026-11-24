@@ -236,7 +236,8 @@ by the information: figures, stats (one against a target or limits, gauge); \
 records, results, a search's matches, table; a trend, a series or a \
 distribution, chart; values across two dimensions, heatmap; a structure, \
 dependencies or a flow, graph or mermaid; durations over time, timeline; code, \
-code; changes, diff; files and their state, files; output, log; categories \
+code; changes, diff; files and their state, files; output, log; what one \
+thing is doing now (a script, an agent), activity; categories \
 with counts, tags; formulas, math; a write-up, markdown; a picture, image; a \
 web page, html; several of these together, a panel. Plans go there too, \
 always, without being asked: a plan, or the ticket you're working on, as steps \

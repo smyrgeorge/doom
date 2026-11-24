@@ -72,8 +72,6 @@ and `clear` are a canvas's own. It closes, is kept and comes back with your sess
 
 ## The types
 
-Pick the one that fits what you have to tell.
-
 - **Here, below:** `progress` a run, a bar, work items one by one; `steps` a plan, a task's progress; `table`
   records, results, filled in by key.
 - **Asking the user** ([asking.md](references/asking.md)): `choice` pick from a list; `compare` alternatives to see
@@ -83,7 +81,7 @@ Pick the one that fits what you have to tell.
 - **Figures** ([data.md](references/data.md)): `stats` a few figures and their changes; `gauge` one against its
   target or limits; `chart` a trend, a series, a distribution; `heatmap` values across two dimensions; `timeline`
   durations on a time axis; `countdown` time elapsed or left; `graph` a structure, dependencies, a flow; `tags`
-  categories with counts; `log` output, lines by level.
+  categories with counts; `log` output, lines by level; `activity` a script or agent at work.
 - **Content and layout** ([content.md](references/content.md)): `text` a line; `markdown` a write-up; `code` a
   snippet, marked, reviewed; `diff` changes; `math` formulas; `mermaid` a diagram; `image` a picture, a screenshot;
   `html` a page as a card; `files` files and their state; `panel` several together: a dashboard.

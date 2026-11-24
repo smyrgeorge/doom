@@ -372,18 +372,20 @@ the canvas's directory, whatever buffer's it was when it was made: /usr/,
 ;; ====== THE SKILL ======
 
 (ert-deftest agent-ui-source/the-skills-sources-right ()
-  "Each element with a source the skill shows (a heredoc): right, its source
-checked (not run), its rules matching a line as they should."
+  "Each element the skill shows (a heredoc) right; those with a source,
+their source checked (not run), its rules matching a line as they should
+(a log's lines in columns, no source: not counted among them)."
   (let* ((skill (+test-agent-ui-skill))
          (pos 0)
          (elements nil))
     (while (string-match "^agent-ui show <<'EOF'\n\\(\\(?:.\\|\n\\)*?\\)\nEOF$" skill pos)
       (push (agent-ui-parse-json (match-string 1 skill)) elements)
       (setq pos (match-end 0)))
-    (setq elements (nreverse elements))
+    (dolist (element elements)
+      (should (agent-ui-check (plist-get element :type) element)))
+    (setq elements (seq-filter (lambda (element) (plist-get element :source)) (nreverse elements)))
     (should (= (length elements) 6))
     (dolist (element elements)
-      (should (agent-ui-check (plist-get element :type) element))
       (should (agent-ui-source-check (plist-get element :source))))
     ;; The rules read what they're for.
     (cl-flet ((applied (element line)

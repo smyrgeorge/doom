@@ -136,14 +136,20 @@ counted. The log's `unit` says what it counts (`12 events`), its `right` goes at
 `append` replaces it with the lines.
 
 ```sh
-agent-ui show <<'EOF'
-{"id": "deploy", "type": "log", "unit": "event", "sources": ["build", "ship"], "right": "16:22 – 16:41 · 19m",
- "lines": [{"time": "16:22", "mark": "▸", "mark-face": "accent", "source": "build", "text": "started"},
-           {"time": "16:22", "mark": "✓", "mark-face": "success", "source": "build", "indent": 1,
-            "text": ["tests", {"text": " passed", "face": "muted"}], "right": "48s"},
-           {"gap": "17m"},
-           {"time": "16:41", "mark": "✗", "mark-face": "error", "source": "ship", "level": "error",
-            "text": "upload refused: 403", "right": "2s"}]}
-EOF
+agent-ui show '{"id":"deploy","type":"log","unit":"event","sources":["build","ship"],"right":"16:22 – 16:41 · 19m","lines":[{"time":"16:22","mark":"▸","mark-face":"accent","source":"build","text":"started"},{"time":"16:22","mark":"✓","mark-face":"success","source":"build","indent":1,"text":["tests",{"text":" passed","face":"muted"}],"right":"48s"},{"gap":"17m"},{"time":"16:41","mark":"✗","mark-face":"error","source":"ship","level":"error","text":"upload refused: 403","right":"2s"}]}'
 agent-ui append deploy '{"lines": [{"time": "16:42", "mark": "↻", "mark-face": "warning", "source": "ship", "text": "retrying"}], "right": "16:22 – 16:42 · 20m"}'
+```
+
+### `activity`
+
+What one thing is doing now (a script running, an agent at work), a small box: a header line (a `mark` for its state,
+`●` by default, coloured by `mark-face`; its `owner` in its colour, as a log's `sources`; its `label`; its `detail`
+muted; `right` at its end, how long it's run, in `right-face`), its last `show` `lines` under it on a rail, each cut
+to the width (a log's lines: text, its level found by its words, or `{"text", "level", "mark", "mark-face"}`), `empty`
+said while it has none, and a `footer` closing them (text, muted, or pieces). Update it as it goes; remove it once
+it's over.
+
+```sh
+agent-ui show '{"id":"tests","type":"activity","owner":"ci","label":"make test","detail":"step 2 of 3","right":"1m 23s","lines":[{"mark":"❯","mark-face":"muted","level":"debug","text":"make test"},"ok parser (12 tests)","FAILED lexer::escapes"],"footer":"the last 2 of 214 lines"}'
+agent-ui update tests '{"mark":"◆","mark-face":"warning","right":"asks you","right-face":"warning"}'
 ```

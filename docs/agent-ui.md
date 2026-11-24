@@ -1,7 +1,7 @@
 # Agent UI
 
 > **Status:** working, in Claude Code sessions in agent-shell (epic `doom-nwj`): the canvas, the command line and MCP
-> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `heatmap` and `panel` types, sources (an element
+> tools, the `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `activity`, `timeline`, `graph`, `code`, `heatmap` and `panel` types, sources (an element
 > following a command, a file, a poll), actions (buttons into the prompt), types the agent makes (kept or discarded by
 > you), elements in the conversation, canvases kept with their sessions, and what the agent is told. `M-x
 > +my/example-agent-ui` shows it ([Examples](examples.md)).
@@ -266,6 +266,7 @@ ids too: `plan` in one section isn't `plan` in another.
 | `files` | Files with their state (changed, added, deleted, renamed, failing, passing) and counts, flat or a tree by folder (`RET` folds a folder); `RET` opens a file at its line; `select` asks you to pick files (a folder's mark picks its files) | `files`, `tree`, `dir`, `select` |
 | `stats` | A row of figures with their change (▲▼, green or red by whether a rise is good): tiles in the GUI, side by side as text | `figures` |
 | `log` | Lines coloured by level (found by their words, or given), errors and warnings counted, the last ones shown, long ones wrapped; follows a file with `"into": "lines"`. A line in columns: its `time` (muted, shown as it changes), a `mark` (its `mark-face`), its `source` (a job, a service: each its colour), its `text` (pieces, each text or `{"text", "face"}`), `indent`, `right` (how long it took, at its end); `{"gap": "17m"}` a pause | `lines`, `show`, `keep`, `unit` (what it counts: events), `right` (at its counts' end: its span), `sources` (their order: their colours) |
+| `activity` | What one thing is doing now (a script, an agent at work): a header line (its `mark`, its `owner` in its colour as a log's `sources`, its `label`, `detail` muted, `right` at its end), its last lines on a rail, each cut to the width (a log's lines), `empty` while there are none, a `footer` closing them | `label`, `mark`, `mark-face`, `owner`, `sources`, `detail`, `right`, `right-face`, `lines`, `show`, `empty`, `footer` |
 | `timeline` | Tasks as bars on a time axis (seconds or timestamps), running ones growing, coloured by status, a scale under them; SVG in the GUI | `tasks` |
 | `graph` | Nodes and edges, laid out in layers by itself (no Graphviz): boxes and curved arrows in the GUI, shrunk to fit (in a pane too narrow, downwards, or as text); each node's arrows as text; nodes coloured by status | `nodes`, `edges`, `direction` |
 | `code` | A snippet highlighted by its language's mode, lines numbered (long ones wrapped) and linked to its file (`RET` opens it there), marked lines with notes; or a file's lines, read when drawn | `code`, `file`, `from`, `to`, `language`, `marks` |
@@ -577,7 +578,8 @@ A paragraph in Claude Code's system prompt (`agent-ui-agent-context`, one of
   (what was found, what it means, what's next, a line saying what's on the canvas). What a sentence or two holds stays
   in the reply alone. Kinds of information are matched to elements: figures `stats` (one against a target `gauge`),
   records `table`, a trend or distribution `chart`, two dimensions `heatmap`, a structure or flow `graph` or `mermaid`,
-  durations `timeline`, code `code`, changes `diff`, files `files`, output `log`, categories `tags`, formulas `math`, a
+  durations `timeline`, code `code`, changes `diff`, files `files`, output `log`, what one thing is doing now
+  `activity`, categories `tags`, formulas `math`, a
   write-up `markdown`, a picture `image`, a page `html`, several together `panel`. Plans go there without being asked
   (a plan or the current ticket's acceptance criteria as `steps`), a long run of work items as `progress` (updated
   after each one); a project's issues and their status don't, as you follow them in Beads' own list
@@ -629,7 +631,7 @@ and progress pie to be drawn by Agent UI with svg.el.
 | `config/agent-ui/review.el` | The review: the list of staged types, a preview, keep, discard |
 | `config/agent-ui/kept/` | The types you kept (made when you keep one) |
 | `config/agent-ui/finished.el` | A finished element closing itself, a countdown under it |
-| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `timeline`, `graph`, `code`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare`, `tags`, `gauge`, `countdown`, `math` (its MathJax script in `elements/math/tex2svg.js`), `mermaid` |
+| `config/agent-ui/elements.el`, `elements/` | The element types, a file each: `text`, `markdown`, `progress`, `steps`, `table`, `chart`, `image`, `html`, `diff`, `choice`, `files`, `stats`, `log`, `activity`, `timeline`, `graph`, `code`, `heatmap`, `panel`, `todo`, `confirm`, `form`, `rank`, `slider`, `compare`, `tags`, `gauge`, `countdown`, `math` (its MathJax script in `elements/math/tex2svg.js`), `mermaid` |
 | `examples/agent-ui.el` | The example: a canvas beside a conversation, filled in as the agent works |
 | `cmd/agent-ui` | The command line |
 | `cmd/agent-ui-mcp.el` | The MCP server: the same operations as tools |

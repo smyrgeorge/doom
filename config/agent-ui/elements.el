@@ -26,6 +26,7 @@
 (load! "elements/files")
 (load! "elements/stats")
 (load! "elements/log")
+(load! "elements/activity")
 (load! "elements/timeline")
 (load! "elements/graph")
 (load! "elements/code")
