@@ -680,7 +680,8 @@ cmd/agent-workflow dry-run feature --outcome review=changes,approved --exit buil
 A workflow's scripts, `elisp` steps and `if` run as you, with all you may do. So a project's own workflows (its
 `.agent-workflow/`) run only once you trust the project: the first time, you're asked to run it this once, trust the
 project (remembered), or not. From the shell they're refused until you trust it with `M-x agent-workflow-trust`; `M-x
-agent-workflow-forget-trust` stops trusting one. The starters and yours (out of git) are trusted.
+agent-workflow-forget-trust` stops trusting one. The starters and yours (out of git) are trusted; a file under
+`.agent-shell/agent-workflow/` that the repository tracks (it committed it) is the project's, not yours.
 
 Agents can't change what runs them:
 

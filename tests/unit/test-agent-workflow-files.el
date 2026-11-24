@@ -836,6 +836,28 @@ from the main checkout; a workflow's agent: checked against them all."
           (should (equal (mapcar #'car (agent-workflow-workflows (agent-workflow-project worktree)))
                          '("feature" "quick"))))))))
 
+(ert-deftest agent-workflow-files/yours-committed-is-the-projects ()
+  "A file under .agent-shell/agent-workflow/ that the repository tracks (it
+committed it): the project's, not yours, run only once you trust it; one
+left out of git, yours (doom-38o.68)."
+  (let ((project (+test-awf--project "committed")))
+    (+test-awf--file project ".agent-shell/agent-workflow/workflows/evil.yml"
+                     "description: committed\njobs:\n  a:\n    run: touch x\n")
+    (+test-awf--file project ".agent-shell/agent-workflow/workflows/mine.yml"
+                     "description: mine\njobs:\n  a:\n    run: echo x\n")
+    (+test-awf--file project ".agent-shell/agent-workflow/agents/helper.md" "---\ndescription: committed\n---\nx\n")
+    (+test-awf--git project "add" "-f" ".agent-shell/agent-workflow/workflows/evil.yml"
+                    ".agent-shell/agent-workflow/agents/helper.md")
+    (let ((workflows (agent-workflow-workflows project))
+          (agent-workflow-trust-file (+test-tmp-file (format "trusted-%d.el" (random 100000)))))
+      (should (eq (plist-get (alist-get "evil" workflows nil nil #'equal) :origin) 'project))
+      (should (eq (plist-get (alist-get "mine" workflows nil nil #'equal) :origin) 'local))
+      (should (eq (plist-get (alist-get "helper" (agent-workflow-agent-definitions project) nil nil #'equal) :origin)
+                  'project))
+      (should-error (agent-workflow--check-trust project (alist-get "evil" workflows nil nil #'equal) nil)
+                    :type 'user-error)
+      (should-not (agent-workflow--check-trust project (alist-get "mine" workflows nil nil #'equal) nil)))))
+
 (ert-deftest agent-workflow-files/read-again-when-changed ()
   "A project's workflows are read again when a file changes, its agents
 too, else kept."

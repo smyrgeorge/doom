@@ -63,18 +63,29 @@ FOLDER)...), ORIGIN starter, project or local."
 
 (defun agent-workflow--files (project kind regexp)
   "PROJECT's KIND files whose names match REGEXP, in order (see
-`agent-workflow--places'): ((ORIGIN . FILE)...)."
+`agent-workflow--places'): ((ORIGIN . FILE)...). A local one the
+repository tracks (it committed it) is the project's: not yours, run
+only once you trust it."
   (seq-mapcat (lambda (place)
                 (when (file-directory-p (cdr place))
-                  (mapcar (lambda (file) (cons (car place) file))
-                          (directory-files (cdr place) t regexp))))
+                  (let* ((files (directory-files (cdr place) t regexp))
+                         (tracked (and files (eq (car place) 'local) (agent-workflow--tracked (cdr place)))))
+                    (mapcar (lambda (file) (cons (if (member file tracked) 'project (car place)) file))
+                            files))))
               (agent-workflow--places project kind)))
 
+(defun agent-workflow--tracked (dir)
+  "The files in DIR (full names) its git repository tracks."
+  (let ((default-directory (file-name-as-directory dir)))
+    (with-temp-buffer
+      (when (eql 0 (process-file "git" nil '(t nil) nil "ls-files" "-z" "--" "."))
+        (mapcar #'expand-file-name (split-string (buffer-string) "\0" t))))))
+
 (defun agent-workflow--stamp (files)
-  "FILES ((ORIGIN . FILE)...) and their modification times: whether one
-changed since."
+  "FILES ((ORIGIN . FILE)...), their origins and modification times:
+whether one changed since (or became the project's)."
   (mapcar (lambda (file)
-            (cons (cdr file) (file-attribute-modification-time (file-attributes (cdr file)))))
+            (list (cdr file) (car file) (file-attribute-modification-time (file-attributes (cdr file)))))
           files))
 
 (defconst agent-workflow-command
