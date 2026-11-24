@@ -366,7 +366,8 @@ said, looked at again next time."
          (size (file-attribute-size (file-attributes file)))
          (offset (agent-ui-source--state-offset state)))
     (cond
-     ((null size))
+     ;; Not there yet: from its start, once it is (its first output is new).
+     ((null size) (setf (agent-ui-source--state-offset state) 0))
      ;; From its end: what's there now doesn't count.
      ((eq offset 'end) (setf (agent-ui-source--state-offset state) size))
      (t

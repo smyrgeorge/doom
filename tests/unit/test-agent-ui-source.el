@@ -252,6 +252,16 @@ still running, its exit and patch not there; once run, done."
       (write-region "a\nb\nc\n" nil file nil 'silent)
       (+test-ausrc-wait (lambda () (equal (plist-get (agent-ui-get "f") :text) "b\nc"))))))
 
+(ert-deftest agent-ui-source/from-the-end-of-a-file-not-there-yet ()
+  "from: end on a file not there yet: its first output, once it is, counts
+\(it's all new) (doom-ht6.61)."
+  (+test-ausrc
+    (let ((file (+test-tmp-file (format "end-later-%d.log" (random 100000)))))
+      (agent-ui-show (list :id "f" :type "text" :text "" :source (list :file file :from "end" :tail 2)))
+      (accept-process-output nil 0.1)
+      (write-region "first\nsecond\n" nil file nil 'silent)
+      (+test-ausrc-wait (lambda () (equal (plist-get (agent-ui-get "f") :text) "first\nsecond"))))))
+
 (ert-deftest agent-ui-source/a-poll ()
   (+test-ausrc
     (let ((file (+test-tmp-file (format "count-%d" (random 100000)))))
