@@ -438,6 +438,25 @@ their source checked (not run), its rules matching a line as they should
       (should (string-prefix-p "1 error · 2 lines" (+test-ausrc-text))))))
 
 
+;; Shown again while its command runs: the old one's end doesn't mark the
+;; new one failed, nor its output fill it (doom-ht6.43).
+(ert-deftest agent-ui-source/shown-again-while-it-runs ()
+  (+test-ausrc
+    (agent-ui-show '(:id "b" :type "progress" :max 2 :source (:command "sleep 30" :failed (:title "FAILED $code"))))
+    (accept-process-output nil 0.1)
+    (agent-ui-show '(:id "b" :type "progress" :max 2 :title "Build"))
+    (accept-process-output nil 0.2)
+    (let ((b (agent-ui-get "b")))
+      (should (equal (plist-get b :title) "Build"))
+      (should-not (plist-get b :status))
+      (should-not (plist-get b :label)))
+    ;; A panel's child replaced, the same.
+    (agent-ui-show '(:id "p" :type "panel" :children ((:id "c" :type "text" :text "" :source (:command "sleep 30" :tail 1)))))
+    (accept-process-output nil 0.1)
+    (agent-ui-show '(:id "p" :type "panel" :children ((:id "c" :type "text" :text "new"))))
+    (accept-process-output nil 0.2)
+    (should (equal (plist-get (agent-ui-get "c") :text) "new"))))
+
 (ert-deftest agent-ui-source/a-childs-source ()
   (+test-ausrc
     ;; A child's source: started with its panel, updating the child.

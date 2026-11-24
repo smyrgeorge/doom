@@ -406,13 +406,15 @@ a character still being written."
   "Stop element ID's source, in the current canvas: its log deleted (they
 stayed in the temporary folder, every command's)."
   (when-let* ((state (and agent-ui-source--states (gethash id agent-ui-source--states))))
+    ;; No longer its source before its process ends: its sentinel, run
+    ;; by `delete-process', would mark the element replacing it failed.
+    (remhash id agent-ui-source--states)
     (when (process-live-p (agent-ui-source--state-process state))
       (delete-process (agent-ui-source--state-process state)))
     (when (timerp (agent-ui-source--state-timer state))
       (cancel-timer (agent-ui-source--state-timer state)))
     (when-let* ((log (agent-ui-source--state-log state)))
-      (ignore-errors (delete-file log)))
-    (remhash id agent-ui-source--states)))
+      (ignore-errors (delete-file log)))))
 
 (defun agent-ui-source--check-dir (state)
   "An error if STATE's command's directory isn't there."
