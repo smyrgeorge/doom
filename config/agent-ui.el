@@ -163,8 +163,9 @@
       ;; Agent UI hidden in its session's pane, or shown again (see above).
       :localleader
       :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle
-      ;; A project panel, as it shows now, a PDF beside its file (see below).
-      :desc "Export the panel as a PDF" "e" #'agent-ui-panel-export-pdf)
+      ;; What it shows now, a PDF: a session's view's in .agent-shell/pdf/, a
+      ;; project panel's beside its file (only a panel has a notice offering it).
+      :desc "Export as a PDF" "e" #'agent-ui-export-pdf)
 
 ;; A FORM, filled in its buffer (config/agent-ui/elements/form.el): typed
 ;; into, so Emacs's keys there, as beads.el's forms (C-c C-c sends it, C-c
@@ -231,13 +232,13 @@ FILE): its tests and documentation."
 
 ;; A PROJECT PANEL'S NOTICE (config/banner.el): each one opened (SPC o u; not a
 ;; session's canvas) offers to be exported as a PDF, as it shows now, beside
-;; its file (`agent-ui-panel-export-pdf', SPC m e there too).
+;; its file (`agent-ui-export-pdf', SPC m e there and in any canvas).
 (defun +my/agent-ui-panel-pdf-notice ()
   "Offer the project panel here as a PDF (see above)."
   (when (fboundp '+my/banner-show)
     (+my/banner-show 'agent-ui-panel-pdf
                      "Export this panel as a PDF, as it shows now (SPC m e)."
-                     :actions '(("Export PDF" . agent-ui-panel-export-pdf)))))
+                     :actions '(("Export PDF" . agent-ui-export-pdf)))))
 
 (add-hook 'agent-ui-panel-open-hook #'+my/agent-ui-panel-pdf-notice)
 

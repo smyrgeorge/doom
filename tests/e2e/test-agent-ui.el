@@ -261,7 +261,7 @@ it; exported, a real PDF beside its file, its charts drawn in it as images
             (should (assq 'agent-ui-panel-pdf +my/banner--list))
             (should header-line-format))
           (advice-add 'agent-ui-snapshot-svg :filter-return (lambda (text) (setq svg text)) '((name . e2e-svg)))
-          (let ((pdf (with-current-buffer canvas (agent-ui-panel-export-pdf))))
+          (let ((pdf (with-current-buffer canvas (agent-ui-export-pdf))))
             (should (string-prefix-p (expand-file-name agent-ui-panel-directory root) pdf))
             (should (equal (with-temp-buffer
                              (set-buffer-multibyte nil)

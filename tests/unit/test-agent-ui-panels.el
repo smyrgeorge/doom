@@ -256,9 +256,9 @@ Export PDF its button; SPC m e in it does the same."
       (+my/agent-ui-panel-pdf-notice))
     (should (eq (car shown) 'agent-ui-panel-pdf))
     (should (string-match-p "Export this panel as a PDF" (cadr shown)))
-    (should (equal (plist-get (cddr shown) :actions) '(("Export PDF" . agent-ui-panel-export-pdf)))))
+    (should (equal (plist-get (cddr shown) :actions) '(("Export PDF" . agent-ui-export-pdf)))))
   (should (eq (lookup-key (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal) (kbd "SPC m e"))
-              #'agent-ui-panel-export-pdf)))
+              #'agent-ui-export-pdf)))
 
 (ert-deftest agent-ui-panels/exported-as-a-pdf ()
   "A panel as it shows now: an SVG of its elements (no buttons) made a PDF by
@@ -278,7 +278,7 @@ second: -2); the SVG gone after; said where."
                       ((symbol-function 'executable-find) (lambda (name &rest _) (concat "/bin/" name))))
               (agent-ui-update "ci" '(:rows (("#1" "passed"))) :canvas canvas)
               (+test-clear-messages)
-              (let ((pdf (with-current-buffer canvas (agent-ui-panel-export-pdf))))
+              (let ((pdf (with-current-buffer canvas (agent-ui-export-pdf))))
                 (should (string-match-p (concat "\\`" (regexp-quote (expand-file-name agent-ui-panel-directory root))
                                                 "service-[0-9]\\{8\\}-[0-9]\\{6\\}\\.pdf\\'")
                                         pdf))
@@ -303,7 +303,7 @@ second: -2); the SVG gone after; said where."
     (save-window-excursion
       (let ((canvas (agent-ui-open-panel "service")))
         (unwind-protect
-            (let ((pdf (with-current-buffer canvas (agent-ui-panel-export-pdf))))
+            (let ((pdf (with-current-buffer canvas (agent-ui-export-pdf))))
               (should (equal (with-temp-buffer
                                (set-buffer-multibyte nil)
                                (insert-file-contents-literally pdf nil 0 5)
@@ -311,19 +311,19 @@ second: -2); the SVG gone after; said where."
                              "%PDF-")))
           (kill-buffer canvas))))))
 
-(ert-deftest agent-ui-panels/a-pdf-only-of-a-panel ()
-  "Not a panel, or rsvg-convert missing: said, nothing made."
+(ert-deftest agent-ui-panels/a-pdf-only-of-a-canvas ()
+  "Not a canvas, or rsvg-convert missing: said, nothing made."
   (with-temp-buffer
-    (should (string-match-p "Not a project panel"
-                            (cadr (should-error (agent-ui-panel-export-pdf) :type 'user-error)))))
+    (should (string-match-p "Not an Agent UI canvas"
+                            (cadr (should-error (agent-ui-export-pdf) :type 'user-error)))))
   (+test-aup `(("service" . ,+test-aup-service))
     (save-window-excursion
       (let ((canvas (agent-ui-open-panel "service"))
-            (agent-ui-panel-pdf-program "no-such-rsvg-convert"))
+            (agent-ui-pdf-program "no-such-rsvg-convert"))
         (unwind-protect
             (with-current-buffer canvas
               (should (string-match-p "needs no-such-rsvg-convert"
-                                      (cadr (should-error (agent-ui-panel-export-pdf) :type 'user-error))))
+                                      (cadr (should-error (agent-ui-export-pdf) :type 'user-error))))
               (should-not (directory-files (expand-file-name agent-ui-panel-directory root) nil "\\.pdf\\'")))
           (kill-buffer canvas))))))
 

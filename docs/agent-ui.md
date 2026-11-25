@@ -130,6 +130,7 @@ element at point.
 | `s` | On a table's column: sort the table by it. Again: the other way |
 | `S` | Save the element as one of the project's panels ([Project panels](#project-panels)) |
 | `R` | Review the types the agent made ([below](#types-the-agent-makes)) |
+| `SPC m e` | Save what the canvas shows now as a PDF, in the session's `.agent-shell/pdf/` (a project panel's: beside its file) |
 
 Questions have keys of their own ([Types that ask](#types-that-ask)).
 
@@ -168,6 +169,7 @@ Questions have keys of their own ([Types that ask](#types-that-ask)).
 | `agent-ui-spinner-pulse` | `8` | The spinner's glow, over this many animation ticks. `nil`: no glow |
 | `agent-ui-max-rows` | `500` | The most rows (a table's) or values (a chart's) an element draws |
 | `agent-ui-max-chars` | `20000` | The most characters an element's drawing has |
+| `agent-ui-pdf-directory` | `".agent-shell/pdf/"` | Where `SPC m e` saves a canvas's PDF, in its session's directory |
 | `agent-ui-svg-font-weight` | `600` on macOS, `400` elsewhere | The weight of the text in charts, graphs and diagrams. On macOS, SemiBold matches the editor's text, which macOS draws a little heavier |
 
 Set them in `config.el`, such as `(setq agent-ui-close-finished nil)`.

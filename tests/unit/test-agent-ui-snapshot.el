@@ -311,3 +311,60 @@ canvas keeps them."
       ;; Without --ansi: plain, as before.
       (should-not (string-match-p "\e" (plist-get (agent-ui-do "render" nil element canvas) :text))))))
 
+;; ====== AS A PDF ======
+
+(ert-deftest agent-ui-snapshot/a-session-s-canvas-as-a-pdf ()
+  "SPC m e in a session's canvas (no notice there: only project panels have
+one): what it shows now, its elements still, a PDF in its directory's
+.agent-shell/pdf/, named after it; said where."
+  (let* ((dir (file-name-as-directory (make-temp-file "canvas-pdf-" t)))
+         (canvas (let ((default-directory dir)) (agent-ui-canvas "Claude")))
+         (calls nil) (svg-text nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'call-process)
+                   (lambda (program _in _out _display &rest args)
+                     (push (cons program args) calls)
+                     (setq svg-text (with-temp-buffer (insert-file-contents (car (last args))) (buffer-string)))
+                     (with-temp-file (nth 3 args) (insert "%PDF-1.5"))
+                     0))
+                  ((symbol-function 'executable-find) (lambda (name &rest _) (concat "/bin/" name))))
+          (agent-ui-show '(:type "text" :id "a" :text "first") :canvas canvas)
+          (agent-ui-show '(:type "table" :id "t" :columns ("Test" "Result") :rows (("lexer" "passed"))
+                                 :row-actions ((:label "Fix" :prompt "Fix {Test}")))
+                         :canvas canvas)
+          (+test-clear-messages)
+          (let ((pdf (with-current-buffer canvas (agent-ui-export-pdf))))
+            (should (string-match-p (concat "\\`" (regexp-quote (expand-file-name ".agent-shell/pdf/" dir))
+                                            "Claude-[0-9]\\{8\\}-[0-9]\\{6\\}\\.pdf\\'")
+                                    pdf))
+            (should (file-exists-p pdf))
+            (should (equal (butlast (car calls)) (list "rsvg-convert" "-f" "pdf" "-o" pdf)))
+            ;; Both its elements, without their buttons.
+            (dolist (text '("first" "lexer" "passed"))
+              (should (string-search (format ">%s<" text) svg-text)))
+            (should-not (string-search ">Fix<" svg-text))
+            (should (= (+test-messages "Agent UI: Claude exported: .*Claude-.*\\.pdf") 1))))
+      (kill-buffer canvas)
+      (delete-directory dir t))))
+
+(ert-deftest agent-ui-snapshot/a-canvas-s-pdf-named-after-it ()
+  "A canvas's PDF named after it, what a file name can't hold a dash."
+  (let* ((dir (file-name-as-directory (make-temp-file "canvas-pdf-" t)))
+         (canvas (let ((default-directory dir)) (agent-ui-canvas "Claude / ask"))))
+    (unwind-protect
+        (should (string-match-p "/\\.agent-shell/pdf/Claude-ask-[0-9-]+\\.pdf\\'" (agent-ui-pdf-file canvas)))
+      (kill-buffer canvas)
+      (delete-directory dir t))))
+
+(ert-deftest agent-ui-snapshot/an-empty-canvas-no-pdf ()
+  "A canvas showing nothing: said, no PDF."
+  (let* ((dir (file-name-as-directory (make-temp-file "canvas-pdf-" t)))
+         (canvas (let ((default-directory dir)) (agent-ui-canvas "Empty"))))
+    (unwind-protect
+        (cl-letf (((symbol-function 'executable-find) (lambda (name &rest _) (concat "/bin/" name))))
+          (with-current-buffer canvas
+            (should (string-match-p "Nothing to export"
+                                    (cadr (should-error (agent-ui-export-pdf) :type 'user-error)))))
+          (should-not (file-exists-p (expand-file-name ".agent-shell/pdf/" dir))))
+      (kill-buffer canvas)
+      (delete-directory dir t))))

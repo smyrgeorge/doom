@@ -22,6 +22,12 @@
 transcripts' folder, kept out of git)."
   :type 'string :group 'agent-ui)
 
+(defcustom agent-ui-pdf-directory ".agent-shell/pdf/"
+  "Where a canvas's PDF goes (SPC m e), relative to its directory (its
+session's; kept out of git with agent-shell's transcripts). A project
+panel's goes beside its file."
+  :type 'string :group 'agent-ui)
+
 (defcustom agent-ui-snapshot-width 80
   "The width snapshots are drawn at, in columns, at most: narrower to fit
 their session's window (`agent-ui-snapshot--width')."
@@ -360,6 +366,80 @@ one). Returns (:file FILE :markdown \"![TITLE](FILE)\")."
                                            ctx)
                     nil file nil 'silent))
     (list :file file :markdown (format "![%s](%s)" (string-replace "]" ")" title) file))))
+
+;; ====== AS A PDF ======
+;; SPC m e in a canvas (a session's view, a project panel): what it shows now,
+;; as it draws it (its window's width), its elements still (no buttons: a
+;; page can't press them), made an SVG (`agent-ui-snapshot-svg'), then a
+;; one-page vector PDF by rsvg-convert, in the theme's colours. A session's
+;; canvas's in its directory's `agent-ui-pdf-directory', CANVAS-DATE-TIME.pdf;
+;; a project panel's beside its file (`agent-ui-panel-pdf-file').
+
+(defvar agent-ui-pdf-program "rsvg-convert"
+  "The program making a canvas's SVG a PDF (librsvg's).")
+
+(defvar agent-ui-panels--state)
+(declare-function agent-ui-panel-pdf-file "panels")
+(declare-function agent-ui-panels--name "panels")
+
+(defun agent-ui-pdf-unique-file (name dir)
+  "A PDF in DIR named NAME-YYYYMMDD-HHMMSS.pdf, not there yet (another in
+the same second: NAME-...-2.pdf)."
+  (let* ((stem (expand-file-name (format "%s-%s" name (format-time-string "%Y%m%d-%H%M%S")) dir))
+         (pdf (concat stem ".pdf"))
+         (n 1))
+    (while (file-exists-p pdf)
+      (setq pdf (format "%s-%d.pdf" stem (cl-incf n))))
+    pdf))
+
+(defun agent-ui-pdf-file (canvas)
+  "Where CANVAS's PDF goes now: a project panel's beside its file, any
+other's in its directory's `agent-ui-pdf-directory', named after it (\"Claude
+/ ask\": Claude-ask-DATE-TIME.pdf)."
+  (let ((buffer (agent-ui--buffer canvas)))
+    (if-let* ((panel (buffer-local-value 'agent-ui-panels--state buffer)))
+        (agent-ui-panel-pdf-file panel)
+      (agent-ui-pdf-unique-file
+       (let ((name (replace-regexp-in-string "[^[:alnum:]._]+" "-" (string-remove-prefix "Agent UI: " (buffer-name buffer)))))
+         (string-trim (if (string-empty-p name) "canvas" name) "-+" "-+"))
+       (expand-file-name agent-ui-pdf-directory (buffer-local-value 'default-directory buffer))))))
+
+(defun agent-ui-export-pdf (&optional canvas)
+  "CANVAS (the one here), as it shows now, saved as a PDF (SPC m e; a
+project panel's notice's Export PDF): see `agent-ui-pdf-file' for where.
+Returns its file."
+  (interactive)
+  (let ((buffer (cond (canvas (agent-ui--buffer canvas))
+                      ((derived-mode-p 'agent-ui-canvas-mode) (current-buffer))
+                      (t (user-error "Not an Agent UI canvas: SPC m e in one saves it as a PDF")))))
+    (unless (executable-find agent-ui-pdf-program)
+      (user-error "Exporting a PDF needs %s (librsvg; scripts/tools.sh installs it)" agent-ui-pdf-program))
+    (let ((order (buffer-local-value 'agent-ui--order buffer)))
+      (unless order
+        (user-error "Nothing to export: this canvas shows nothing"))
+      (let* ((ctx (plist-put (with-current-buffer buffer (agent-ui--context)) :still t))
+             (text (mapconcat (lambda (id)
+                                (agent-ui--in buffer
+                                  (agent-ui-render (agent-ui-get id :canvas buffer)
+                                                   (plist-put (copy-sequence ctx) :id id))))
+                              ;; A blank line between them, as on the canvas.
+                              order "\n\n"))
+             (pdf (agent-ui-pdf-file buffer))
+             (svg (make-temp-file "agent-ui-" nil ".svg"))
+             (panel (buffer-local-value 'agent-ui-panels--state buffer)))
+        (make-directory (file-name-directory pdf) t)
+        (unwind-protect
+            (progn
+              (let ((coding-system-for-write 'utf-8))
+                (write-region (agent-ui-snapshot-svg text ctx) nil svg nil 'silent))
+              (with-temp-buffer
+                (unless (eql 0 (call-process agent-ui-pdf-program nil t nil "-f" "pdf" "-o" pdf svg))
+                  (user-error "No PDF made: %s" (string-trim (buffer-string))))))
+          (delete-file svg))
+        (message "%s exported: %s"
+                 (if panel (format "Panel %s" (agent-ui-panels--name panel)) (buffer-name buffer))
+                 (abbreviate-file-name pdf))
+        pdf))))
 
 ;; ====== INTO THE PROMPT ======
 
