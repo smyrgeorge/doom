@@ -23,20 +23,6 @@
 step, a graph's node): running blue, done green (running was yellow, the
 colour of what needs you; done blue).")
 
-(defcustom agent-ui-timeline-milliseconds-below 1.5
-  "Times shorter than this many seconds a timeline shows in milliseconds
-\(340ms, 1200ms): a task's, its scale's labels. Longer ones, 8s, 2m 05s."
-  :type 'number :group 'agent-ui)
-
-(defun agent-ui-timeline--duration (seconds)
-  "SECONDS as a timeline shows them: under
-`agent-ui-timeline-milliseconds-below', milliseconds (340ms; 0.3 s was
-0s, 1.2 s 1s); else as `agent-ui-format-duration' (8s, 2m 05s)."
-  (let ((ms (round (* 1000 seconds))))
-    (if (< ms (* 1000 agent-ui-timeline-milliseconds-below))
-        (format "%dms" ms)
-      (agent-ui-format-duration seconds))))
-
 (defun agent-ui-timeline--zero (end)
   "The scale's start, in the unit of its END label: 0ms or 0s."
   (if (string-suffix-p "ms" end) "0ms" "0s"))
@@ -116,7 +102,7 @@ colour of what needs you; done blue).")
              (shown (seq-take tasks agent-ui-max-rows))
              (times (mapcar (lambda (task)
                               (if (eq (plist-get task :status) 'running) "running"
-                                (agent-ui-timeline--duration (- (agent-ui-timeline--end task span) (plist-get task :start)))))
+                                (agent-ui-format-time-taken (- (agent-ui-timeline--end task span) (plist-get task :start)))))
                             shown))
              (time-width (apply #'max (mapcar #'string-width times)))
              ;; The names' column shrinks first, then the bars, to a column
@@ -156,8 +142,8 @@ colour of what needs you; done blue).")
          ;; middle only with a space each side, the end only if it fits after
          ;; the start (they ran together: \"0s  13s26s\").
          (propertize
-          (let* ((mid (agent-ui-timeline--duration (/ length 2)))
-                 (end (agent-ui-timeline--duration length))
+          (let* ((mid (agent-ui-format-time-taken (/ length 2)))
+                 (end (agent-ui-format-time-taken length))
                  (zero (agent-ui-timeline--zero end))
                  (mid-at (- (/ bar-width 2) (/ (string-width mid) 2)))
                  (end-at (- bar-width (string-width end)))
@@ -221,11 +207,11 @@ colour of what needs you; done blue).")
                                      :fill-opacity (if (eq status 'queued) 0.5 1))
                       ;; Its time, where it fits in the image.
                       (let ((time (if (eq status 'running) "running"
-                                    (agent-ui-timeline--duration (- end (plist-get task :start))))))
+                                    (agent-ui-format-time-taken (- end (plist-get task :start))))))
                         (when (<= (+ x1 (/ cw 2) (* 0.5 lh (string-width time))) width)
                           (agent-ui-chart--svg-text svg ctx time (+ x1 (/ cw 2)) (+ y (* 0.7 row)) :fill muted)))))
         (let* ((y (+ bottom (* 0.8 lh)))
-               (end (agent-ui-timeline--duration length))
+               (end (agent-ui-format-time-taken length))
                (zero (agent-ui-timeline--zero end)))
           (agent-ui-chart--svg-text svg ctx zero bar-left y :fill muted)
           ;; Its end, where it clears its start (they overlapped, narrow).

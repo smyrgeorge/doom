@@ -128,7 +128,8 @@ through, unlike the steps kept."
         (started (plist-get step :started)))
     (cond
      ((memq (plist-get step :status) '(pending skipped)) "")
-     (seconds (agent-ui-format-duration seconds))
+     ;; Finished: under a second and a half in milliseconds (0s, 1s).
+     (seconds (agent-ui-format-time-taken seconds))
      ((and started (memq (plist-get step :status) '(running waiting)))
       (agent-ui-format-duration (max 0 (- (funcall agent-ui-clock) started))))
      (t ""))))

@@ -593,6 +593,21 @@ detail's sake when the line fits. A step too long: wrapped, as a plan's
     (setq element (agent-ui--checked (agent-ui-append-to element '(:steps ((:name "a" :status "done"))))))
     (should (equal (plist-get (car (plist-get element :steps)) :seconds) 30.0))))
 
+(ert-deftest agent-ui-elements/steps-times-in-milliseconds ()
+  "A finished step under 1.5 s: its time in milliseconds, given or timed
+(0.4 s was 0s, 1.2 s 1s); a running one's ticking time in seconds."
+  (should (equal (+test-aue-draw '(:type "steps" :steps ((:name "lint" :status "done" :seconds 0.4)
+                                                         (:name "compile" :status "failed" :seconds 1.2)
+                                                         (:name "test" :status "done" :seconds 41))))
+                 "✓ lint      400ms\n✗ compile  1200ms\n✓ test        41s"))
+  (let* ((now 100.0)
+         (agent-ui-clock (lambda () now))
+         (element (agent-ui--checked '(:type "steps" :steps ((:name "a" :status "running"))))))
+    (setq now 100.25)
+    (should (string-match-p "a  0s\\'" (+test-aue-draw element)))
+    (setq element (agent-ui--checked (agent-ui-append-to element '(:steps ((:name "a" :status "done"))))))
+    (should (equal (+test-aue-draw element) "✓ a  250ms"))))
+
 (ert-deftest agent-ui-elements/steps-on-one-line-each ()
   "A step's name or detail with line breaks (a failing test's): on its line
 (it ran onto lines of its own, at column 0)."
@@ -4284,14 +4299,14 @@ later, 22 hours wide); one still running: to now."
 (ert-deftest agent-ui-elements/timeline-milliseconds ()
   "Times under 1.5 s in milliseconds, a task's and the scale's, in text and
 in the GUI (0.34 s was 0s, 1.2 s 1s); longer ones in seconds; the
-threshold `agent-ui-timeline-milliseconds-below'."
-  (should (equal (agent-ui-timeline--duration 0.34) "340ms"))
-  (should (equal (agent-ui-timeline--duration 1.2) "1200ms"))
-  (should (equal (agent-ui-timeline--duration 1.4994) "1499ms"))
-  (should (equal (agent-ui-timeline--duration 1.5) "2s"))
-  (should (equal (agent-ui-timeline--duration 8) "8s"))
-  (let ((agent-ui-timeline-milliseconds-below 0))
-    (should (equal (agent-ui-timeline--duration 0.34) "0s")))
+threshold `agent-ui-milliseconds-below'."
+  (should (equal (agent-ui-format-time-taken 0.34) "340ms"))
+  (should (equal (agent-ui-format-time-taken 1.2) "1200ms"))
+  (should (equal (agent-ui-format-time-taken 1.4994) "1499ms"))
+  (should (equal (agent-ui-format-time-taken 1.5) "2s"))
+  (should (equal (agent-ui-format-time-taken 8) "8s"))
+  (let ((agent-ui-milliseconds-below 0))
+    (should (equal (agent-ui-format-time-taken 0.34) "0s")))
   (let ((element '(:type "timeline" :tasks ((:name "parse" :start 0 :duration 0.12)
                                            (:name "check" :start 0.12 :duration 0.34 :status "failed")
                                            (:name "emit" :start 0.46 :duration 0.54)))))

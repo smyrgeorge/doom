@@ -822,6 +822,22 @@ rate, a step's time.")
           ((< s 3600) (format "%dm %02ds" (/ s 60) (% s 60)))
           (t (format "%dh %02dm" (/ s 3600) (/ (% s 3600) 60))))))
 
+(defcustom agent-ui-milliseconds-below 1.5
+  "Times taken shorter than this many seconds are shown in milliseconds
+\(340ms, 1200ms): a timeline's, a finished step's. Longer ones, 8s, 2m 05s."
+  :type 'number :group 'agent-ui)
+
+(defun agent-ui-format-time-taken (seconds)
+  "SECONDS something took (a timeline's task, a finished step): under
+`agent-ui-milliseconds-below', milliseconds (340ms; 0.34 s was 0s, 1.2 s
+1s); else as `agent-ui-format-duration' (8s, 2m 05s). Not for times that
+tick each second (a running step, a countdown): their last figures would
+flicker."
+  (let ((ms (round (* 1000 seconds))))
+    (if (< ms (* 1000 agent-ui-milliseconds-below))
+        (format "%dms" ms)
+      (agent-ui-format-duration seconds))))
+
 ;; A click on a button is mouse-2 (as button.el's): one on a link (follow-link)
 ;; quicker than `mouse-1-click-follows-link' is made mouse-2, Evil's
 ;; down-mouse-1 selecting again the window clicked from. Unbound, it was the
