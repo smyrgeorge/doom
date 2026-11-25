@@ -1,14 +1,7 @@
 # Project sidebar
 
-The treemacs sidebar opens with a workspace's first project file, follows the current file and its project, and shows
-the git status, also of changes made outside Emacs. Each git project's branch follows its name, with the commits it is
-ahead (`↑`) and behind (`↓`) its upstream: `doom  main ↑2` (a detached HEAD: its short commit), updated after a refresh,
-a magit operation, or a switch made in a terminal. That line (the project in view, its
-branch) is the sidebar's top bar, and stays there while a long tree scrolls; a click on it goes back to it
-(`+my/treemacs-sticky-title`: nil turns it off).
-
-It is 35 columns wide, at most a quarter of the frame (`+my/treemacs-max-width`), and follows the frame as it is
-resized. A width set by hand is kept, also when the sidebar is closed and opened again.
+The treemacs sidebar shows the current project's files and their git status. It opens with a workspace's first project
+file, and follows the current file and its project.
 
 | macOS | Linux | Action |
 |---|---|---|
@@ -21,5 +14,20 @@ resized. A width set by hand is kept, also when the sidebar is closed and opened
 | `SPC w w`, window numbers | the same | Go to the sidebar |
 | Drag its edge, `SPC w <` / `SPC w >`, `w` | the same | Resize it |
 
-The arrows work in the language server's lists too (`SPC c S`, `SPC c X`, `SPC c y`), which open with the cursor in
-them.
+- The git status shows changes made outside Emacs too.
+- Each git project's name is followed by its branch, and the commits it is ahead (`↑`) and behind (`↓`) its upstream:
+  `doom  main ↑2`. A detached HEAD shows its short commit.
+- The branch is updated after a refresh, a Magit operation, or a switch made in a terminal.
+- The line of the project in view is the sidebar's top bar. It stays there while a long tree scrolls, and a click on it
+  goes back to the project.
+- The sidebar is 35 columns wide, and at most a quarter of the frame. It follows the frame as it's resized.
+- A width set by hand is kept, also when the sidebar is closed and opened again.
+- The arrows work in the language server's lists too (`SPC c S`, `SPC c X`, `SPC c y`), which open with the cursor in
+  them.
+
+Set these in `config.el`:
+
+| Setting | Default | What |
+|---|---|---|
+| `+my/treemacs-sticky-title` | `t` | The project's line stays at the top. `nil` turns it off |
+| `+my/treemacs-max-width` | `0.25` | The sidebar's widest, as a share of the frame |

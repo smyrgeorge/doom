@@ -87,7 +87,7 @@ one file. Slow queries load on their own without freezing Emacs. Your agent can 
 
 ### Tiling
 
-Applications (your agent, the terminal, Magit, previews, issues) open in a new pane: the main one on the left, the
+Applications (your agent, the terminal, Magit, previews, drawings) open in a new pane: the main one on the left, the
 others stacked on the right. Files open as tabs in the current pane, and a pane closes with its last tab
 ([more](docs/editor.md#tiling)).
 

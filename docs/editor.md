@@ -1,50 +1,69 @@
 # The editor
 
+This config changes how windows and files work. Each window has its own tabs, applications open in tiled panes, and
+files get an error stripe, notices and a sticky header.
+
 ## Tabs per window
 
-Each window has its own tabs: the files shown in it (and new buffers, `SPC b N`, the buffer list, `SPC b i`, and the
-issue list and its issues, `SPC o i`), of the current workspace. A file, the buffer list or the issues close once no
-window has them as a tab (their `q` too).
+Each window has its own tabs: the files shown in it, new buffers (`SPC b N`), the buffer list (`SPC b i`), and the
+issue list and its issues (`SPC o i`). The tabs are the current workspace's buffers only.
 
 | macOS | Linux | Action |
 |---|---|---|
 | `gt` / `gT` | `gt` / `gT` | Next / previous tab |
-| `Cmd+1`..`Cmd+8`, `Cmd+9` | `Ctrl+1`..`Ctrl+8`, `Ctrl+9` | Tab 1 to 8, the last tab |
+| `Cmd+1`..`Cmd+8` | `Ctrl+1`..`Ctrl+8` | Tab 1 to 8 |
+| `Cmd+9` | `Ctrl+9` | The last tab |
 | `Cmd+W`, middle click | `Ctrl+Shift+W`, middle click | Close the tab, and the window with its last tab |
-| Right click | Right click | Close the others, split vertically / horizontally |
+| Right click | Right click | A menu: close the others, split vertically or horizontally |
 
-The buffer list (`SPC b i`) is grouped by workspace: each buffer under the workspace it's in (the issues, an agent's
-session too), those in none under Default.
+- A file, the buffer list or the issues close once no window has them as a tab. The buffer list and the issues also
+  close with their `q`.
+- The buffer list (`SPC b i`) is grouped by workspace. Each buffer is under the workspace it's in, and so are the
+  issues and an agent's session. Buffers in no workspace are under Default.
 
 ## A minibuffer left open
 
-A prompt still open (`M-x`, a question) while you're in another window is tinted with the theme's yellow: it's waiting
-for you. Click it to answer (`C-g` there cancels it); the tint goes as soon as you're back.
+A prompt still open while you're in another window, such as `M-x` or a question, is tinted with the theme's yellow.
+It's waiting for you. Click it to answer, or press `C-g` there to cancel it. The tint goes as soon as you're back.
 
 ## Tiling
 
-Emacs is tiling first:
+Emacs is tiling first. Applications open in a new pane, where the tiling strategy puts it. Files open as tabs in the
+current pane, and a pane closes with its last tab.
 
-- Applications (your agent's sessions, the terminal, magit, the Markdown preview, drawings) open in a new pane where
-  the tiling strategy puts it; one already open (shown, or a tab under a file), in its pane. Inside magit, a log
-  or a diff stays in its pane; a commit opens in a new one. `SPC o C` (your agent) and `SPC o T` (a terminal) open in
-  the window you're in instead (`SPC o T` from a popup or the sidebar: in the last pane used).
-- Then they behave as any buffer: a file opened in their pane is a tab there, and they keep theirs.
-- Files always open as a tab in the current pane, whatever pane it is. From a popup or the sidebar, in the last pane
-  used.
-- A pane closes with its last tab (`Cmd+W`, `SPC b k`). When one closes (however: `SPC w d`, `q`, its last tab), the
+| Key | Action |
+|---|---|
+| `SPC w SPC` | A new pane, showing the current buffer |
+| `SPC w a` | Arrange the panes again, the main pane staying the main one |
+| `SPC w RET` | Move the current pane's buffer to the main pane, and the main's to its place |
+| `SPC w ]` / `SPC w [` | The main pane bigger / smaller, from any pane (`]` / `[` again repeat it) |
+| `SPC w }` / `SPC w {` | The current pane bigger / smaller among the others (`}` / `{` again repeat it) |
+| `SPC w e` | Choose another strategy for the session (`M-x +my/tiling-choose-strategy`) |
+| `SPC w TAB` / `SPC w S-TAB` | The next / previous strategy (`TAB` / `S-TAB` again go on) |
+| `SPC w w` / `SPC w W` | The next / previous window |
+| `SPC o C` / `SPC o T` | Your agent / a terminal in the window you're in, not in a new pane |
+| `M-x +my/example-tiling` | Try it |
+
+![Tiled panes: the main one on the left, the others stacked on the right](../examples/tiling.png)
+
+- Applications are your agent's sessions, the terminal, Magit, the Markdown and Mermaid previews, drawings, Agent UI
+  and HTML pages. One already open, shown or as a tab under a file, opens in its pane.
+- Inside Magit, a log or a diff stays in its pane. A commit opens in a new one.
+- `SPC o T` from a popup or the sidebar opens in the last pane used.
+- Once open, applications behave as any buffer. A file opened in their pane is a tab there, and they keep their own.
+- Files always open as a tab in the current pane, whatever pane it is. From a popup or the sidebar, they open in the
+  last pane used.
+- A pane closes with its last tab (`Cmd+W`, `SPC b k`). However a pane closes (`SPC w d`, `q`, its last tab), the
   stacked panes share its rows again, at equal heights.
-- A [merge](git.md#resolving-conflicts)'s bar and three panes stay together: an application or a file opened during
+- A [merge](git.md#resolving-conflicts) keeps its bar and three panes together. An application or a file opened during
   it goes in a pane beside them, and `SPC w a` leaves them as they are.
-- [Agent UI](agent-ui.md#in-the-sessions-pane) is part of its session's pane: laying the panes out, resizing them,
+- [Agent UI](agent-ui.md#in-the-sessions-pane) is part of its session's pane. Laying the panes out, resizing them and
   fullscreen take it along with the session.
+- Without `(load! "config/tiling")` in `config.el`, each application opens where it would on its own.
 
-Which applications open in a new pane is chosen in `config.el`: `(setq +my/tiling-apps 'all)` (the default), or a list
-of `agent-shell`, `terminal`, `preview`, `drawings`, `magit`, `issues`, `agent-ui`, `html` (`M-x customize-variable
-+my/tiling-apps` ticks them; `claude`, its old name, is still `agent-shell`). One left out opens as it would without
-tiling (the terminal as a popup); an unknown name is warned about at startup.
+### Strategies
 
-The strategy, chosen in `config.el` (`(setq +my/tiling-strategy 'tall)`), says where the panes go:
+The strategy says where the panes go.
 
 | Strategy | Layout |
 |---|---|
@@ -54,15 +73,11 @@ The strategy, chosen in `config.el` (`(setq +my/tiling-strategy 'tall)`), says w
 | `fullscreen` | The current pane alone, the others hidden behind it in order |
 | `bsp` | No main pane: each new pane halves the current one along its longer side |
 
-`SPC w e` chooses another for the session (`M-x +my/tiling-choose-strategy`), and `SPC w TAB` / `SPC w S-TAB` switch to
-the next / previous one (`TAB` / `S-TAB` again go on): the panes are laid out its way at once, and the echo area says
-which (`Tiling: wide (3/5)`). Another workspace's panes follow at its next `SPC w a`.
+- `SPC w e` and `SPC w TAB` lay the panes out the new way at once. The echo area says which strategy it is
+  (`Tiling: wide (3/5)`).
+- Another workspace's panes follow at its next `SPC w a`.
 
-`SPC w SPC` opens a new pane showing the current buffer, `SPC w a` arranges the panes again (in the strategy chosen,
-the main pane staying the main one), and `SPC w RET` moves the current pane's buffer to the main pane (the main's to
-its place). `SPC w ]` / `SPC w [` make the main pane bigger / smaller, from any pane (`]` / `[` again repeat it).
-`SPC w }` / `SPC w {` make the current pane bigger / smaller among the others, which stay even (`}` / `{` again repeat
-it); it keeps its size when you arrange the panes, open one or close another.
+What the resize keys change depends on the strategy:
 
 | Strategy | `SPC w ]` / `SPC w [` | `SPC w }` / `SPC w {` |
 |---|---|---|
@@ -71,89 +86,129 @@ it); it keeps its size when you arrange the panes, open one or close another.
 | `fullscreen` | Nothing to resize | Nothing to resize |
 | `bsp` | The current pane's half of its split | Its split's half of the one above |
 
-In `fullscreen`, a new pane opens alone, just after the current one, and closing it (`SPC w d`, its last tab, `q`)
-shows the next one. One that opens by itself (a canvas from a shell) goes behind the current one, hidden just after it:
-`SPC w w` brings it up. Each workspace keeps its own hidden panes. Choosing another strategy shows them all again, laid
-out its way: as many as it has room for, the rest staying hidden.
+A pane resized with `SPC w }` / `SPC w {` keeps its size when you arrange the panes, open one or close another.
 
-In `bsp`, `SPC w a` lays the panes out as a spiral, each halving the last, and when a pane closes, its space goes to
-its neighbour and every split runs along its longer side again. Splits are always even: a resize lasts until the
-panes are laid out again.
+### The fullscreen and bsp strategies
 
-| macOS | Linux | Action (`fullscreen`) |
+In `fullscreen`, one pane is in front and the others are hidden behind it. Some keys work differently there.
+
+| Key | Action (`fullscreen`) |
+|---|---|
+| `SPC w w` / `SPC w W` | Bring the next / previous pane to the front |
+| `SPC w RET` | Make the pane in front the first one. It becomes the main pane when another strategy lays them out |
+
+- A new pane opens alone, just after the current one. Closing it (`SPC w d`, its last tab, `q`) shows the next one.
+- A pane that opens by itself, such as a canvas from a shell, goes behind the current one, just after it. `SPC w w`
+  brings it up.
+- Each workspace keeps its own hidden panes.
+- Choosing another strategy shows them all again, laid out its way. It shows as many as it has room for, and the rest
+  stay hidden.
+
+In `bsp`:
+
+- `SPC w a` lays the panes out as a spiral, each halving the last.
+- When a pane closes, its space goes to its neighbour, and every split runs along its longer side again.
+- Splits are always even. A resize lasts until the panes are laid out again.
+
+### Settings
+
+Set these in `config.el`:
+
+| Setting | Default | What |
 |---|---|---|
-| `SPC w w` / `SPC w W` | `SPC w w` / `SPC w W` | The next / previous pane in front (in the other strategies, the next / previous window) |
-| `SPC w RET` | `SPC w RET` | The pane in front becomes the first, the main one when another strategy lays them out |
+| `+my/tiling-strategy` | `'tall` | The strategy: `tall`, `tall-right`, `wide`, `fullscreen` or `bsp` |
+| `+my/tiling-apps` | `'all` | The applications that open in a new pane: `all`, or a list of `agent-shell`, `terminal`, `preview` (the Markdown and Mermaid previews), `drawings`, `magit`, `agent-ui`, `html` |
 
-Try it: `M-x +my/example-tiling`.
-
-Without `(load! "config/tiling")` in `config.el`, each opens where it would on its own.
-
-![Tiled panes: the main one on the left, the others stacked on the right](../examples/tiling.png)
+- `M-x customize-variable +my/tiling-apps` lets you tick them.
+- An application left out opens as it would without tiling. The terminal, for one, opens as a popup.
+- An unknown name is warned about at startup.
 
 ## Error stripe
 
-A strip at the right edge of a file's window maps the whole file:
-- diagnostics: errors (red), warnings (yellow), suggestions (dim yellow: LSP hints and information);
-- TODO comments: `TODO`, `FIXME`, `HACK` (blue);
-- git changes: added, changed and deleted lines, in the gutter's colours;
-- the part on screen, a light band.
+A strip at the right edge of a file's window maps the whole file. It marks errors, TODOs and git changes, and a light
+band shows the part of the file on screen.
 
-Where marks overlap the most important wins: error > warning > TODO > deleted > changed > added > suggestion.
-Click a mark to jump to it, drag the band to scroll. Try it: `M-x +my/example-stripe`.
+| Key | Action |
+|---|---|
+| Click the strip | Jump to that part of the file |
+| Drag the band | Scroll |
+| `M-x +my/example-stripe` | Try it |
 
 ![The error stripe at the window's right edge](../examples/stripe.png)
 
+- Diagnostics: errors in red, warnings in yellow, suggestions in dim yellow (LSP hints and information).
+- TODO comments: `TODO`, `FIXME` and `HACK`, in blue.
+- Git changes: added, changed and deleted lines, in the gutter's colours.
+- Where marks overlap, the most important wins: error, then warning, TODO, deleted, changed, added, and suggestion.
+
 ## Notices
 
-Notices at the top of a window, with action buttons. Markdown files offer the [live preview](markdown.md); HTML files
-offer to open them in your browser (or [in Emacs](#html-pages)); files with lines over 5,000 characters open plain, and offer to wrap them or open
-them normally. Large files (over 20,000 lines or 1 MB) open at once without the language server, spelling, syntax
-checking, the sticky header and the error stripe, and offer to open them normally. Try it: `M-x +my/example-banner`.
+Notices show at the top of a window, with buttons for their actions. Some kinds of files open with one.
+
+| File | Notice |
+|---|---|
+| Markdown | Offers the [live preview](markdown.md) |
+| HTML | Offers to open it in your browser, or [in Emacs](#html-pages) |
+| Lines over 5,000 characters | Opens plain, and offers to wrap the lines or open it normally |
+| Over 20,000 lines or 1 MB | Opens at once, without the language server, spelling, syntax checking, the sticky header and the error stripe. Offers to open it normally |
+
+| Key | Action |
+|---|---|
+| Click a button | Do what it says |
+| Click `✕` | Close the notice |
+| `M-x +my/example-banner` | Try it: a notice of each kind |
 
 ![Notices of each kind at the top of a window](../examples/banner.png)
 
 ## HTML pages
 
-`M-x +my/html-open-in-emacs` shows an HTML file or a URL as a page in WebKit, in a pane; links out of it open in your
-browser.
+An HTML file or a URL can open as a page in WebKit, in a pane. Links out of it open in your browser. In a terminal, or
+in an Emacs without WebKit, the page opens in your browser instead.
 
 | Key | Action |
 |---|---|
+| `M-x +my/html-open-in-emacs` | Open an HTML file or a URL as a page |
 | `j` / `k`, `C-d` / `C-u`, `gg` / `G` | Scroll |
 | `h` / `l` | Scroll sideways |
-| `+` / `-` / `0` | Zoom in / out / its own size, in all the page's panes |
+| `+` / `-` / `0` | Zoom in / out / back to its own size, in all the page's panes |
 | `W` | As wide as the pane |
-| `g r` | Reload (as opening it again does) |
-| `y`, `Cmd+C` | Copy the selection |
+| `gr` | Reload, as opening it again does |
+| `y`, `Cmd+C` | Copy the selection (Linux: `y`, `Ctrl+Shift+C`) |
 | `q` | Close |
 
 ## Sticky header
 
-The header line shows the classes and functions the top line is inside (`class Api { › fun call(x: Int) {`); in
-Markdown, the headings (`# Guide › ## Setup`); in a Dockerfile, the stage (its `FROM` line). Before any, the file's
-path in its project. In a narrow pane it fits: the scopes cut to their names (`class Api › fun call`), then the outer
-ones dropped (`… › fun call`); the path cut from the left, keeping the file's name.
+The header line shows the classes and functions the window's top line is inside. Before any, it shows the file's path
+in its project.
 
-A tree-sitter language gets it from its major mode: the functions it declares (Python, Java, TypeScript, Rust, C, Lua,
-CSS, JSON, YAML...), else its outline (Markdown, Dockerfile). A mode declaring neither needs its scopes' node types in
-`+my/sticky-defun-types` (Kotlin's are there); an entry there also replaces a mode's own, set in `config.el`.
+| File | Header |
+|---|---|
+| Code | The classes and functions: `class Api { › fun call(x: Int) {` |
+| Markdown | The headings: `# Guide › ## Setup` |
+| Dockerfile | The stage: its `FROM` line |
+
+- In a narrow pane the header fits. The scopes are cut to their names (`class Api › fun call`), then the outer ones are
+  dropped (`… › fun call`). The path is cut from the left, keeping the file's name.
+- A tree-sitter language gets its scopes from its major mode. These are the functions the mode declares (Python, Java,
+  TypeScript, Rust, C, Lua, CSS, JSON, YAML...), or else its outline (Markdown, Dockerfile).
+- A mode declaring neither needs its scopes' node types in `+my/sticky-defun-types`. Kotlin's are there.
+- An entry in `+my/sticky-defun-types`, set in `config.el`, also replaces a mode's own.
 
 ## Code
 
 | macOS | Linux | Action |
 |---|---|---|
-| `Cmd+B` | `Ctrl+Shift+B` | Go to the declaration; on the declaration, list the usages |
+| `Cmd+B` | `Ctrl+Shift+B` | Go to the declaration. On the declaration, list the usages |
 | `Cmd+[` / `Cmd+]` | `Alt+←` / `Alt+→` | Back / forward (`C-o` / `C-i` on both) |
 | `Option+Enter` | `Alt+Enter` | Spelling fixes, code actions and [your agent](agent-shell.md), in one menu |
 | `SPC c ~` | `SPC c ~` | Cycle the word through snake_case, UPPER_CASE, PascalCase, camelCase and kebab-case |
 
-Spelling knows ~40k programming words and checks camelCase words part by part.
+Spelling knows about 40,000 programming words, and checks camelCase words part by part.
 
 ## Language servers
 
-Inlay hints (in the comment colour), semantic highlighting and colour swatches are on. A code lens sits at the end of
-its line, or above the line when they don't fit the pane together.
+Inlay hints, semantic highlighting and colour swatches are on. Inlay hints are in the comment colour. A code lens sits
+at the end of its line, or above the line when they don't fit the pane together.
 
 | Language | Inlay hints | Code lenses |
 |---|---|---|
@@ -164,8 +219,8 @@ its line, or above the line when they don't fit the pane together.
 
 Other languages get their server's own.
 
-`Cmd+B` (Linux: `Ctrl+Shift+B`) on a declaration lists its usages in a peek under it: each usage's line, the function
-it's in and its code, beside a preview of the selected one (in a pane under 70 columns, the list alone).
+`Cmd+B` (Linux: `Ctrl+Shift+B`) on a declaration lists its usages in a peek under it. Each usage shows its line, the
+function it's in and its code, beside a preview of the selected one. In a pane under 70 columns, the list shows alone.
 
 | Key | Action |
 |---|---|
@@ -176,9 +231,9 @@ it's in and its code, beside a preview of the selected one (in a pane under 70 c
 
 ## Behaviour
 
-- New windows take focus; `SPC w S` / `SPC w V` split and leave it.
+- New windows take focus. `SPC w S` / `SPC w V` split and keep the focus where it was.
 - Saving returns to normal state.
 - `q` closes transient menus.
 - A thin line marks column 120, or a project's `.editorconfig` `max_line_length`.
-- The line you're on is always shown whole, at a window's bottom too (an agent's prompt); only a scroll leaves it
+- The line you're on is always shown whole, at a window's bottom too, as in an agent's prompt. Only a scroll leaves it
   cut.

@@ -1,9 +1,21 @@
 # Shell commands
 
+The commands in `cmd/` work with Emacs from a shell, for you, your scripts and your agents.
+
+`cmd/agent-ui`, `cmd/agent-workspace` and `cmd/agent-workflow` talk to your running Emacs, which must be a server. They
+reply with JSON on stdout, and exit with these codes:
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Done |
+| 1 | Not done. The reply says why |
+| 2 | A wrong use |
+| 3 | No Emacs server to talk to |
+
 ## cmd/diff
 
-Resolves Git conflicts in the [three-pane merge](git.md#resolving-conflicts), one file after the other, in your running
-Emacs if it's a server, else in a new one.
+`cmd/diff` resolves Git conflicts in the [three-pane merge](git.md#resolving-conflicts), one file after the other. It
+uses your running Emacs if it's a server, or else starts a new one.
 
 ```sh
 cmd/diff                 # every conflicted file of the repository
@@ -12,22 +24,28 @@ cmd/diff example         # the merge example
 cmd/diff --list          # list the conflicted files
 ```
 
-`-g` opens a GUI frame, `-n` always starts a new Emacs, and `-s NAME` picks a server. It exits with 0 when everything is
-resolved, 1 when files are still in conflict.
+| Option | What |
+|---|---|
+| `-g`, `--gui` | Open a GUI frame |
+| `-n`, `--new` | Always start a new Emacs |
+| `-s NAME`, `--socket NAME` | Use the Emacs server NAME |
+| `-l`, `--list` | List the conflicted files |
 
-As Git's merge tool:
+It exits with 0 when every file is resolved, 1 when files are still in conflict, and 2 for a wrong use.
+
+To use it as Git's merge tool, run this once:
 
 ```sh
 git config --global mergetool.doom.cmd '~/.config/doom/cmd/diff "$MERGED"'
 git config --global mergetool.doom.trustExitCode true
 ```
 
-It was `cmd/diff.sh` before: a merge tool set up with that name needs the first line run again.
+Then `git mergetool -t doom` runs it.
 
 ## cmd/agent-ui
 
-Shows things in Emacs beside a coding agent's session, on its canvas: progress bars, checklists, tables. Made for
-agents, from their shell; see [Agent UI](agent-ui.md).
+`cmd/agent-ui` shows things in a coding agent's session, on its canvas: progress bars, checklists, tables. It's made for
+agents, to run from their shell. [Agent UI](agent-ui.md) has the details.
 
 ```sh
 cmd/agent-ui show '{"id":"build","type":"progress","title":"Build","max":12}'
@@ -37,14 +55,13 @@ cmd/agent-ui show --canvas tests '{"id":"t","type":"table","columns":["Test","Re
                              # another canvas of the session, its own pane
 ```
 
-The reply is JSON on stdout; it exits with 0 when done, 1 when not (the reply says why), 2 for a wrong use, 3 without
-an Emacs server. `cmd/agent-ui-mcp.el` serves the same operations as MCP tools (`emacs --batch -Q -l
-cmd/agent-ui-mcp.el -f agent-ui-mcp-main`), as each agent-shell session starts it.
+`cmd/agent-ui-mcp.el` serves the same operations as MCP tools. Each agent-shell session starts it this way:
+`emacs --batch -Q -l cmd/agent-ui-mcp.el -f agent-ui-mcp-main`.
 
 ## cmd/agent-workspace
 
-Makes an agent in this folder's project, or the agents a crew lacks, or sends its crew an event; shows the crew and
-runs it, for your scripts; see [Agent workspace](agent-workspace.md).
+`cmd/agent-workspace` works with the crew of this folder's project, for your scripts
+([Agent workspace](agent-workspace.md)). It makes agents, sends them events, shows the crew and runs it.
 
 ```sh
 cmd/agent-workspace new --role builder                  # a name made for it
@@ -59,24 +76,29 @@ cmd/agent-workspace wake linus
 cmd/agent-workspace loop linus on                       # as L; off turns it off
 ```
 
-`give`, `wake`, `sleep` and `loop` are said in the room with who did them (`shell gave doom-a1b to grace`). From an
-agent's session they're refused unless its role leads (the [lead](agent-workspace.md#the-lead)), `new` and `crew`
-too, whatever its `AGENT_WORKSPACE_AGENT` says; `status` works from any.
+| Command | Reply |
+|---|---|
+| `new` | `{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}` |
+| `crew` | `{"ok":true,"made":[{"name":"ken","role":"reviewer",...}]}`, or `"made":[]` when the crew lacks nothing |
+| `send` | `{"ok":true,"events":[{"id":1,"to":"ada","state":"queued"}]}` |
+| `status` | `{"ok":true,"agents":[...],"conflicts":[...],"offers":[...],"talk":"ask"}` |
+| `give`, `wake`, `sleep`, `loop` | The agent, as `new` has it. `give` adds `"prompt":"sent"` or `"queued"`, and `loop` adds `"loop":true` |
 
-An event is queued and delivered when its agent is free, as data from its source
-([The inbox](agent-workspace.md#the-inbox)). For now `send` is refused: this config turns events from outside off. The reply is JSON on stdout
-(`{"ok":true,"name":"ada","role":"builder","worktree":...,"branch":"agent/ada",...}` for new,
-`{"ok":true,"made":[{"name":"ken","role":"reviewer",...}]}` for crew, `"made":[]` when it lacks nothing, those not
-made in `"failed":[{"role":"reviewer","error":...}]`, an unknown crew naming the crews there are,
-`{"ok":true,"events":[{"id":1,"to":"ada","state":"queued"}]}` for send, `{"ok":true,"agents":[...],"conflicts":[...],
-"offers":[...],"talk":"ask"}` for status, the agent as new has it for give, wake, sleep and loop, with `"prompt":"sent"`
-or `"queued"` for give and `"loop":true` for loop); it exits with 0 when done, 1 when not (the reply says why), 2 for a
-wrong use, 3 without an Emacs server.
+- `crew` lists the agents it couldn't make in `"failed":[{"role":"reviewer","error":...}]`. For an unknown crew, it
+  names the crews there are.
+- `give`, `wake`, `sleep` and `loop` are said in the room, with who did them (`shell gave doom-a1b to grace`).
+- From an agent's session, `give`, `wake`, `sleep`, `loop`, `new` and `crew` are refused unless the agent's role leads
+  ([The lead](agent-workspace.md#the-lead)). This holds whatever its `AGENT_WORKSPACE_AGENT` says. `status` works from
+  any session.
+- An event is queued, and delivered when its agent is free, as data from its source
+  ([The inbox](agent-workspace.md#the-inbox)).
+- `send` is refused for now, because `config.el` turns events from outside off:
+  `(setq agent-workspace-outside-events nil)`. `t` turns them on.
 
 ## cmd/agent-workflow
 
-Starts [agent workflows](agent-workflow.md)' runs, and checks the workflows and profiles of this folder's project, for
-you and your scripts; an agent of a run ends its step with it.
+`cmd/agent-workflow` starts the runs of [agent workflows](agent-workflow.md), and checks the workflows and agents of
+this folder's project. It's for you and your scripts. An agent of a run ends its step with it.
 
 ```sh
 cmd/agent-workflow run doom-a1b doom-c3d          # runs on these issues, each with its own workflow, followed
@@ -93,10 +115,15 @@ cmd/agent-workflow check                          # every workflow and profile o
 cmd/agent-workflow check draft.yml                # one file: a workflow (.yml) or a profile (.md), anywhere
 ```
 
-The reply is JSON on stdout: the runs started and the issues refused; the step done; the runs' state, their jobs; the
-project's workflows and profiles, and each problem's level, file, line and message. It exits with 0 when done
-(`check`: no error), 1 when not (the reply says why), 2 for a wrong use, 3 without an Emacs server.
+| Command | Reply |
+|---|---|
+| `run --detach` | The runs started, and the issues refused |
+| `done` | The step done |
+| `status` | The runs' state, and their jobs |
+| `check` | The project's workflows and agents, and each problem's level, file, line and message. It exits with 0 when there's no error |
 
-`run` and `logs -f` print a run's log instead, a line per event (time, issue, job, what happened; what needs you,
-with the command answering it), until the runs end: 0 all done, 1 one cancelled; Ctrl-C stops following, never the
-runs. `--json`: the reply, then the journals' lines, each with its `issue`.
+- `run` and `logs -f` print a run's log instead, a line per event, until the runs end. A line says the time, the issue,
+  the job and what happened. What needs you comes with the command that answers it.
+- `run` exits with 0 when all its runs are done, and 1 when one was cancelled.
+- Ctrl-C stops following the log, never the runs.
+- With `--json`, they print the reply, then the journals' lines, each with its `issue`.

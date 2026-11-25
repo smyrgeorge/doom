@@ -1,100 +1,129 @@
 # Your agent
 
-A coding agent runs in an Emacs buffer through [agent-shell](https://github.com/xenodium/agent-shell): yours, chosen in
-`config.el`, Claude Code here. Any agent agent-shell speaks to (over ACP) can be it: Codex, Gemini CLI, OpenCode, Qwen
+A coding agent runs in an Emacs buffer through [agent-shell](https://github.com/xenodium/agent-shell). Yours is chosen
+in `config.el`, Claude Code here. It can be any agent agent-shell speaks to over ACP: Codex, Gemini CLI, OpenCode, Qwen
 Code, GitHub Copilot's CLI, Goose, Cursor's agent...
 
 ```elisp
 (setq agent-shell-preferred-agent-config 'claude-code)   ; or codex, gemini-cli...; nil: asked each time
 ```
 
-Its adapter (or CLI) comes from `scripts/tools.sh`, which installs your agent's, or those `AGENTS` names
-(`AGENTS="codex gemini-cli" scripts/tools.sh`). Claude Code logs in with the `claude` CLI's login (run `claude` once in
-a terminal).
-
 | Key | Action |
 |---|---|
-| `SPC o c` | A session with your agent, a new one or one to resume (it asks), in a new [tiled](editor.md#tiling) pane |
-| `SPC o C` | The same, in the window you're in (the file there kept as a tab) |
+| `SPC o c` | A session with your agent, in a new [tiled](editor.md#tiling) pane. It asks for a new one or one to resume |
+| `SPC o C` | The same, in the window you're in. The file there stays as a tab |
+| `RET` | Send the prompt, in insert and normal state |
+| `S-RET` | A newline in the prompt |
 | `Option+Enter` (Linux: `Alt+Enter`) | Send the error at point or the selection to the agent |
-| `RET` (normal state too) | Send the prompt (`S-RET`: a newline) |
+| `M-x agent-shell` | Start any other agent, picked from agent-shell's list |
 
-`M-x agent-shell` starts any other agent, picked from agent-shell's list.
+## Setting it up
 
-A session's buffer is named after its agent: `Claude`, a second one `Claude<2>`, a third `Claude<3>`, in whichever
-project they run (as same-named files are), and so for any agent (`Codex`, `Gemini`...).
+- `scripts/tools.sh` installs your agent's adapter, or its CLI.
+- To install others, name them in `AGENTS`: `AGENTS="codex gemini-cli" scripts/tools.sh`.
+- Claude Code logs in with the `claude` CLI's login. Run `claude` once in a terminal.
 
-`(setq +my/agent-shell-insert-ret-newline t)` in `config.el` makes `RET` in insert state a newline instead, the prompt
-sent with `RET` from normal state.
+Set these in `config.el`:
 
-A session starts in insert state, its prompt empty but for what you chose: the selection, dired's marked files (or
-those of the selection there), the image you're on. `(setq agent-shell-context-sources '(files region error line))` in
-`config.el` brings the error at point too, or else the line you're on.
+| Setting | Default | What |
+|---|---|---|
+| `agent-shell-preferred-agent-config` | `'claude-code` | Your agent. `nil` asks each time |
+| `+my/agent-shell-insert-ret-newline` | `nil` | `t` makes `RET` in insert state a newline. The prompt is then sent with `RET` from normal state |
+| `agent-shell-context-sources` | `'(files region)` | What a new session's prompt starts with. Add `error` and `line` for the error at point, or else the line you're on |
+| `agent-shell-elicitation--experimental-feature-enabled` | `t` | A quick question as a form in the conversation. `nil` turns the forms off |
 
-Sessions are told they run in Emacs: `path:line` references become links, images show inline in the theme's colours,
-and the agent can ask Emacs what you're looking at. Every agent is told the same: in its system prompt where it takes
-one from Emacs (Claude Code does), else before the first message of a new session. The agent shows you information on
-a canvas beside its session, each kind as the element that fits it (figures, tables, charts, diagrams, plans, changes),
-its reply keeping the words ([Agent UI](agent-ui.md)). Its questions come there too, as interactive elements (a list to
-pick from, options side by side, a yes or no, a form...), your answer its next prompt; only a quick one (2 to 4 short
-options) comes as a form in the conversation, the agent waiting for your answer (Claude Code's `AskUserQuestion`,
-another agent's own tool if it has one; agent-shell's experimental forms:
-`(setq agent-shell-elicitation--experimental-feature-enabled nil)` in `config.el` turns them off). While you're in
-another app, a [notification](notifications.md) says when a session finished its turn (or stopped on an error) or asks
-for your permission, titled by its agent.
+## Sessions
 
-Several sessions can work on one project at once, as a crew: each an agent with a name, a role and its own git
-worktree, run from one app (`SPC o w`, [Agent workspace](agent-workspace.md)).
+- A session's buffer is named after its agent: `Claude`, then `Claude<2>` and `Claude<3>`, in whichever project they
+  run. Other agents' are named the same way (`Codex`, `Gemini`...).
+- A session starts in insert state. Its prompt is empty but for what you chose: the selection, dired's marked files (or
+  those in the selection there), or the image you're on.
+- Sessions are told they run in Emacs. `path:line` references become links, images show inline in the theme's colours,
+  and the agent can ask Emacs what you're looking at.
+- Every agent is told the same. It's in the agent's system prompt where it takes one from Emacs, as Claude Code does.
+  Otherwise it comes before the first message of a new session.
+- While you're in another app, a [notification](notifications.md) says when a session finished its turn, stopped on an
+  error, or asks for your permission. It's titled by the session's agent.
+- Several sessions can work on one project at once, as a crew. Each is an agent with a name, a role and its own git
+  worktree, run from one app (`SPC o w`, [Agent workspace](agent-workspace.md)).
+
+## What the agent shows you
+
+The agent shows you information under its conversation, each kind as the element that fits it: figures, tables,
+charts, diagrams, plans, changes. Its reply keeps the words ([Agent UI](agent-ui.md)).
+
+- Its questions come there too, as interactive elements: a list to pick from, options side by side, a yes or no, a
+  form. Your answer becomes its next prompt.
+- Only a quick question, with 2 to 4 short options, comes as a form in the conversation. The agent waits for your
+  answer.
+- The form is Claude Code's `AskUserQuestion`, or another agent's own tool if it has one. These forms are still
+  experimental in agent-shell, and a [setting](#setting-it-up) turns them off.
 
 ## Diagrams in replies
 
 The agent's ```` ```mermaid ```` blocks are drawn as diagrams in its replies, in the theme's colours
-([Mermaid](mermaid.md)), once a block is complete: its source shows until then, and with an error, Mermaid's message
-under it. A diagram is no taller than the window; `RET` or a click on it opens it at full size. Copying a reply as
-Markdown, and its transcript, keep the source. The agent is told to use them for diagrams.
-
-## The agent's diffs
-
-A change the agent asks permission for opens as a diff with `v`. The keys its header line names work in normal state:
+([Mermaid](mermaid.md)). The agent is told to use them for diagrams.
 
 | Key | Action |
 |---|---|
-| `n` / `p` | The next / previous hunk |
-| `y` | Accept the change |
-| `RET` | Open the file at the change |
+| `RET` or a click, on a diagram | Open it at full size |
 
-While the agent waits for a permission, `n` in normal state rejects it and interrupts it.
+- A block is drawn once it's complete. Until then, its source shows.
+- With an error, Mermaid's message shows under the source.
+- A diagram is no taller than the window.
+- Copying a reply as Markdown keeps the source, and so does the transcript.
+
+## The agent's diffs
+
+A change the agent asks permission for opens as a diff. The keys its header line names work in normal state.
+
+| Key | Action |
+|---|---|
+| `v` (in the session) | Open the change as a diff, while the agent waits for your permission |
+| `n` (in the session) | Reject the change, and interrupt the agent |
+| `n` / `p` (in the diff) | The next / previous hunk |
+| `y` (in the diff) | Accept the change |
+| `RET` (in the diff) | Open the file at the change |
 
 ## Drawing for the agent
 
-In a session's buffer, `C-c C-d` (`SPC m d`) opens a new [drawing](drawings.md) in a new pane, saved in the project's
+In a session's buffer, `C-c C-d` opens a new [drawing](drawings.md) in a new pane. It's saved in the project's
 `.agent-shell/drawings/`.
 
 | Key | Action |
 |---|---|
-| `C-c C-c` | Insert it into the prompt as an image (a PNG beside the drawing) and close it |
+| `C-c C-d` (`SPC m d`), in a session | A new drawing for the agent |
+| `C-c C-c` | Insert it into the prompt as an image, and close it |
 | `C-c C-k` | Discard it |
 | `M-p` / `M-n` | An earlier drawing instead, to change and insert again |
 
-An agent that takes no images gets the drawing's file instead, to read itself.
+- The image is a PNG beside the drawing.
+- An agent that takes no images gets the drawing's file instead, to read itself.
 
 ## Issues for the agent
 
-In a project that tracks its [issues](issues.md) with Beads, the agent works with them through `bd`. A session started
-there is told so, with Beads' own guide for agents (`bd prime`), and each `bd` command the agent runs refreshes the
-issue lists and issues you have open, so its changes show as it makes them. Where the project's Claude Code settings
-run `bd prime` as a session starts (a SessionStart hook, as this config's `.claude/settings.json`), Claude Code gets the
-guide from there, not twice; another agent reads none of them, and is given it.
+In a project that tracks its [issues](issues.md) with Beads, the agent works with them through `bd`. Each `bd` command
+the agent runs refreshes the issue lists and issues you have open, so its changes show as it makes them.
 
 | Key | Action |
 |---|---|
-| `C-c C-i` (`SPC m i`) | In a session's buffer: pick one of the project's open issues (ready ones first) for the prompt |
-| `C-c C-a` (`SPC m a`) | On an issue, in the list or its own buffer: put it in the prompt of the project's session |
+| `C-c C-i` (`SPC m i`), in a session | Pick one of the project's open issues for the prompt, ready ones first |
+| `C-c C-a` (`SPC m a`), on an issue | Put it in the prompt of the project's session, from the list or the issue's own buffer |
 
-An issue goes into the prompt as `Beads issue ID: title`, for you to say what to do with it.
+- An issue goes into the prompt as `Beads issue ID: title`, for you to say what to do with it.
+- A session started in the project is told it uses Beads, with Beads' own guide for agents (`bd prime`).
+- Some projects' Claude Code settings run `bd prime` as a session starts, with a SessionStart hook. This config's
+  `.claude/settings.json` does. Claude Code then gets the guide from there, not twice.
+- Another agent reads none of those settings, and is given the guide.
 
 ## Profiling Emacs
 
-`SPC h T` starts the profiler; do what's slow, then `SPC h T` again. The profile is written as text under
-`~/.config/emacs/.local/cache/profiles/`, and a message (also copied) tells the agent where it is and to read the
-[`emacs-profiling` skill](ai-agents.md) first.
+When Emacs is slow, record a profile and hand it to your agent.
+
+| Key | Action |
+|---|---|
+| `SPC h T` | Start the profiler. Do what's slow, then press it again to stop |
+
+- The profile is written as text under `~/.config/emacs/.local/cache/profiles/`.
+- A message says where it is, and tells the agent to read the [`emacs-profiling` skill](ai-agents.md) first. The
+  message is also copied, to paste to your agent.
