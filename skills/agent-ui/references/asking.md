@@ -117,7 +117,7 @@ cells: "parser · failed · macos"), the files' paths, the chips' labels.
 Say so in a line and end your turn:
 
 ```sh
-agent-ui show '{"id":"bugs","type":"table","columns":["ID","P","Bug"],"key":"ID","rows":[["doom-1ms","P2","Tabs: a new buffer loses its tab"],["doom-3z6","P2","Large Markdown freezes Emacs"]],"select":{"question":"Which should I fix?","multiple":true,"note":true}}'
+agent-ui show '{"id":"bugs","type":"table","columns":["ID","P","Bug"],"key":"ID","rows":[["doom-a1b","P2","Tabs: a new buffer loses its tab"],["doom-c3d","P2","Large Markdown freezes Emacs"]],"select":{"question":"Which should I fix?","multiple":true,"note":true}}'
 agent-ui show --canvas ask '{"id":"apply","type":"tags","tags":["bug","docs","agent-ui"],"select":{"question":"Which labels should the new ticket get?","multiple":true}}'
 ```
 

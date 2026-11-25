@@ -103,8 +103,8 @@ the work began before the bar. Update it, don't show it again (its times start a
 agent-ui show '{"id":"build","type":"progress","title":"Build","max":12,"label":"configuring"}'
 agent-ui update build '{"value":7,"label":"linking"}'
 agent-ui update build '{"value":12,"status":"done","label":"done in 41s"}'
-agent-ui show '{"id":"bugs","type":"progress","title":"Bug fixing","max":58,"unit":"bugs","label":"doom-sq6.3"}'
-agent-ui update bugs '{"value":13,"label":"doom-sq6.14"}'
+agent-ui show '{"id":"bugs","type":"progress","title":"Bug fixing","max":58,"unit":"bugs","label":"doom-a1b"}'
+agent-ui update bugs '{"value":13,"label":"doom-c3d"}'
 ```
 
 ### `steps`
@@ -112,8 +112,8 @@ agent-ui update bugs '{"value":13,"label":"doom-sq6.14"}'
 A checklist. A step is a name (pending), or `{"name", "status", "detail"}`; status is `pending`, `running` (a spinner),
 `waiting` (◆: on the user), `done`, `failed` or `skipped`; detail is a short note after it. **Append a step whose name is there to change it in
 place**, so you only send what changed. A step is timed from `running` to `done` or `failed` (or give its
-`seconds`; under 1.5 s it shows in milliseconds). Its own `steps` are drawn under it: append one with `"parent"`
-(its step's name), up to 4 deep. A line each, wrapped where too long. A plan to approve first (`approve`): see
+`seconds`). Its own `steps` are drawn under it: append one with `"parent"` (its step's name), up to 4 deep. A line
+each, wrapped where too long. A plan to approve first (`approve`): see
 [asking.md](references/asking.md).
 
 ```sh
