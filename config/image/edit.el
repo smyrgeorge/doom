@@ -9,26 +9,17 @@
   "Image types sips (macOS) and ImageMagick (Linux) write: what rotating,
 flipping and cropping change.")
 
-(defun +my/image--editable-kind-p ()
-  "Non-nil if the image is one rotating, flipping and cropping change: one
-sips or ImageMagick writes (not an SVG: text), not an animation (one frame
-would be left), not read-only."
+(defun +my/image--editable-p ()
+  "Non-nil if rotating, flipping and cropping can change the image: one sips
+or ImageMagick writes (not an SVG: text), not an animation (one frame would
+be left)."
   (and (memq image-type +my/image--editable-types)
        (not image-multi-frame)
        (not buffer-read-only)))
 
-(defun +my/image--editable-p ()
-  "Non-nil if rotating, flipping and cropping can change the image now: one
-they change (`+my/image--editable-kind-p'), not while git's HEAD is shown
-in its place (TAB, diff.el)."
-  (and (+my/image--editable-kind-p)
-       (not (eq (+my/image--head-view) 'head))))
-
 (defun +my/image--check-editable ()
   (unless (+my/image--editable-p)
-    (user-error (cond ((eq (+my/image--head-view) 'head)
-                       "Git's HEAD is shown: TAB for the image, to change it")
-                      (image-multi-frame "Not an animation: one frame would be left")
+    (user-error (cond (image-multi-frame "Not an animation: one frame would be left")
                       (buffer-read-only "Read-only")
                       (t (format "Can't change a%s %s image"
                                  (if (memq image-type '(svg xpm)) "n" "")

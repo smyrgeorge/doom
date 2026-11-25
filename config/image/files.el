@@ -7,9 +7,8 @@
 
 ;; THE IMAGE SHOWN
 (defun +my/image--spec ()
-  "The image the buffer shows (image-mode's), if it shows one: its own, its
-text's, not git's HEAD drawn in its place (diff.el)."
-  (let ((spec (and (derived-mode-p 'image-mode) (get-text-property (point-min) 'display))))
+  "The image the buffer shows (image-mode's), if it shows one."
+  (let ((spec (and (derived-mode-p 'image-mode) (image-get-display-property))))
     (and (eq (car-safe spec) 'image) spec)))
 
 (defvar-local +my/image--size nil
