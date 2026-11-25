@@ -261,8 +261,9 @@ its fetches' timer, its commands running, its last error."
   ;; key (their element shows something: a refresh is said loading late).
   stale errors (running (make-hash-table :test #'equal)) titles ticker
   (loaded (make-hash-table :test #'equal))
-  ;; When its :fetch last ran (`float-time'), nil before.
-  fetched)
+  ;; When its :fetch last ran (`float-time'), nil before; when its queries
+  ;; last all ended, its data in (a query can take longer than its :every).
+  fetched settled)
 
 (defvar-local agent-ui-panels--state nil
   "In a project panel's canvas: the panel (an `agent-ui-panels--state').")
@@ -695,12 +696,16 @@ long itself (Emacs frozen), said."
 ;; A panel hidden fetches nothing; read by an agent (agent-ui get), it's
 ;; fetched then if its data is older than its :every (or it was never
 ;; fetched, or a fetch was missed): the agent reads it again once its queries
-;; end (cmd/agent-ui does). Never fetched more often than its :every so.
+;; end (cmd/agent-ui does). Its data's age counts from when its queries
+;; ended, not from the fetch: a query taking longer than its :every had its
+;; data old as it came, each read fetching again, the agent never answered.
+;; Never fetched more often than its :every so.
 (defun agent-ui-panel-read-fetch (panel)
   "PANEL read by an agent: fetched now if it's hidden and its data is old
 \(see above). Non-nil while its queries run."
   (let ((every (plist-get (agent-ui-panels--script panel) :every))
-        (fetched (agent-ui-panels--fetched panel)))
+        (fetched (when-let* ((fetched (agent-ui-panels--fetched panel)))
+                   (max fetched (or (agent-ui-panels--settled panel) 0)))))
     (when (and (agent-ui-panels--script panel)
                (agent-ui-panels--live-p panel)
                (not (agent-ui-panels--visible-p panel))
@@ -851,7 +856,9 @@ process."
                    (setf (agent-ui-panels--processes panel) (delq process (agent-ui-panels--processes panel)))
                    (when (eq (plist-get (gethash key running) :process) process)
                      (remhash key running)
-                     (puthash key t (agent-ui-panels--loaded panel)))
+                     (puthash key t (agent-ui-panels--loaded panel))
+                     (when (zerop (hash-table-count running))
+                       (setf (agent-ui-panels--settled panel) (float-time))))
                    (let ((text (with-current-buffer out (buffer-string)))
                          (errors (string-trim (with-current-buffer err (buffer-string))))
                          (code (process-exit-status process)))

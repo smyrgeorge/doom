@@ -533,6 +533,26 @@ not fetched twice meanwhile, nor again while its data is fresh."
       (should (eq (plist-get reply :fetching) :false))
       (should (equal (plist-get (aref (plist-get reply :elements) 0) :text) "42")))))
 
+(ert-deftest agent-ui-panels/read-fresh-from-when-its-queries-end ()
+  "Hidden, read by an agent: its data's age counts from when its queries
+ended. A query longer than its :every (1 s) had its data old as it came,
+each read fetching again: the agent never answered (doom-ht6.95: its query
+slow under a full test run's load)."
+  (+test-aup-open "read"
+    (should (+test-wait-for (lambda () (memq 'done +test-aup-calls)) 3))
+    (switch-to-buffer "*scratch*")
+    (should (>= (agent-ui-panels--settled panel) (agent-ui-panels--fetched panel)))
+    (setq +test-aup-calls nil)
+    ;; Fetched 10 s ago, its query ended just now: fresh.
+    (setf (agent-ui-panels--fetched panel) (- (float-time) 10)
+          (agent-ui-panels--settled panel) (- (float-time) 0.1))
+    (should-not (agent-ui-panel-read-fetch panel))
+    (should-not +test-aup-calls)
+    ;; Ended 2 s ago: old, fetched.
+    (setf (agent-ui-panels--settled panel) (- (float-time) 2))
+    (should (agent-ui-panel-read-fetch panel))
+    (should (equal +test-aup-calls '(fetch)))))
+
 (ert-deftest agent-ui-panels/a-query-not-started-twice ()
   "Every 0.1 s, its command 0.6 s: not started again while it runs; the
 fetch goes on."
