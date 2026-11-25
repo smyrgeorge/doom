@@ -429,6 +429,22 @@ yasnippet loads too; elsewhere as ever."
           (should (equal (+test-agent-shell--snippets claude-after) '(nil nil))))
       (mapc #'kill-buffer buffers))))
 
+(ert-deftest agent-shell/no-indent-guides ()
+  "Doom's indent guides stay off in agent-shell's buffers (a session, its
+viewport's), on elsewhere as ever."
+  (should (memq #'+my/agent-shell-no-indent-guides-p
+                +indent-guides-inhibit-functions))
+  (dolist (mode '(agent-shell-mode
+                  agent-shell-viewport-view-mode
+                  agent-shell-viewport-edit-mode))
+    (with-temp-buffer
+      (setq-local major-mode mode)
+      (should (run-hook-with-args-until-success '+indent-guides-inhibit-functions))))
+  (dolist (mode '(text-mode prog-mode comint-mode))
+    (with-temp-buffer
+      (funcall mode)
+      (should-not (+my/agent-shell-no-indent-guides-p)))))
+
 ;; ====== CONTEXT FROM THE CURRENT BUFFER ======
 
 (ert-deftest agent-shell/context-from-a-buffer-with-dated-lines ()
