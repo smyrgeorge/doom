@@ -531,18 +531,18 @@ to bottom."
 
 ;; ====== ITS WINDOWS ======
 
-(defun agent-ui--pane-view-name (view)
-  "VIEW's name: its part's (\"tests\"), a panel's, else Agent UI (the
-session's own canvas)."
+(defun agent-ui-pane-view-name (view)
+  "VIEW's name: its part's (\"tests\"), a panel's, else Canvas (the
+session's own canvas: Agent UI is the bar's under the views)."
   (or (buffer-local-value 'agent-ui--canvas-part view)
       (and (boundp 'agent-ui-panels--state)
            (when-let* ((panel (buffer-local-value 'agent-ui-panels--state view)))
              (agent-ui-panels--name panel)))
-      "Agent UI"))
+      "Canvas"))
 
 (defun agent-ui--pane-bar (view)
-  "VIEW's bar, a header line: its name (see `agent-ui--pane-view-name')."
-  (list (propertize (concat " " (string-replace "%" "%%" (agent-ui--pane-view-name view)))
+  "VIEW's bar, a header line: its name (see `agent-ui-pane-view-name')."
+  (list (propertize (concat " " (string-replace "%" "%%" (agent-ui-pane-view-name view)))
                     'face 'agent-ui-pane-bar-name)))
 
 ;; THE BAR UNDER ITS VIEWS

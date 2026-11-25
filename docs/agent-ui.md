@@ -156,7 +156,7 @@ elements come and go; a height you give it stays until what it shows needs anoth
 ones (`ask`, `tests`...) are **views**, laid out there to use the room: in columns, each a stack of views, as many
 columns as fit (40 columns a view; 80 for one showing a diff, code, a graph or diagram, a heatmap, a timeline or a
 comparison), the short views stacked beside a tall one, the session's own first. They're laid out again when views
-open or close, not while the agent updates them. Each view scrolls and is selected on its own, with a bar naming it (the session's own: `Agent UI`) instead of a mode line. A bar under them all
+open or close, not while the agent updates them. Each view scrolls and is selected on its own, with a bar naming it (the session's own: `Canvas`) instead of a mode line. A bar under them all, `Agent UI`,
 says how many views there are and their keys; the session's mode line stays under the conversation.
 
 | Key | Action |

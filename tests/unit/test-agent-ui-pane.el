@@ -168,11 +168,12 @@ keeps its mode line, the view has a bar instead (its name, the keys)."
         (should (= (+ (window-total-height window) (window-total-height cell)) height))
         (should (agent-ui-pane-window-p cell))
         (should-not (agent-ui-pane-window-p window))
-        ;; Its name on its bar; under it, Agent UI's bar: what it is, its
-        ;; keys. No tab line; the conversation's mode line its own.
+        ;; Its name on its bar (Canvas: Agent UI is the bar's under it);
+        ;; under it, Agent UI's bar: what it is, its keys. No tab line;
+        ;; the conversation's mode line its own.
         (should (eq (window-parameter cell 'tab-line-format) 'none))
         (should-not (window-parameter window 'mode-line-format))
-        (should (equal (+test-aup-bar cell) " Agent UI"))
+        (should (equal (+test-aup-bar cell) " Canvas"))
         (let ((under (+test-aup-bar cell 'mode-line-format)))
           (should (string-prefix-p " Agent UI" under))
           (should-not (string-search "views" under))
@@ -212,6 +213,7 @@ under the leftmost column, the keys under the rightmost; the others' none."
       (should (> (window-left-column c) (window-left-column a)))
       (should (= (window-top-line c) (window-top-line a)))
       (should (= (window-total-height c) (+ (window-total-height a) (window-total-height b))))
+      (should (equal (+test-aup-bar a) " Canvas"))
       (should (string-prefix-p " tests" (+test-aup-bar b)))
       (should (string-prefix-p " logs" (+test-aup-bar c)))
       ;; The bar under them: under tests (leftmost), under logs (the keys).

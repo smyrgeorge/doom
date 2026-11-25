@@ -29,13 +29,12 @@
 (declare-function agent-ui-pane-attach-window "agent-ui/pane")
 (declare-function agent-ui-pane-detach "agent-ui/pane")
 (declare-function agent-ui-pane-cells "agent-ui/pane")
+(declare-function agent-ui-pane-view-name "agent-ui/pane")
 (declare-function agent-ui--session-name "agent-ui/agent")
-(declare-function agent-ui-panels--name "agent-ui/panels")
 (declare-function agent-ui-session-canvases "agent-ui/agent")
 (declare-function evil-normalize-keymaps "evil-core")
 (declare-function agent-workspace-agent-panels "agent-workspace/panels")
 (defvar agent-ui-display-function)
-(defvar agent-ui-panels--state)
 (defvar agent-ui--canvas-part)
 (defvar agent-ui-focus-questions)
 
@@ -385,13 +384,9 @@ show something, then its panels; their buffers."
 
 (defun agent-workspace--tab-name (tab)
   "TAB's name: its panel's (\"tests\"), its other canvas's (\"ask\"), as
-they were named, or \"Canvas\": the app's word for its main one, as CREW
-is the minimap's."
-  (if-let* (((boundp 'agent-ui-panels--state))
-            (panel (buffer-local-value 'agent-ui-panels--state tab)))
-      (agent-ui-panels--name panel)
-    (or (and (boundp 'agent-ui--canvas-part) (buffer-local-value 'agent-ui--canvas-part tab))
-        "Canvas")))
+they were named, or \"Canvas\": its main one, as Agent UI names it on its
+bar."
+  (agent-ui-pane-view-name tab))
 
 (define-minor-mode agent-workspace-side-mode
   "An agent's canvas or panel shown in its pane on the stage: v goes to the
