@@ -9,7 +9,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'map)
 
 (declare-function agent-shell--start "agent-shell")
 (declare-function agent-shell-subscribe-to "agent-shell")

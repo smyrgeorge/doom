@@ -12,7 +12,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'ansi-color)               ; its faces: the agents' colours
 
 ;; worktree.el and session.el, loaded after.
 (declare-function agent-workspace-worktree-ensure "agent-workspace/worktree")
@@ -170,6 +169,7 @@ this Emacs's."
 
 (defun agent-workspace-agent-face (agent)
   "AGENT's colour as a face: the theme's ANSI face (use its foreground)."
+  (require 'ansi-color)                 ; its faces: loaded when first used
   (intern (concat "ansi-color-" (or (agent-workspace-agent-colour agent) "blue"))))
 
 (defun agent-workspace-buffer-name (agent)

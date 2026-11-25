@@ -14,9 +14,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'svg)
-(require 'mailcap)
-(require 'color)
 
 ;; ====== VARIABLES ======
 
@@ -405,9 +402,6 @@ text the agent reads."
 ;; link agent-shell draws, and opens with `browse-url'; its handler here shows
 ;; the canvas's pane, selected, the cursor on element ID.
 
-(require 'url-parse)
-(require 'url-util)
-
 (defun agent-ui-link (canvas &optional id)
   "The link to CANVAS (its name) and, with ID, to its element ID."
   (concat "agent-ui://canvas/" (url-hexify-string canvas)
@@ -458,6 +452,7 @@ text's first character), or nil."
             (setq pos (next-single-property-change pos 'agent-ui-child nil end)))
           (and (< pos end) pos))))))
 
-(require 'browse-url)
-(add-to-list 'browse-url-handlers '("\\`agent-ui:" . agent-ui-open-link))
+;; Once browse-url is loaded (by the first link opened): not as Emacs starts.
+(with-eval-after-load 'browse-url
+  (add-to-list 'browse-url-handlers '("\\`agent-ui:" . agent-ui-open-link)))
 

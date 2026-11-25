@@ -4,8 +4,6 @@
 ;; (Allow, Always allow, Reject...), read from its buffer and pressed as they
 ;; are. Loaded from config/agent-shell.el.
 
-(require 'text-property-search)
-(require 'map)
 (require 'seq)
 (require 'subr-x)
 

@@ -13,7 +13,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'json)
 
 (defvar agent-workflow-bd-actor "agent-workflow"
   "Who the engine's writes are in the issues' history (BEADS_ACTOR).")

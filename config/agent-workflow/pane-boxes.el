@@ -6,8 +6,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'map)
-(require 'ansi-color)
 
 (defvar agent-shell--state)
 

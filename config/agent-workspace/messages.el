@@ -21,7 +21,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'map)
 
 (declare-function agent-shell-subscribe-to "agent-shell")
 

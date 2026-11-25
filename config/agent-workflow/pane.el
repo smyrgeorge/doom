@@ -38,8 +38,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'map)
-(require 'ansi-color)
 
 (defvar agent-workflow-pane-log-lines)
 (defvar agent-ui-answer-function)

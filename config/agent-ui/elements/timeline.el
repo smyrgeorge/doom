@@ -16,7 +16,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'svg)
 
 (defconst agent-ui-timeline--statuses
   '((done agent-ui-success) (running agent-ui-accent) (failed agent-ui-error) (queued agent-ui-muted))

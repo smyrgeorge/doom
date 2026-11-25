@@ -46,9 +46,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'json)
-(require 'map)
-(require 'filenotify)
 
 (defvar agent-shell--state)
 

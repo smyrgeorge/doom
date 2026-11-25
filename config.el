@@ -148,7 +148,8 @@
 ;; laid over a window: the notices, the error stripe, WebKit's cover; Emacs in
 ;; a terminal; garbage collection; profiling: SPC h T starts the profiler,
 ;; again writes a profile for an agent, who reads skills/emacs-profiling first;
-;; this config's functions byte-compiled when Emacs is idle)
+;; this config's functions byte-compiled when Emacs is idle; Emacs's libraries
+;; loaded when first used, not at startup)
 (load! "config/emacs")
 
 ;; TILING (SPC w SPC: a new pane where the tiling strategy puts it; tiling first:

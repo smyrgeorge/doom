@@ -16,8 +16,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'svg)
-(require 'parse-time)
 
 (defconst agent-ui-chart-faces
   '(agent-ui-accent agent-ui-warning font-lock-constant-face agent-ui-success agent-ui-error

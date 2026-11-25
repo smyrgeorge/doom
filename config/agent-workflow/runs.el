@@ -45,9 +45,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'json)
-(require 'map)
-(require 'crm)                          ; crm-separator, let-bound: special first
 
 (declare-function agent-shell-insert "agent-shell")
 (declare-function agent-shell--prompt-queue-enqueue "agent-shell-prompt-queue")

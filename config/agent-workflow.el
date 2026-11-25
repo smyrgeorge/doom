@@ -229,6 +229,7 @@ last few, scrolling back through these)."
 ;; Emacs quits: the pool's sessions end with it, asking nothing.
 (add-hook 'kill-emacs-hook #'agent-workflow--quit-h)
 
-;; Emacs starting: the runs not over read back (and continued, if
-;; `agent-workflow-continue-on-start').
-(add-hook 'emacs-startup-hook #'agent-workflow-restore-all)
+;; Emacs started: the runs not over read back (and continued, if
+;; `agent-workflow-continue-on-start'), once it's been idle a second, not
+;; while it starts.
+(add-hook 'emacs-startup-hook #'agent-workflow-restore-all-when-idle)

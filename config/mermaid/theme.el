@@ -1,8 +1,6 @@
 ;;; $DOOMDIR/config/mermaid/theme.el -*- lexical-binding: t; -*-
 ;; Mermaid's config in the theme's colours. Loaded from config/mermaid.el.
 
-(require 'color)
-
 ;; THE THEME'S COLOURS (see config/mermaid.el)
 ;; Each colour Mermaid's base theme takes, from a face: (VARIABLE FACE
 ;; ATTRIBUTE [AMOUNT]), AMOUNT blending the colour into the theme's background

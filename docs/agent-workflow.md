@@ -625,8 +625,9 @@ agent-workflow-watch`:
 
 ### Stopped, then on again
 
-A run's `state.json` holds all it needs to come back. When Emacs starts, the runs not over of the projects that had
-some are read back, each with the workflow it started with; a job that was running is interrupted, and waits for you.
+A run's `state.json` holds all it needs to come back. Once Emacs has started (idle a second), the runs not over of the
+projects that had some are read back, each with the workflow it started with (a command using a project's runs before
+reads them back first); a job that was running is interrupted, and waits for you.
 
 - `M-x agent-workflow-continue` continues every interrupted run of the project: an agent step's session is resumed
   in the same worktree and told it was interrupted and what the branch has now (a fresh one is told the same, if it

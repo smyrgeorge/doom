@@ -20,7 +20,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'url-util)
 
 ;; ====== VARIABLES ======
 

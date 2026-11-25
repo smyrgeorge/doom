@@ -9,8 +9,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'map)
-(require 'crm)
 
 
 ;; ====== STARTING ONE ======
@@ -531,7 +529,7 @@ issues): their ids."
          (candidates (mapcar (lambda (issue)
                                (cons (concat (string-pad (nth 0 issue) width) "  " (nth 1 issue)) issue))
                              issues))
-         (crm-separator (agent-workflow--separator (mapcar #'car candidates))))
+         (separator (agent-workflow--separator (mapcar #'car candidates))))
     (dolist (issue issues)
       (puthash (nth 0 issue) (or (alist-get 'status (nth 3 issue)) "open") statuses))
     (dolist (candidate candidates)
@@ -550,8 +548,12 @@ issues): their ids."
                         (if (equal (nth 2 issue) "epic")
                             (agent-workflow-epic-issues project (car issue))
                           (list (car issue)))))
-                    (completing-read-multiple "Run on: " (agent-workflow--issues-table candidates affixes)
-                                              nil t))
+                    ;; crm loaded first: its `crm-separator' bound as its own
+                    ;; (crm isn't loaded as Emacs starts, config/emacs/libraries.el).
+                    (progn (require 'crm)
+                           (dlet ((crm-separator separator))
+                             (completing-read-multiple "Run on: " (agent-workflow--issues-table candidates affixes)
+                                                       nil t))))
         (user-error "No issue picked"))))
 
 (defconst agent-workflow--picker-gap 2

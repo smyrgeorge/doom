@@ -10,8 +10,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'color)
-(require 'svg)
 
 ;; ====== VARIABLES ======
 

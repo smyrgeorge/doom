@@ -35,9 +35,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'text-property-search)
-(require 'json)
-(require 'map)
 
 (declare-function agent-shell-subscribe-to "agent-shell")
 (defvar flycheck-global-modes)

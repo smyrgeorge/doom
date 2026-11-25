@@ -34,8 +34,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'color)
-(require 'parse-time)
 
 (defconst agent-ui-progress--eighths [" " "▏" "▎" "▍" "▌" "▋" "▊" "▉"]
   "A cell partly filled, by eighths.")

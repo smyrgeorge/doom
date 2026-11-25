@@ -1,8 +1,9 @@
 ;;; $DOOMDIR/config/emacs.el -*- lexical-binding: t; -*-
 ;; Emacs itself: what differs between macOS and Linux, the frame and its
 ;; windows, child frames, Emacs in a terminal, garbage collection, profiling,
-;; and this config's functions compiled. Loaded from config.el, first: the
-;; other files use what differs between macOS and Linux, child frames and the
+;; Emacs's libraries loaded when first used, and this config's functions
+;; compiled. Loaded from config.el, first: the other files use what differs
+;; between macOS and Linux, the libraries' autoloads, child frames and the
 ;; focus of new windows. Its code is in config/emacs/.
 
 ;; ====== VARIABLES ======
@@ -124,6 +125,12 @@
 (defvar +my/profiling-top 30
   "Functions the summary lists, by time and by memory.")
 
+;; LIBRARIES (config/emacs/libraries.el)
+;; Emacs's own libraries this config uses (svg, url, map, json...) load when
+;; first used, not as Emacs starts: each costs ~8 ms to load here, however
+;; small (a native-compiled .eln opened), and config.el loaded 33 of them,
+;; a quarter of a second. Their functions are autoloaded.
+
 ;; COMPILE (config/emacs/compile.el)
 ;; Doom loads config.el and config/*.el as source, so their functions ran
 ;; interpreted, several times slower than compiled: e.g. the stripe's redraw on
@@ -145,7 +152,9 @@
 
 ;; ====== CODE ======
 
-;; What differs between macOS and Linux first: the other files use it.
+;; Emacs's libraries autoloaded, and what differs between macOS and Linux,
+;; first: the other files use them.
+(load! "emacs/libraries")
 (load! "emacs/os")
 (load! "emacs/window")
 (load! "emacs/childframe")

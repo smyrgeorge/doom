@@ -25,7 +25,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'text-property-search)
 
 (declare-function treemacs-get-local-window "treemacs-scope")
 (declare-function treemacs-current-workspace "treemacs-scope")

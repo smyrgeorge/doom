@@ -655,6 +655,32 @@ jobs:
         (should (eq (+test-awr--job back "b") 'pending))
         (agent-workflow--cancel back)))))
 
+(ert-deftest agent-workflow-runs/runs-over-passed-by-as-emacs-starts ()
+  "Emacs starting: a run over isn't read back, its workflow not parsed
+(~50 ms each: they were, every one, as Emacs started); read on its own,
+it still is, whole. The restore waits for Emacs to be idle, not done in
+`emacs-startup-hook' itself (doom-djc.35)."
+  (should (memq #'agent-workflow-restore-all-when-idle emacs-startup-hook))
+  (should-not (memq #'agent-workflow-restore-all emacs-startup-hook))
+  (+test-awr "over"
+    (write-region "description: x
+for: [chore]
+jobs:
+  a:
+    run: echo a
+" nil (expand-file-name ".agent-workflow/workflows/chores.yml" project))
+    (let ((run (agent-workflow-start-run project (+test-awr--issue project "Over" "--type" "chore")))
+          (parsed 0))
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'done)) 10))
+      (setq agent-workflow--runs nil)
+      (cl-letf* ((read (symbol-function 'agent-workflow-workflow-read))
+                 ((symbol-function 'agent-workflow-workflow-read)
+                  (lambda (&rest args) (cl-incf parsed) (apply read args))))
+        (should-not (agent-workflow-restore project))
+        (should (= parsed 0))
+        (should (eq (agent-workflow-run-state (agent-workflow--read-run (agent-workflow-run-dir run))) 'done))
+        (should (= parsed 1))))))
+
 (ert-deftest agent-workflow-runs/interrupted-waiting-for-an-agent ()
   "A job whose agent step waits for a free agent (the pool full),
 interrupted (its budget used up, paused now): it waits for you, not for an

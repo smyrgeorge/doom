@@ -14,7 +14,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'svg)
 
 (defun agent-ui-stats--figure (entry index)
   (cl-flet ((bad (what) (agent-ui--fail "stats: figure %d %s" index what)))

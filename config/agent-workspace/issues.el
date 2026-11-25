@@ -16,8 +16,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'json)
-(require 'map)
 
 (declare-function agent-shell-subscribe-to "agent-shell")
 (declare-function agent-ui-even-glyphs "agent-ui/core")

@@ -19,7 +19,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'map)
 
 (defvar agent-shell--state)
 (defvar agent-workflow-budget)

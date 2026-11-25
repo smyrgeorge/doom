@@ -15,7 +15,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'svg)
 
 (defconst agent-ui-graph--statuses
   '((none nil) (ok agent-ui-success) (error agent-ui-error) (warning agent-ui-warning) (active agent-ui-accent))

@@ -61,7 +61,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'json)
 
 (declare-function agent-workflow-pause "agent-workflow/resume")
 (declare-function agent-workflow--dry-run "agent-workflow/dry")

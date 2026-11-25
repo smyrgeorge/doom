@@ -6,7 +6,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'map)
 
 
 ;; ====== NEEDS YOU ======

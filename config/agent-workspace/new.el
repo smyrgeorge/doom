@@ -242,7 +242,9 @@ to add, :full."
          (labels (plist-get spec :labels))
          (hands (plist-get spec :hands-to))
          (full (and max (>= count max)))
-         (colour (and (plist-get spec :colour) (intern (concat "ansi-color-" (plist-get spec :colour)))))
+         (colour (and (plist-get spec :colour)
+                      (progn (require 'ansi-color) ; its faces: loaded when first used
+                             (intern (concat "ansi-color-" (plist-get spec :colour))))))
          (icon (plist-get spec :icon)))
     (list :icon (agent-workspace-glyph (cons (and icon (concat "nf-" (string-remove-prefix "nf-" icon)))
                                              (or (plist-get spec :glyph) "▶"))

@@ -3,17 +3,19 @@
 ;; config/agent-workflow.el, after steps.el. No Doom here.
 ;;
 ;; A run's state.json holds all it needs to come back (runs.el). Emacs
-;; starting, the runs not over of the projects that had some (noted in
-;; `agent-workflow-projects-file') are read back, each with the workflow it
-;; started with (its workflow.yml); a project's are read back too when you
-;; use it before (M-x agent-workflow-run-ticket, continue...). A job that was
-;; running is interrupted: it waits for you, as does its run. Continue it
-;; (M-x agent-workflow-continue: every run of the project at once; one, with
-;; its issue, from the shell): an agent step's session resumed in the same
-;; worktree, told it was interrupted and what the branch has now (a fresh
-;; one told the same, if it can't be); a script run again from its start.
-;; Done steps never run again. Or skip its step, go back to a job, or cancel
-;; the run. `agent-workflow-continue-on-start' continues them by itself.
+;; started (once idle a second, not while it starts), the runs not over of
+;; the projects that had some (noted in `agent-workflow-projects-file') are
+;; read back, each with the workflow it started with (its workflow.yml); a
+;; run over is passed by, its workflow not parsed. A project's are read back
+;; too when you use it before (M-x agent-workflow-run-ticket, continue...).
+;; A job that was running is interrupted: it waits for you, as does its
+;; run. Continue it (M-x agent-workflow-continue: every run of the project
+;; at once; one, with its issue, from the shell): an agent step's session
+;; resumed in the same worktree, told it was interrupted and what the branch
+;; has now (a fresh one told the same, if it can't be); a script run again
+;; from its start. Done steps never run again. Or skip its step, go back to
+;; a job, or cancel the run. `agent-workflow-continue-on-start' continues
+;; them by itself.
 ;;
 ;; A run keeps the workflow it started with; continuing with the current
 ;; one (C-u, --current) takes the project's now, jobs kept by their names.
@@ -29,7 +31,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'json)
 
 (defvar agent-workflow-projects-file)
 (defvar agent-workflow-continue-on-start)
@@ -78,16 +79,21 @@
                            (_ value))))))
     state))
 
-(defun agent-workflow--read-run (dir)
+(defun agent-workflow--read-run (dir &optional not-over)
   "The run in DIR (a run's folder), read back from its state.json and the
-workflow it started with: a run, or nil if it can't be."
+workflow it started with: a run, or nil if it can't be. NOT-OVER: nil for
+a run that's over too, its workflow not read (parsing it takes ~50 ms:
+Emacs starting, every run of every project is looked at)."
   (let ((state-file (expand-file-name "state.json" dir))
         (workflow-file (expand-file-name "workflow.yml" dir)))
     (when (and (file-readable-p state-file) (file-readable-p workflow-file))
       (let* ((saved (with-temp-buffer
                       (insert-file-contents state-file)
                       (json-parse-buffer :object-type 'plist :array-type 'list :null-object nil :false-object nil)))
-             (workflow (car (agent-workflow-workflow-read workflow-file 'any (plist-get saved :workflow))))
+             (over (and not-over
+                        (memq (intern (or (plist-get saved :state) "")) agent-workflow--ended)))
+             (workflow (and (not over)
+                            (car (agent-workflow-workflow-read workflow-file 'any (plist-get saved :workflow)))))
              (project (file-name-as-directory
                        (expand-file-name "../../../../../" (file-name-as-directory dir)))))
         (when workflow
@@ -125,7 +131,7 @@ that were running interrupted, waiting for you; the others looked at
         (dolist (run-dir (and (file-directory-p issue-dir) (directory-files issue-dir t "\\`[0-9]+\\'")))
           (let ((dir (file-name-as-directory run-dir)))
             (unless (seq-find (lambda (run) (equal (agent-workflow-run-dir run) dir)) agent-workflow--runs)
-              (when-let* ((run (ignore-errors (agent-workflow--read-run dir))))
+              (when-let* ((run (ignore-errors (agent-workflow--read-run dir t))))
                 (unless (memq (agent-workflow-run-state run) agent-workflow--ended)
                   (setf (agent-workflow-run-project run) (file-name-as-directory project))
                   (dolist (job (agent-workflow-run-jobs run))
@@ -151,13 +157,21 @@ that were running interrupted, waiting for you; the others looked at
 
 (defun agent-workflow-restore-all ()
   "Every noted project's runs read back; continued, if
-`agent-workflow-continue-on-start' says. In `emacs-startup-hook'."
+`agent-workflow-continue-on-start' says. Once Emacs is ready
+\(`agent-workflow-restore-all-when-idle')."
   (dolist (project (agent-workflow--known-projects))
     (when (file-directory-p project)
       (let ((runs (with-demoted-errors "agent workflow: %S" (agent-workflow-restore project))))
         (when agent-workflow-continue-on-start
           (dolist (run runs)
             (with-demoted-errors "agent workflow: %S" (agent-workflow--continue run))))))))
+
+(defun agent-workflow-restore-all-when-idle ()
+  "`agent-workflow-restore-all' once Emacs has been idle a second: Emacs
+ready first (a run not over read back parses its workflow, ~50 ms). A
+command using a project's runs before reads them back itself
+\(`agent-workflow--ensure-restored'). In `emacs-startup-hook'."
+  (run-with-idle-timer 1 nil #'agent-workflow-restore-all))
 
 (defun agent-workflow--ensure-restored (project)
   "PROJECT's runs read back, if they haven't been (before a command uses

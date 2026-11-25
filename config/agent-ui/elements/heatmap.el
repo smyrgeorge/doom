@@ -16,8 +16,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'svg)
-(require 'color)
 
 (defconst agent-ui-heatmap--states
   '(("passed" . agent-ui-success) ("pass" . agent-ui-success) ("ok" . agent-ui-success)

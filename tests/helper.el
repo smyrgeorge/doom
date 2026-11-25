@@ -406,9 +406,10 @@ pass stopped, unless `+test-compile'."
       (cancel-timer +my/compile--timer))
     (remove-hook 'after-load-functions '+my/compile-pending-h)))
 
-;; What config.el loads first, which the other files use (config/emacs/os.el,
-;; config/emacs.el's first part); the apps it starts only recorded (see NOTHING
-;; OPENS OUTSIDE). Advice stays when a test loads it again.
+;; What config.el loads first, which the other files use (config/emacs/
+;; libraries.el, os.el, config/emacs.el's first part); the apps it starts only
+;; recorded (see NOTHING OPENS OUTSIDE). Advice stays when a test loads it again.
+(+test-load "config/emacs/libraries")
 (+test-load "config/emacs/os")
 (advice-add '+my/os--run :override
             (lambda (program &rest args) (push (cons program args) +test-os-runs) 0)

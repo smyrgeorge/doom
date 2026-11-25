@@ -1,7 +1,7 @@
 ;;; tests/unit/test-emacs.el -*- lexical-binding: t; -*-
 ;; config/emacs.el's garbage collection: it waits for 32 MB while idle (gcmh's
 ;; low threshold), instead of gcmh's 800 KB. Its parts' tests: test-os.el,
-;; test-profiling.el, test-compile.el.
+;; test-libraries.el, test-profiling.el, test-compile.el.
 
 (+test-load "config/emacs")
 
@@ -51,14 +51,17 @@
       (gcmh-mode -1))))
 
 (ert-deftest emacs/config-el-loads-it-first ()
-  "First of the config files, so it holds from the start; its part for what
+  "First of the config files, so it holds from the start; its parts for
+Emacs's libraries (config/emacs/libraries.el, their autoloads) and what
 differs between macOS and Linux (config/emacs/os.el) first of its own: the
-other files use its functions."
+other files use their functions."
   (let* ((forms (+test-emacs--config-forms))
          (loads (seq-filter (lambda (form) (eq (car-safe form) 'load!)) forms)))
     (should (equal (car loads) '(load! "config/emacs")))
     (should-not (member '(load! "config/os") loads))
     (with-temp-buffer
       (insert-file-contents (expand-file-name "config/emacs.el" +test-root))
+      (should (re-search-forward "^(load! \"\\([^\"]+\\)\")" nil t))
+      (should (equal (match-string 1) "emacs/libraries"))
       (should (re-search-forward "^(load! \"\\([^\"]+\\)\")" nil t))
       (should (equal (match-string 1) "emacs/os")))))

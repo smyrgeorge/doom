@@ -58,7 +58,6 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'json)
 
 (declare-function agent-workspace-inbox-add "agent-workspace/inbox")
 (declare-function agent-workspace-inbox-count "agent-workspace/inbox")

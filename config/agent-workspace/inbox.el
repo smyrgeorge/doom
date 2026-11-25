@@ -35,7 +35,6 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
-(require 'json)
 
 (declare-function agent-shell--config-option-set-mode-id "agent-shell")
 

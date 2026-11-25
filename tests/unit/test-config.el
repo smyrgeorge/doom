@@ -44,9 +44,17 @@ order, theirs included: the `load!'s among its top-level forms."
                append (append (+test-config--parts part) (list part))))))
 
 (defvar +test-config--history-before
-  (remove (expand-file-name "config/emacs/os.el" +test-root) (mapcar #'car load-history))
-  "The files loaded before config.el; but config/emacs/os.el, which
-tests/helper.el loads too (config.el loads it again, first).")
+  (seq-difference (mapcar #'car load-history)
+                  (mapcar (lambda (part) (expand-file-name (concat "config/emacs/" part ".el") +test-root))
+                          '("libraries" "os")))
+  "The files loaded before config.el; but config/emacs/libraries.el and
+os.el, which tests/helper.el loads too (config.el loads them again, first).")
+
+(defvar +test-config--features-before features
+  "The features loaded before config.el.")
+
+(defvar +test-config--features-after nil
+  "The features loaded once config.el has, before any test ran.")
 
 (defvar +test-config--error nil "What loading config.el signalled, if anything.")
 
@@ -75,7 +83,8 @@ tests/helper.el loads too (config.el loads it again, first).")
         (+test-load "config")
       (error (setq +test-config--error err))))
   (setq +test-config--default-directory default-directory
-        +test-config--fill-column-buffer fill-column))
+        +test-config--fill-column-buffer fill-column
+        +test-config--features-after features))
 
 (let ((root (file-name-as-directory (expand-file-name +test-root))))
   (setq +test-config--loaded-files
@@ -368,12 +377,25 @@ config/emacs.el) is set up before tiling uses it."
              (+test-config--load-position "config/tiling"))))
 
 (ert-deftest config/order-emacs-first ()
-  "config/emacs.el is the first file config.el loads, and its part for what
+  "config/emacs.el is the first file config.el loads, and its parts for
+Emacs's libraries (config/emacs/libraries.el, their autoloads) and what
 differs between macOS and Linux (config/emacs/os.el) its first: the other
-files use it."
+files use them."
   (should (equal (car (+test-config--loads)) "config/emacs"))
-  (should (equal (car (+test-config--parts "config/emacs")) "config/emacs/os"))
-  (should (equal (car (+test-config--loaded)) (+test-config--file "config/emacs/os"))))
+  (should (equal (seq-take (+test-config--parts "config/emacs") 2)
+                 '("config/emacs/libraries" "config/emacs/os")))
+  (should (equal (car (+test-config--loaded)) (+test-config--file "config/emacs/libraries"))))
+
+(ert-deftest config/loads-no-library-it-defers ()
+  "Loading config.el loads none of Emacs's libraries it uses but defers to
+their first use (config/emacs/libraries.el): each costs ~8 ms as Emacs
+starts, and its top-level requires loaded 33 of them, 0.26 s (doom-djc.36)."
+  (should-not (seq-filter (lambda (feature)
+                            (and (memq feature '(map svg dom xml color parse-time iso8601 mailcap browse-url
+                                                     url url-util url-parse auth-source eieio
+                                                     text-property-search ansi-color filenotify crm json))
+                                 (not (memq feature +test-config--features-before))))
+                          +test-config--features-after)))
 
 (ert-deftest config/compile-sees-every-file ()
   "config/emacs/compile.el loads first, with config/emacs.el, but compiles

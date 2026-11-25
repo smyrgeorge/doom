@@ -21,9 +21,7 @@
 ;; only.
 
 (require 'cl-lib)
-(require 'map)
 (require 'subr-x)
-(require 'svg)
 
 (declare-function nerd-icons-mdicon "nerd-icons")
 (declare-function nerd-icons-codicon "nerd-icons")
