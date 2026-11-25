@@ -68,7 +68,8 @@ agent-ui show '{"id":"matrix","type":"heatmap","title":"Test runs by OS","rows":
 
 Tasks as bars on a time axis: `{"name", "start", "end" or "duration", "status"}`, times in seconds or timestamps; a
 task without `end` nor `duration` runs until now (with timestamps it grows). `status` running, done, failed or queued
-colours it. For CI jobs, parallel test shards, a trace's spans; update the element as tasks start and end.
+colours it. Times under 1.5 s show in milliseconds (`"duration": 0.34` is 340ms). For CI jobs, parallel test shards, a
+trace's spans; update the element as tasks start and end.
 
 ```sh
 agent-ui show '{"id":"ci","type":"timeline","title":"CI","tasks":[{"name":"build","start":0,"duration":8},{"name":"test-1","start":8,"duration":14},{"name":"test-2","start":8,"duration":11,"status":"failed"},{"name":"deploy","start":22,"duration":4,"status":"queued"}]}'

@@ -4281,6 +4281,40 @@ later, 22 hours wide); one still running: to now."
     (should (string-match-p "<rect" svg)))
   (should (equal (+test-aue-draw '(:type "timeline")) "no tasks")))
 
+(ert-deftest agent-ui-elements/timeline-milliseconds ()
+  "Times under 1.5 s in milliseconds, a task's and the scale's, in text and
+in the GUI (0.34 s was 0s, 1.2 s 1s); longer ones in seconds; the
+threshold `agent-ui-timeline-milliseconds-below'."
+  (should (equal (agent-ui-timeline--duration 0.34) "340ms"))
+  (should (equal (agent-ui-timeline--duration 1.2) "1200ms"))
+  (should (equal (agent-ui-timeline--duration 1.4994) "1499ms"))
+  (should (equal (agent-ui-timeline--duration 1.5) "2s"))
+  (should (equal (agent-ui-timeline--duration 8) "8s"))
+  (let ((agent-ui-timeline-milliseconds-below 0))
+    (should (equal (agent-ui-timeline--duration 0.34) "0s")))
+  (let ((element '(:type "timeline" :tasks ((:name "parse" :start 0 :duration 0.12)
+                                           (:name "check" :start 0.12 :duration 0.34 :status "failed")
+                                           (:name "emit" :start 0.46 :duration 0.54)))))
+    (let ((text (+test-aue-draw element :width 50)))
+      (should (string-match-p "  120ms\n" text))
+      (should (string-match-p "  340ms\n" text))
+      (should (string-match-p "  540ms\n" text))
+      ;; The scale in milliseconds, its start too.
+      (should (string-match-p "^ +0ms +500ms +1000ms\\'" (car (last (split-string text "\n")))))
+      (dolist (width '(15 20 25 30))
+        (dolist (line (split-string (+test-aue-draw element :width width) "\n"))
+          (should (<= (string-width line) width)))))
+    (let ((svg (+test-aue-svg element 60)))
+      (should (string-match-p ">340ms</text>" svg))
+      (should (string-match-p ">0ms</text>" svg))
+      (should (string-match-p ">1000ms</text>" svg))))
+  ;; Over 1.5 s: seconds, the scale from 0s.
+  (let ((text (+test-aue-draw '(:type "timeline" :tasks ((:name "a" :start 0 :duration 0.4) (:name "b" :start 0.4 :duration 3.6)))
+                              :width 50)))
+    (should (string-match-p "  400ms\n" text))
+    (should (string-match-p "  4s\n" text))
+    (should (string-match-p "^ +0s +2s +4s\\'" (car (last (split-string text "\n")))))))
+
 (ert-deftest agent-ui-elements/timeline-coloured-as-the-others ()
   "Its bars coloured as a checklist's steps and a graph's nodes are: running
 the accent (blue), done success (green), failed error; not running yellow
