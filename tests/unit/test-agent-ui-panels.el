@@ -457,6 +457,30 @@ with no code: not asked."
             (should (memq 'fetch +test-aup-calls)))
         (kill-buffer canvas)))))
 
+(ert-deftest agent-ui-panels/closed-before-its-code-starts ()
+  "Opened without being selected (its code started a moment later, as an
+agent opens one) and closed before: its code neither asked about nor run.
+It was asked about, closed (in batch, from stdin: the agent workspace's
+tests hit it, doom-b5u). Open then, it starts as ever."
+  (+test-aup `(("sourced" . ,(+test-aup-fixture "sourced")))
+    (setq +test-aup-calls nil)
+    (let* ((asked nil)
+           (agent-ui-panel-allow-function (lambda (panel) (push (agent-ui-panels--name panel) asked) t))
+           (canvas (save-window-excursion (agent-ui-open-panel "sourced" nil t))))
+      (should-not asked)
+      (kill-buffer canvas)
+      (+test-sleep 0.05)
+      (should-not asked)
+      (should-not +test-aup-calls)
+      (setq canvas (save-window-excursion (agent-ui-open-panel "sourced" nil t)))
+      (unwind-protect
+          (progn
+            (+test-sleep 0.05)
+            (should (equal asked '("sourced")))
+            ;; Its script evaluated (fetched once shown: hidden here).
+            (should (agent-ui-panels--script (buffer-local-value 'agent-ui-panels--state canvas))))
+        (kill-buffer canvas)))))
+
 (ert-deftest agent-ui-panels/the-panel-type-s-functions-its-own ()
   "No function of the panel element's (elements/panel.el) redefined by
 another file loaded after it (the project panels' code once took

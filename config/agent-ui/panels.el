@@ -640,8 +640,11 @@ an error of it kept and said. Non-nil if it went well."
 (defun agent-ui-panels--start (panel form)
   "PANEL's code started, if it has some and it's allowed: FORM (its file's)
 evaluated, its :ui drawn again with its sources, :start, :fetch now and
-every :every seconds."
-  (when (and (agent-ui-panels--code-p form (agent-ui-panels--ui panel))
+every :every seconds. Closed before (opened without being selected: started
+a moment later), nothing asked: a panel closed at once was asked about, its
+question come out of nowhere. Closed while it asks, nothing run."
+  (when (and (agent-ui-panels--live-p panel)
+             (agent-ui-panels--code-p form (agent-ui-panels--ui panel))
              (or (funcall agent-ui-panel-allow-function panel)
                  (agent-ui-panels--failed panel "its code" "not run, not let: gR asks again"))
              (agent-ui-panels--live-p panel))
