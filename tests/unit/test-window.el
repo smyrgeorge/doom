@@ -394,10 +394,12 @@ terminal, nor with no padding."
         (should (= (length got) 3))))))
 
 (ert-deftest window/an-agent-ui-canvas-s-right-fringe-unpadded ()
-  "An Agent UI canvas (made: `agent-ui-canvas-hook'): its right fringe as
-wide as its left, not padded (its lines drawn to fit, none cut), in the
-windows showing it now and later; another buffer's untouched."
+  "An Agent UI canvas (made: `agent-ui-canvas-hook'), the sidebar
+\(`treemacs-mode-hook': its selected line's bar had twice the room on its
+right): its right fringe as wide as its left, not padded, in the windows
+showing it now and later; another buffer's untouched."
   (should (memq #'+my/unpadded-right-fringe-h (default-value 'agent-ui-canvas-hook)))
+  (should (memq #'+my/unpadded-right-fringe-h (default-value 'treemacs-mode-hook)))
   (let ((canvas (+test-buffer "canvas")))
     (cl-letf* ((frame-parameter (symbol-function 'frame-parameter))
                ((symbol-function 'frame-parameter)

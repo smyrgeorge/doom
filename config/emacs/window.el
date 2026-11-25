@@ -37,14 +37,16 @@ frame."
 
 (defun +my/unpadded-right-fringe-h ()
   "The current buffer's right fringe as wide as its left, not padded (see
-FRINGES): a buffer whose lines are drawn to fit its window, none cut (an
-Agent UI canvas: config/agent-ui.el). Its windows now, and any it's shown
-in later."
+FRINGES): an Agent UI canvas (its lines drawn to fit, none cut:
+config/agent-ui.el), the sidebar (its selected line highlighted across:
+the bar had twice the room on its right). Its windows now, and any it's
+shown in later."
   (setq-local right-fringe-width (or (frame-parameter nil 'left-fringe) 8))
   (dolist (window (get-buffer-window-list nil nil t))
     (set-window-fringes window nil right-fringe-width)))
 
 (add-hook 'agent-ui-canvas-hook #'+my/unpadded-right-fringe-h)
+(add-hook 'treemacs-mode-hook #'+my/unpadded-right-fringe-h)
 
 ;; NEW WINDOWS GET FOCUS (config/emacs.el). The command's end: once
 ;; `post-command-hook' runs at the level it ran at (a prompt it shows runs
