@@ -2080,8 +2080,10 @@ strips' frames synced (its window's hidden)."
         (should-not (memq fn (symbol-value hook)))))))
 
 (ert-deftest stripe/pad ()
-  "Fringes a column wider each side (graphical frames); the right one may be
-padded already."
+  "The left fringe a column wider (graphical frames); the right one Doom's,
+not padded though every window's is (config/emacs/window.el): the strip
+beside it, a wrapped line's space before it (the right side was half again
+the left)."
   (+test-stripe "x\n"
     ;; A terminal session: nothing (done when a graphical window shows it).
     (+my/stripe--pad)
@@ -2097,13 +2099,13 @@ padded already."
                       ('right-fringe right)
                       (_ (funcall parameter frame name))))))
         (+my/stripe--pad)
-        (should (equal (list left-fringe-width right-fringe-width) '(16 16)))
+        (should (equal (list left-fringe-width right-fringe-width) '(16 8)))
         (setq right 16)                 ; config/emacs/window.el's padding
         (+my/stripe--pad)
-        (should (equal (list left-fringe-width right-fringe-width) '(16 16)))
+        (should (equal (list left-fringe-width right-fringe-width) '(16 8)))
         (let ((+my/stripe-padding 2))
           (+my/stripe--pad)
-          (should (equal (list left-fringe-width right-fringe-width) '(24 24))))
+          (should (equal (list left-fringe-width right-fringe-width) '(24 8))))
         (kill-local-variable 'left-fringe-width)
         (let ((+my/stripe-padding nil))
           (+my/stripe--pad)

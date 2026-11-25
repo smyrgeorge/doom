@@ -52,19 +52,20 @@ buffer)."
                       fringes-outside-margins))
 
 (defun +my/stripe--pad (&optional frame)
-  "Widen the current buffer's fringes by `+my/stripe-padding' columns, as
-measured in FRAME or else any graphical frame. With none yet (a terminal
-session), it's done when a graphical window first shows the buffer."
+  "Widen the current buffer's left fringe by `+my/stripe-padding' columns, as
+measured in FRAME or else any graphical frame, its right one Doom's (see
+PADDING). With none yet (a terminal session), it's done when a graphical
+window first shows the buffer."
   (when-let* ((columns +my/stripe-padding)
               (frame (or frame
                          (seq-find (lambda (f) (and (display-graphic-p f)
                                                     (not (frame-parent f))))
                                    (cons (selected-frame) (frame-list))))))
-    (let ((pad (* columns (frame-char-width frame))))
-      ;; The right one may be padded already (config/emacs.el, FRINGES).
-      (setq-local left-fringe-width (+ (or (frame-parameter frame 'left-fringe) 8) pad)
-                  right-fringe-width (max (or (frame-parameter frame 'right-fringe) 8)
-                                          (+ 8 pad))))))
+    (let ((left (or (frame-parameter frame 'left-fringe) 8)))
+      ;; The right one not padded, though every window's is (config/emacs.el,
+      ;; FRINGES): the strip beside it, and a wrapped line's space before it.
+      (setq-local left-fringe-width (+ left (* columns (frame-char-width frame)))
+                  right-fringe-width left))))
 
 (defun +my/stripe--maybe-enable ()
   ;; `so-long-mode' (files with very long lines) replaces their mode and isn't
