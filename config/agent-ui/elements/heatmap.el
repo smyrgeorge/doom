@@ -205,7 +205,7 @@ month of days ran 97 columns wide at 60."
          (muted (agent-ui-chart--color 'agent-ui-muted)) (fg (agent-ui-chart--color 'default)))
     (cl-loop for c in (car heads) for j from 0
              do (svg-text svg c :x (+ label-w (* j cell-w) (/ cell-w 2)) :y (* 0.9 lh)
-                          :font-size (round size) :font-family (agent-ui--svg-font)
+                          :font-size (round size) :font-family (agent-ui--svg-font) :font-weight agent-ui-svg-font-weight
                           :fill muted :text-anchor "middle"))
     (cl-loop for row in (plist-get props :values) for label in labels for y in ys for h in heights
              do (progn

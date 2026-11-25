@@ -168,6 +168,7 @@ Questions have keys of their own ([Types that ask](#types-that-ask)).
 | `agent-ui-spinner-pulse` | `8` | The spinner's glow, over this many animation ticks. `nil`: no glow |
 | `agent-ui-max-rows` | `500` | The most rows (a table's) or values (a chart's) an element draws |
 | `agent-ui-max-chars` | `20000` | The most characters an element's drawing has |
+| `agent-ui-svg-font-weight` | `600` on macOS, `400` elsewhere | The weight of the text in charts, graphs and diagrams. On macOS, SemiBold matches the editor's text, which macOS draws a little heavier |
 
 Set them in `config.el`, such as `(setq agent-ui-close-finished nil)`.
 

@@ -271,8 +271,8 @@ chart's) that image. CTX: its :width (columns), :char-width, :line-height."
         (setq width (max width (+ (* 2 pad) (* col cw))))
         (cl-incf y height)))
     (let ((height (+ y pad)))
-      (concat (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" font-family=\"%s\" font-size=\"%d\" xml:space=\"preserve\" style=\"white-space:pre\">"
-                      width height (xml-escape-string family) (round (* 0.8 lh)))
+      (concat (format "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" font-family=\"%s\" font-size=\"%d\" font-weight=\"%s\" xml:space=\"preserve\" style=\"white-space:pre\">"
+                      width height (xml-escape-string family) (round (* 0.8 lh)) agent-ui-svg-font-weight)
               (format "<rect width=\"100%%\" height=\"100%%\" rx=\"6\" fill=\"%s\"/>" bg)
               (string-join (nreverse parts))
               "</svg>"))))

@@ -227,6 +227,7 @@ thick as the others); a line where the font isn't known."
     (if-let* ((size (plist-get ctx :font-size))
               (ascent (plist-get ctx :font-ascent)))
         (svg-text svg "│" :x (* cw column) :y ascent :font-size size :font-family (agent-ui--svg-font)
+                  :font-weight agent-ui-svg-font-weight
                   :fill color :transform (format "scale(1 %.4f)" (/ (round height) (float lh))))
       (svg-line svg (+ (* cw column) (/ cw 2.0)) 0 (+ (* cw column) (/ cw 2.0)) (round height)
                 :stroke color :stroke-width 1))

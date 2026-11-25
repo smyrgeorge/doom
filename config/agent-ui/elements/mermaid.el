@@ -53,11 +53,27 @@ most CTX's width. Sized in its data: a snapshot nests it as it's shown."
                    root t t)
                   (substring svg end)))))))
 
+(defun agent-ui-mermaid--weighted (svg)
+  "SVG (mmdc's) with its text at `agent-ui-svg-font-weight' (see THE SVGS'
+TEXT in config/agent-ui/core.el): on its root, which its labels inherit, and
+in place of the regular weight some of them set (a sequence's actors, in
+their style). Bold stays bold."
+  (if (or (eql agent-ui-svg-font-weight 400) (not (string-match "<svg\\b" svg)))
+      svg
+    (let ((at (match-end 0))
+          (weight (number-to-string agent-ui-svg-font-weight)))
+      (replace-regexp-in-string
+       "font-weight: *\\(?:400\\|normal\\)\\b" (concat "font-weight: " weight)
+       (concat (substring svg 0 at) " font-weight=\"" weight "\"" (substring svg at))
+       t t))))
+
 (defun agent-ui-mermaid--image (file ctx)
-  "FILE's SVG as an image (see `agent-ui-mermaid--sized')."
+  "FILE's SVG as an image (see `agent-ui-mermaid--sized'), its text's weight
+Agent UI's (`agent-ui-mermaid--weighted')."
   (propertize "diagram" 'display
               (agent-ui-image (create-image (agent-ui-mermaid--sized
-                                             (with-temp-buffer (insert-file-contents file) (buffer-string))
+                                             (agent-ui-mermaid--weighted
+                                              (with-temp-buffer (insert-file-contents file) (buffer-string)))
                                              ctx)
                                             'svg t :ascent 'center))))
 

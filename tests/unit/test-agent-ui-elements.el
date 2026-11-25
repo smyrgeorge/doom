@@ -4296,6 +4296,28 @@ later, 22 hours wide); one still running: to now."
     (should (string-match-p "<rect" svg)))
   (should (equal (+test-aue-draw '(:type "timeline")) "no tasks")))
 
+(ert-deftest agent-ui-elements/svg-text-at-its-weight ()
+  "The SVGs' text at `agent-ui-svg-font-weight': SemiBold on macOS (librsvg
+doesn't thicken it as macOS does the editor's: thin and washed out beside it),
+regular elsewhere; a chart's, a graph's, a gauge's; a bold one stays bold."
+  (should (eql (eval (car (get 'agent-ui-svg-font-weight 'standard-value)) t)
+               (if (eq system-type 'darwin) 600 400)))
+  (let ((agent-ui-svg-font-weight 600))
+    (dolist (element '((:type "chart" :kind "bar" :labels ("a" "b") :values (1 2))
+                       (:type "graph" :nodes ("a" "b") :edges (("a" "b")))
+                       (:type "timeline" :tasks ((:name "build" :start 0 :duration 8)))
+                       (:type "gauge" :value 3 :max 10)))
+      (let ((svg (+test-aue-svg element 60)))
+        (should (string-match-p "<text [^>]*font-weight=\"600\"" svg))
+        (should-not (string-match-p "font-weight=\"[^\"]*\"[^>]*font-weight=" svg))))
+    (let ((svg (with-temp-buffer
+                 (let ((s (svg-create 10 10)))
+                   (agent-ui-chart--svg-text s (agent-ui-context :graphic t) "x" 0 0 :font-weight "bold")
+                   (svg-print s)
+                   (buffer-string)))))
+      (should (string-search "font-weight=\"bold\"" svg))
+      (should-not (string-search "font-weight=\"600\"" svg)))))
+
 (ert-deftest agent-ui-elements/timeline-milliseconds ()
   "Times under 1.5 s in milliseconds, a task's and the scale's, in text and
 in the GUI (0.34 s was 0s, 1.2 s 1s); longer ones in seconds; the

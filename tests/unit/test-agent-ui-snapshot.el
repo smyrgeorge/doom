@@ -39,6 +39,16 @@
     ;; It reads as an image.
     (should (create-image svg 'svg t))))
 
+(ert-deftest agent-ui-snapshot/text-at-the-svgs-weight ()
+  "A snapshot's text (and a panel row's, drawn so) at
+`agent-ui-svg-font-weight', on its root; bold runs stay bold."
+  (let* ((agent-ui-svg-font-weight 600)
+         (svg (agent-ui-snapshot-svg (concat "plain " (propertize "strong" 'face 'bold))
+                                     (agent-ui-context :width 40 :char-width 8 :line-height 16))))
+    (should (string-match-p "\\`<svg [^>]* font-weight=\"600\"" svg))
+    (should (string-match-p "font-weight=\"bold\">strong</text>" svg))
+    (should (create-image svg 'svg t))))
+
 (ert-deftest agent-ui-snapshot/a-chart-nested ()
   (let* ((ctx (agent-ui-context :width 40 :graphic t :char-width 8 :line-height 16))
          (text (agent-ui-render '(:type "chart" :title "T" :values (1 3 2)) ctx))

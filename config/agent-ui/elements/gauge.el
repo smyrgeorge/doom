@@ -197,7 +197,8 @@ line of its own above (it was left out: \"lines covered\" gone at 24)."
                for i from 0
                do (svg-text svg line
                             :x cx :y (+ cy (* 2.0 lh) (* 0.9 lh i)) :text-anchor "middle"
-                            :font-size (round (* 0.75 lh)) :font-family font :fill (agent-ui-color 'agent-ui-muted)))
+                            :font-size (round (* 0.75 lh)) :font-family font
+                            :font-weight agent-ui-svg-font-weight :fill (agent-ui-color 'agent-ui-muted)))
       ;; Its range's ends under the arc's: smaller if they'd meet.
       (let* ((ends (concat (agent-ui-format-number min) "  " (agent-ui-format-number max)))
              (size (agent-ui-svg-fit-size ends (* 0.7 lh) (+ (* 2 r) stroke))))
@@ -205,7 +206,8 @@ line of its own above (it was left out: \"lines covered\" gone at 24)."
           (svg-text svg (agent-ui-format-number (car end))
                     :x (if (equal (cdr end) "start") (- cx r (/ stroke 2.0)) (+ cx r (/ stroke 2.0)))
                     :y (+ cy (* 0.9 lh)) :text-anchor (cdr end)
-                    :font-size (round size) :font-family font :fill (agent-ui-color 'agent-ui-muted))))
+                    :font-size (round size) :font-family font
+                    :font-weight agent-ui-svg-font-weight :fill (agent-ui-color 'agent-ui-muted))))
       (propertize "gauge" 'display (agent-ui-svg-image svg)))))
 
 (agent-ui-define gauge

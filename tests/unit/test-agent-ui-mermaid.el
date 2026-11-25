@@ -97,6 +97,23 @@ each line's rest under its indent (a line ran 190 columns at every width)."
     (should (string-prefix-p "<svg width=\"1200\" height=\"300\""
                              (agent-ui-mermaid--sized svg (+test-aum--gui 200))))))
 
+(ert-deftest agent-ui-mermaid/text-at-the-svgs-weight ()
+  "mmdc's SVG at `agent-ui-svg-font-weight': on its root (its labels inherit
+it), and in place of the regular weight a sequence's actors set inline; bold
+stays bold; at 400, as it is."
+  (let ((svg (concat "<?xml version=\"1.0\"?>\n<svg id=\"my-svg\" viewBox=\"0 0 10 10\">"
+                     "<text style=\"text-anchor: middle; font-size: 16px; font-weight: 400;\">actor</text>"
+                     "<text style=\"font-weight:normal\">note</text>"
+                     "<text font-weight=\"bold\">title</text></svg>")))
+    (let* ((agent-ui-svg-font-weight 600)
+           (weighted (agent-ui-mermaid--weighted svg)))
+      (should (string-prefix-p "<?xml version=\"1.0\"?>\n<svg font-weight=\"600\" id=\"my-svg\"" weighted))
+      (should (string-search "font-size: 16px; font-weight: 600;\">actor" weighted))
+      (should (string-search "font-weight: 600\">note" weighted))
+      (should (string-search "font-weight=\"bold\">title" weighted)))
+    (let ((agent-ui-svg-font-weight 400))
+      (should (equal (agent-ui-mermaid--weighted svg) svg)))))
+
 (ert-deftest agent-ui-mermaid/an-update-draws-anew ()
   (+test-aum
     (+test-aum--draw +test-aum--flow)

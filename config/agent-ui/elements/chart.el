@@ -625,13 +625,14 @@ labels under them (none on another's), as two lines; nil without times."
   (propertize "chart" 'display (agent-ui-svg-image svg)))
 
 (defun agent-ui-chart--svg-text (svg ctx text x y &rest args)
+  "TEXT in SVG at X, Y, in the editor's font at CTX's size, its weight
+`agent-ui-svg-font-weight' unless ARGS (svg-text's) give one."
   (apply #'svg-text svg text :x x :y y
          :font-size (round (* 0.8 (plist-get ctx :line-height)))
-         :font-family (let ((family (face-attribute 'default :family nil t)))
-                        (if (and (stringp family) (not (member family '("default" "unspecified"))))
-                            family
-                          "monospace"))
-         args))
+         :font-family (agent-ui--svg-font)
+         (append (unless (plist-member args :font-weight)
+                   (list :font-weight agent-ui-svg-font-weight))
+                 args)))
 
 (defun agent-ui-chart--line-svg (props ctx)
   (pcase-let* ((cw (plist-get ctx :char-width))

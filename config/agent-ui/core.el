@@ -972,6 +972,18 @@ it out, gaps in it)."
 own (`agent-ui-image')."
   (agent-ui-image (svg-image svg :scale 1 :ascent 'center)))
 
+;; THE SVGS' TEXT: drawn by librsvg, the editor's by the system. On macOS its
+;; font smoothing thickens the editor's strokes (light text on a dark
+;; background most); librsvg's aren't: at the same weight, the SVGs' letters
+;; (a chart's, a graph's) read thin, grey and soft beside the editor's, on a
+;; 1x screen most. SemiBold was the closest of Regular, Medium, SemiBold and
+;; Regular outlined, seen side by side. Elsewhere (Linux) both are drawn alike.
+(defcustom agent-ui-svg-font-weight (if (eq system-type 'darwin) 600 400)
+  "The weight of the text in Agent UI's SVG images (charts, graphs,
+timelines, gauges, chips, panels' rows, snapshots, Mermaid diagrams): 400
+regular, 600 SemiBold. Bold text stays bold."
+  :type 'integer :group 'agent-ui)
+
 (defun agent-ui--svg-font ()
   "The default face's family, for SVG text."
   (let ((family (face-attribute 'default :family nil t)))
@@ -1132,7 +1144,7 @@ the GUI (CTX), a rounded tag over it."
                        :stroke color :stroke-width 1)
         (svg-text svg inner :x (/ w 2.0) :y (* 0.72 lh) :text-anchor "middle"
                   :font-size (round (* 0.7 lh)) :font-family (agent-ui--svg-font)
-                  :fill (if filled bg color))
+                  :font-weight agent-ui-svg-font-weight :fill (if filled bg color))
         (propertize text 'display (agent-ui-svg-image svg))))))
 
 (defun agent-ui-pie (fraction ctx &optional face)
