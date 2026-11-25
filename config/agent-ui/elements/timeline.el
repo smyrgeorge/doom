@@ -28,10 +28,14 @@ colour of what needs you; done blue).")
   (if (string-suffix-p "ms" end) "0ms" "0s"))
 
 (defun agent-ui-timeline--time (value)
-  "VALUE, seconds or a timestamp, as seconds (a float); nil if neither."
+  "VALUE, seconds or a timestamp, as seconds (a float); nil if neither. An
+ISO 8601 timestamp keeps its fraction of a second (21:17:49.461Z), which
+`date-to-time' drops (a task of 690 ms drawn as 1 s); another, as date
+parses it."
   (cond ((numberp value) (float value))
         ((stringp value)
-         (ignore-errors (float-time (date-to-time value))))))
+         (or (ignore-errors (float-time (encode-time (iso8601-parse value t))))
+             (ignore-errors (float-time (date-to-time value)))))))
 
 (defun agent-ui-timeline--check (props)
   (let ((tasks (cl-loop for task in (plist-get props :tasks)

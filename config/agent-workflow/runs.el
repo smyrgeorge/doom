@@ -220,8 +220,10 @@ checkout (none made)."
   (expand-file-name "runs" (expand-file-name agent-workflow-local-directory project)))
 
 (defun agent-workflow--now ()
-  "Now, as the journal has it: ISO 8601, UTC."
-  (format-time-string "%FT%T%z" nil t))
+  "Now, as the journal has it: ISO 8601, UTC, to the millisecond (a pane
+opened later times a step of 690 ms from it as 690 ms, not 1 s or 0 s:
+`agent-workflow--journal-time' reads it)."
+  (format-time-string "%FT%T.%3N%z" nil t))
 
 (defun agent-workflow--journal (run event &rest data)
   "Append EVENT (a string) with DATA (keys and values, as JSON takes them)

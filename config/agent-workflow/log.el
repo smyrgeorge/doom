@@ -154,6 +154,15 @@ a line that can't be read (half written) left out."
                                                  :null-object nil :false-object nil)))
                           (split-string (buffer-string) "\n" t)))))))
 
+(defun agent-workflow--journal-time (event)
+  "EVENT's time (its :t, `agent-workflow--now'), as seconds (a float), its
+fraction of a second kept (`date-to-time' drops it); now if it has none
+that reads. A journal written before its milliseconds: whole seconds."
+  (let ((stamp (plist-get event :t)))
+    (float-time (or (ignore-errors (encode-time (iso8601-parse stamp t)))
+                    (ignore-errors (date-to-time stamp))
+                    (current-time)))))
+
 (defun agent-workflow--log-replay (issue events)
   "EVENTS of ISSUE's run (`agent-workflow--journal-events') as its log's
 lines; a wait's hint from its job's last question."
@@ -167,8 +176,7 @@ lines; a wait's hint from its job's last question."
                                              (intern (or (plist-get event :kind) "none")))))
                             ("answered" (setf (alist-get job asked nil 'remove #'equal) nil)))
                           (agent-workflow--log-line issue name event
-                                                    (or (ignore-errors (date-to-time (plist-get event :t)))
-                                                        (current-time))
+                                                    (agent-workflow--journal-time event)
                                                     (let ((kind (alist-get job asked nil nil #'equal)))
                                                       (cond ((null kind) 'none) ((eq kind 'guard) nil) (t kind))))))
                       events))))

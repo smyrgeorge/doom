@@ -759,6 +759,34 @@ growing (no end)."
                 (list (list :job "green" :round 1 :start 100.0 :end 110.0 :outcome "failed")))
     (should (equal (plist-get (car (plist-get (agent-workflow--pane-rounds-element) :tasks)) :status) "failed"))))
 
+(ert-deftest agent-workflow-pane/rounds-to-the-millisecond ()
+  "Its rounds' bars stamped to the millisecond, as the job list times them:
+a check of 690 ms was a bar of 1 s (its start and end cut to the second)."
+  (with-temp-buffer
+    (setq-local agent-workflow--pane-rounds
+                (list (list :job "check" :round 1 :start 1795641469.46142 :end 1795641470.151197 :outcome "done")
+                      (list :job "all-green" :round 1 :start 1795641470.204792 :end nil)))
+    (let ((tasks (plist-get (agent-workflow--pane-rounds-element) :tasks)))
+      (should (equal (plist-get (car tasks) :start) "2026-11-25T21:17:49.461Z"))
+      (should (equal (plist-get (car tasks) :end) "2026-11-25T21:17:50.151Z"))
+      (should (equal (plist-get (cadr tasks) :start) "2026-11-25T21:17:50.204Z")))))
+
+(ert-deftest agent-workflow-pane/journal-to-the-millisecond ()
+  "The journal's times to the millisecond, read back so: a pane opened later
+times its steps as one open all along (690 ms, not 1 s or 0 s). A journal
+written before: whole seconds; a time that doesn't read: now."
+  (should (string-match-p "\\`[0-9-]+T[0-9:]+\\.[0-9]\\{3\\}\\+0000\\'" (agent-workflow--now)))
+  (let ((now (agent-workflow--journal-time (list :t (agent-workflow--now)))))
+    (should (< (abs (- now (float-time))) 1)))
+  (should (< (abs (- (- (agent-workflow--journal-time '(:t "2026-11-25T21:17:50.151+0000"))
+                        (agent-workflow--journal-time '(:t "2026-11-25T21:17:49.461+0000")))
+                     0.69))
+             0.001))
+  (should (= (agent-workflow--journal-time '(:t "2026-11-23T09:42:07+0000"))
+             (float-time (date-to-time "2026-11-23T09:42:07+0000"))))
+  (should (< (abs (- (agent-workflow--journal-time '(:t "not a time")) (float-time))) 1))
+  (should (< (abs (- (agent-workflow--journal-time '(:ev "no time")) (float-time))) 1)))
+
 (ert-deftest agent-workflow-pane/rounds-sent-back ()
   "A job sending the work back (review: changes, rerun build): its round
 closed as it does, with its outcome (review → changes), not running through

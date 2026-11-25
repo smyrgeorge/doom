@@ -20,6 +20,7 @@
                    ("dom" dom-node)
                    ("xml" xml-escape-string)
                    ("parse-time" parse-iso8601-time-string)
+                   ("iso8601" iso8601-parse)
                    ("mailcap" mailcap-file-name-to-mime-type)
                    ("browse-url" browse-url-file-url)
                    ("text-property-search" text-property-search-backward)

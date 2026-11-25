@@ -212,7 +212,7 @@ answering the other)."
       ;; Its times, rounds and Log's lines, event by event (a job done: how
       ;; long its round took, its round's start then).
       (dolist (event (agent-workflow--journal-events (agent-workflow-run-dir run)))
-        (let ((time (float-time (or (ignore-errors (date-to-time (plist-get event :t))) (current-time)))))
+        (let ((time (agent-workflow--journal-time event)))
           (agent-workflow--pane-time (plist-get event :ev) event time)
           (dolist (line (agent-workflow--pane-log-lines run (plist-get event :ev) event time))
             (push line lines)))))
@@ -581,9 +581,11 @@ running ended."
   "The pane's rounds as a timeline (nil before the first), under its caption
 \(rounds, as the git's: branch): a bar each, its round past 1 and an
 outcome other than done said; one running growing; one ended done (its
-outcome in its name), replaced or cancelled grey."
+outcome in its name), replaced or cancelled grey. Its start and end
+timestamps (a running bar grows: Agent UI's timeline), to the millisecond,
+as the job list times them: a round of 690 ms is 690 ms, not 1 s."
   (when agent-workflow--pane-rounds
-    (cl-flet ((stamp (time) (format-time-string "%FT%TZ" time t)))
+    (cl-flet ((stamp (time) (format-time-string "%FT%T.%3NZ" time t)))
       (list :id "rounds" :type "timeline" :caption "rounds"
             :tasks (mapcar (lambda (round)
                              (let ((outcome (plist-get round :outcome))

@@ -4356,6 +4356,20 @@ threshold `agent-ui-milliseconds-below'."
     (should (string-match-p "  4s\n" text))
     (should (string-match-p "^ +0s +2s +4s\\'" (car (last (split-string text "\n")))))))
 
+(ert-deftest agent-ui-elements/timeline-stamps-to-the-millisecond ()
+  "Timestamps keep their fraction of a second (a task of 690 ms was drawn as
+1 s: `date-to-time' drops it); whole seconds, another zone and a date of
+another form as before."
+  (should (string-match-p "  690ms\n"
+                          (+test-aue-draw '(:type "timeline" :tasks ((:name "check" :start "2026-11-25T21:17:49.461Z"
+                                                                       :end "2026-11-25T21:17:50.151Z")))
+                                          :width 50)))
+  (should (= (agent-ui-timeline--time "2026-11-25T23:17:49.5+02:00") 1795641469.5))
+  (should (= (agent-ui-timeline--time "2026-11-09T12:01:00Z") (float-time (date-to-time "2026-11-09T12:01:00Z"))))
+  (should (= (agent-ui-timeline--time "Mon, 09 Nov 2026 12:01:00 +0000")
+             (float-time (date-to-time "2026-11-09T12:01:00Z"))))
+  (should-not (agent-ui-timeline--time "soon")))
+
 (ert-deftest agent-ui-elements/timeline-coloured-as-the-others ()
   "Its bars coloured as a checklist's steps and a graph's nodes are: running
 the accent (blue), done success (green), failed error; not running yellow
