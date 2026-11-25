@@ -36,7 +36,8 @@ keys, so Vim's and Doom's keys stay as they are there. The rules are in `config/
 | `SPC s a` | `SPC s a` | Search Everywhere |
 | `Cmd+Shift+F` | `Ctrl+Shift+F` | Find in files (on Linux full screen is `F11`) |
 | `←` / `→`, `zR` / `zM` (sidebar) | the same | Collapse / expand; everything |
-| `Cmd+C` (sidebar) | `Ctrl+Shift+C` (sidebar) | Copy the file's path |
+| `Cmd+C` (sidebar) | `Ctrl+Shift+C` (sidebar) | Copy the file itself, to paste into other apps |
+| `Option+Cmd+C` (sidebar) | `ya` (sidebar) | Copy the file's path |
 | `SPC g d` | `SPC g d` | The file's git diff in a pane |
 | `e` (Magit, on a conflicted file) | the same | Resolve its conflicts |
 | `SPC m p` / `SPC m P` (Markdown) | the same | Live preview / in the browser |

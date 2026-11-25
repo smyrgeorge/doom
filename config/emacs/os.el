@@ -127,6 +127,49 @@ paste in other apps."
         (user-error "Couldn't copy the image: %s" (string-trim (buffer-string)))))))
 
 ;; IMAGE EDITING
+;; THE CLIPBOARD'S FILES
+;; A file itself on the clipboard, as Finder's Cmd+C puts it: pasted into
+;; Slack, a mail or a folder, it's the file (an upload, an attachment, a
+;; copy), not its path. On macOS its URL is written to the general pasteboard
+;; as Finder writes it (NSPasteboard, through osascript's JavaScript); on
+;; Linux it goes as a text/uri-list, as file managers copy one.
+(defconst +my/os--copy-file-script
+  "function run(argv) {
+     ObjC.import('AppKit');
+     const pasteboard = $.NSPasteboard.generalPasteboard;
+     pasteboard.clearContents;
+     return pasteboard.writeObjects($.NSArray.arrayWithObject($.NSURL.fileURLWithPath(argv[0])));
+   }"
+  "JavaScript for Automation putting the file argv[0] on the pasteboard.")
+
+(defun +my/os-file-url (file)
+  "FILE's file: URL, each part of its path percent-encoded (spaces, #...)."
+  (concat "file://" (mapconcat #'url-hexify-string (split-string (expand-file-name file) "/") "/")))
+
+(defun +my/os-copy-file (file)
+  "FILE (or a folder) itself on the clipboard, to paste in other apps (see
+above): Slack uploads it."
+  (let ((file (directory-file-name (expand-file-name file))))
+    (+my/os--local file "copy" 'files)
+    (unless (file-exists-p file)
+      (user-error "No such file: %s" file))
+    (with-temp-buffer
+      (let ((status
+             (cond
+              ((+my/macos-p)
+               (call-process "osascript" nil t nil "-l" "JavaScript" "-e" +my/os--copy-file-script file))
+              ((and (getenv "WAYLAND_DISPLAY") (executable-find "wl-copy"))
+               (call-process "wl-copy" nil t nil "--type" "text/uri-list" (concat (+my/os-file-url file) "\r\n")))
+              ((executable-find "xclip")
+               (insert (+my/os-file-url file) "\r\n")
+               (call-process-region (point-min) (point-max) "xclip" t t nil
+                                    "-selection" "clipboard" "-t" "text/uri-list"))
+              (t (user-error "Copying a file needs %s"
+                             (if (getenv "WAYLAND_DISPLAY") "wl-copy (wl-clipboard)" "xclip"))))))
+        (unless (and (eql status 0)
+                     (not (and (+my/macos-p) (string-match-p "false" (buffer-string)))))
+          (user-error "Couldn't copy the file: %s" (string-trim (buffer-string))))))))
+
 (defun +my/os-imagemagick ()
   "ImageMagick's command: magick (7), else convert (6, Debian's and
 Ubuntu's); nil if it's not installed."

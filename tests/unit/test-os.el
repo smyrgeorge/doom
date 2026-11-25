@@ -221,6 +221,61 @@ neither: said which is needed."
         (+test-os--with-programs '("xclip")
           (should-error (+my/os-copy-image "/a/b.png" 'png) :type 'user-error))))))
 
+;; ====== THE CLIPBOARD'S FILES ======
+
+(ert-deftest os/file-url ()
+  "A file's URL, each part of its path percent-encoded."
+  (should (equal (+my/os-file-url "/tmp/a b#c.txt") "file:///tmp/a%20b%23c.txt"))
+  (should (equal (+my/os-file-url "/tmp/ü.txt") "file:///tmp/%C3%BC.txt")))
+
+(ert-deftest os/copy-file-on-macos ()
+  "The file itself on the pasteboard, as Finder copies it: its URL written by
+osascript's JavaScript; a folder too, without its slash. Not there, on another
+machine, or not written (false): said."
+  (let ((file (+test-tmp-file "os/copy/report.pdf")))
+    (with-temp-file file (insert "%PDF"))
+    (+test-os--recording-calls
+      (+test-on-macos
+        (+my/os-copy-file file)
+        (+my/os-copy-file (file-name-directory file)))
+      (should (equal (nth 1 calls) (list "osascript" nil "-l" "JavaScript" "-e" +my/os--copy-file-script file)))
+      (should (equal (car (last (nth 0 calls))) (directory-file-name (file-name-directory file))))
+      (should (string-search "writeObjects" +my/os--copy-file-script))
+      (+test-on-macos
+        (should-error (+my/os-copy-file (concat file ".gone")) :type 'user-error)
+        (should-error (+my/os-copy-file "/ssh:host:/a/b.pdf") :type 'user-error)))
+    (cl-letf (((symbol-function 'call-process) (lambda (&rest _) (insert "false") 0)))
+      (+test-on-macos
+        (should (string-match-p "Couldn.t copy the file"
+                                (cadr (should-error (+my/os-copy-file file) :type 'user-error))))))))
+
+(ert-deftest os/copy-file-on-linux ()
+  "Wayland: wl-copy; X11: xclip; the file's URL as a text/uri-list; neither:
+said which is needed."
+  (let ((file (+test-tmp-file "os/copy/a b.txt"))
+        (region nil))
+    (with-temp-file file (insert "x"))
+    (+test-os--recording-calls
+      (cl-letf (((symbol-function 'call-process-region)
+                 (lambda (start end program &rest args)
+                   (setq region (cons (buffer-substring start end) (cons program (nthcdr 3 args))))
+                   status)))
+        (+test-on-linux
+          (let ((process-environment (cons "WAYLAND_DISPLAY=wayland-0" process-environment)))
+            (+test-os--with-programs '("wl-copy" "xclip")
+              (+my/os-copy-file file))
+            (should (equal (car calls) (list "wl-copy" nil "--type" "text/uri-list"
+                                             (concat (+my/os-file-url file) "\r\n"))))
+            (should (string-search "a%20b.txt" (car (last (car calls))))))
+          (let ((process-environment (cons "WAYLAND_DISPLAY" process-environment)))
+            (+test-os--with-programs '("xclip")
+              (+my/os-copy-file file))
+            (should (equal region (list (concat (+my/os-file-url file) "\r\n")
+                                        "xclip" "-selection" "clipboard" "-t" "text/uri-list")))
+            (+test-os--with-programs '()
+              (should (string-match-p "needs xclip"
+                                      (cadr (should-error (+my/os-copy-file file) :type 'user-error)))))))))))
+
 ;; ====== IMAGE EDITING ======
 
 (ert-deftest os/imagemagick-command ()

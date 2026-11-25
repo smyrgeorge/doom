@@ -9,7 +9,8 @@ file, and follows the current file and its project.
 | `zR` / `zM` | `zR` / `zM` | Expand / collapse everything (`.git` stays closed) |
 | Click | Click | Select (the sidebar gets the focus) |
 | Double click | Double click | Open a file, expand / collapse a folder |
-| `Cmd+C` | `Ctrl+Shift+C` | Copy the file's (or folder's) absolute path (`ya` on both) |
+| `Cmd+C` | `Ctrl+Shift+C` | Copy the file (or folder) itself, as Finder does: paste it into Slack, a mail or a folder |
+| `Option+Cmd+C`, `ya` | `ya` | Copy its absolute path |
 | Right click → Reveal in Finder | Right click → Show in File Manager | The file or folder, selected in the file manager |
 | `SPC w w`, window numbers | the same | Go to the sidebar |
 | Drag its edge, `SPC w <` / `SPC w >`, `w` | the same | Resize it |

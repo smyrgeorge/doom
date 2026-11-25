@@ -226,6 +226,53 @@ advice around it kept."
   (should (commandp #'treemacs-expand-all))
   (should (commandp #'treemacs-collapse-all)))
 
+(ert-deftest treemacs/copy-the-file-or-its-path ()
+  "Cmd+C (Linux: Ctrl+Shift+C) copies the file or folder at point itself, to
+paste into Slack (`+my/os-copy-file'); Option+Cmd+C its path, as ya; on no
+file, said."
+  (should (eq (lookup-key treemacs-mode-map (kbd "s-c")) #'+my/treemacs-copy-file-at-point))
+  (should (eq (lookup-key treemacs-mode-map (kbd "M-s-c")) #'treemacs-copy-absolute-path-at-point))
+  (let ((copied nil) (path "/w/doc/report.pdf"))
+    (cl-letf (((symbol-function 'treemacs--prop-at-point) (lambda (_prop) path))
+              ((symbol-function '+my/os-copy-file) (lambda (file) (push file copied))))
+      (+my/treemacs-copy-file-at-point)
+      (should (equal copied '("/w/doc/report.pdf")))
+      (setq path nil)
+      (should-error (+my/treemacs-copy-file-at-point) :type 'user-error))))
+
+(ert-deftest treemacs/copying-the-file-said-as-its-path ()
+  "Copied, the file says so as treemacs' copy of its path does: its line
+flashes green (`treemacs-on-success-pulse-face') and the echo area says
+\"[Treemacs] Copied file: PATH\", the path in its colour; a folder's with its
+slash; a % in it shown as one."
+  (let* ((dir (file-name-as-directory (+test-tmp-file "treemacs/copy/a 100% folder")))
+         (file (expand-file-name "report.pdf" dir))
+         (path file)
+         (pulses nil)
+         (said nil))
+    (make-directory dir t)
+    (with-temp-file file (insert "%PDF"))
+    (cl-letf (((symbol-function 'treemacs--prop-at-point) (lambda (_prop) path))
+              ((symbol-function '+my/os-copy-file) #'ignore)
+              ((symbol-function 'pulse-momentary-highlight-one-line)
+               (lambda (_point &optional face) (push face pulses)))
+              ((symbol-function 'message)
+               (lambda (format &rest args) (push (apply #'format format args) said))))
+      (with-temp-buffer
+        (insert "report.pdf\n")
+        (goto-char (point-min))
+        (+my/treemacs-copy-file-at-point)
+        (should (equal pulses '(treemacs-on-success-pulse-face)))
+        (should (equal (substring-no-properties (car said))
+                       (concat "[Treemacs] Copied file: " file)))
+        (should (eq (get-text-property (string-search "/" (car said)) 'face (car said))
+                    'font-lock-string-face))
+        (setq path (directory-file-name dir))
+        (+my/treemacs-copy-file-at-point)
+        (should (equal (length pulses) 2))
+        (should (equal (substring-no-properties (car said))
+                       (concat "[Treemacs] Copied folder: " dir)))))))
+
 (ert-deftest treemacs/keys-in-the-sidebar ()
   "In treemacs (its evil state), the arrows are ours."
   (+test-treemacs
@@ -238,7 +285,8 @@ advice around it kept."
         (should (eq (key-binding [down]) #'treemacs-next-line))
         (should (eq (key-binding (kbd "zR")) #'treemacs-expand-all))
         (should (eq (key-binding (kbd "zM")) #'treemacs-collapse-all))
-        (should (eq (key-binding (kbd "s-c")) #'treemacs-copy-absolute-path-at-point))
+        (should (eq (key-binding (kbd "s-c")) #'+my/treemacs-copy-file-at-point))
+        (should (eq (key-binding (kbd "M-s-c")) #'treemacs-copy-absolute-path-at-point))
         ;; h / l: treemacs' own.
         (should (eq (key-binding "h") #'treemacs-COLLAPSE-action))
         (should (eq (key-binding "l") #'treemacs-RET-action))))))
@@ -249,18 +297,24 @@ advice around it kept."
   (should (eq (lookup-key treemacs-mode-map [mouse-1]) #'ignore))
   (should (eq (lookup-key treemacs-mode-map [double-mouse-1]) #'treemacs-doubleclick-action)))
 
-(ert-deftest treemacs/copy-copies-the-path ()
-  "Cmd+C on a file copies its absolute path (to the kill ring, so the
-clipboard)."
+(ert-deftest treemacs/copy-copies-the-file-option-its-path ()
+  "Cmd+C on a file copies the file itself (`+my/os-copy-file'); Option+Cmd+C
+its absolute path (to the kill ring, so the clipboard), as Finder's keys."
   (+test-treemacs
     (let ((root (+test-treemacs--project "copy" "README.md"))
           (kill-ring nil)
-          (interprogram-cut-function nil))
+          (interprogram-cut-function nil)
+          (copied nil))
       (with-current-buffer (+test-treemacs--show-project root)
         (goto-char (point-min))
         (should (re-search-forward "README\\.md" nil t))
+        (cl-letf (((symbol-function '+my/os-copy-file) (lambda (file) (push file copied))))
+          (let ((inhibit-message t))
+            (call-interactively (key-binding (kbd "s-c")))))
+        (should (equal copied (list (expand-file-name "README.md" root))))
+        (should-not kill-ring)
         (let ((inhibit-message t))
-          (call-interactively (key-binding (kbd "s-c"))))
+          (call-interactively (key-binding (kbd "M-s-c"))))
         (should (equal (current-kill 0) (expand-file-name "README.md" root)))))))
 
 ;; ====== CONTEXT MENU ======
@@ -324,16 +378,18 @@ not on a line without a path."
   (+test-on-linux (should (equal (+my/treemacs--reveal-label) "Show in File Manager"))))
 
 (ert-deftest treemacs/copy-key-per-system ()
-  "Cmd+C everywhere; Ctrl+Shift+C on Linux only (config/emacs.el, KEYS)."
+  "Cmd+C (the file) and Option+Cmd+C (its path) everywhere; Ctrl+Shift+C (the
+file) on Linux only (config/emacs.el, KEYS)."
   (unwind-protect
       (progn
         (define-key treemacs-mode-map (kbd "C-S-c") nil)
         (+test-on-macos (+test-treemacs--reload))
-        (should (eq (lookup-key treemacs-mode-map (kbd "s-c")) #'treemacs-copy-absolute-path-at-point))
+        (should (eq (lookup-key treemacs-mode-map (kbd "s-c")) #'+my/treemacs-copy-file-at-point))
+        (should (eq (lookup-key treemacs-mode-map (kbd "M-s-c")) #'treemacs-copy-absolute-path-at-point))
         (should-not (lookup-key treemacs-mode-map (kbd "C-S-c")))
         (+test-on-linux (+test-treemacs--reload))
-        (should (eq (lookup-key treemacs-mode-map (kbd "s-c")) #'treemacs-copy-absolute-path-at-point))
-        (should (eq (lookup-key treemacs-mode-map (kbd "C-S-c")) #'treemacs-copy-absolute-path-at-point)))
+        (should (eq (lookup-key treemacs-mode-map (kbd "s-c")) #'+my/treemacs-copy-file-at-point))
+        (should (eq (lookup-key treemacs-mode-map (kbd "C-S-c")) #'+my/treemacs-copy-file-at-point)))
     (define-key treemacs-mode-map (kbd "C-S-c") nil)
     (+test-treemacs--reload)
     (when (timerp +my/treemacs--git-poll-timer) (cancel-timer +my/treemacs--git-poll-timer))))
