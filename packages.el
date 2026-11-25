@@ -61,9 +61,9 @@
 ;; Pinned: the agent workspace advises agent-shell's internals (its queue, its
 ;; steering: config/agent-workspace/session.el), checked with these commits
 ;; (tests/unit/test-agent-workspace-*.el); the tests on GitHub build the same.
-(package! shell-maker :pin "cba42efd503bbdf19a7244b9119efd8764e99ecb")
-(package! acp :pin "3fa3b58ecef062293095b046d4873b5bf4c99de3")
-(package! agent-shell :pin "7473e5eb2f3a7da01e1762ac20ac3a4c577b1cb8")
+(package! shell-maker :pin "6745635b4f5e62c3fe07a0f09b8dd4d92b79839d")
+(package! acp :pin "041470ecff003630e03f061584d41071c36f0124")
+(package! agent-shell :pin "7c107f28293b02d058b622e4df6dc565b202be7a")
 
 ;; YAML read as Lisp data: the agent workflows' files (config/agent-workflow/
 ;; workflows.el). Pinned: the commit they were checked with
