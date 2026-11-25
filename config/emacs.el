@@ -76,7 +76,8 @@
 ;; Every window's right fringe is a character wider (16 px instead of Doom's 8):
 ;; the arrows of lines cut off at the window's edge (e.g. long names in
 ;; treemacs) sit in the middle of it instead of against the text. File windows
-;; get the same on the left too (config/stripe.el, PADDING).
+;; get the same on the left too (config/stripe.el, PADDING). Agent UI's
+;; canvases don't: their lines are drawn to fit, none cut (config/agent-ui.el).
 (defvar +my/right-fringe-padding 1
   "Columns added to every window's right fringe (nil: none).")
 

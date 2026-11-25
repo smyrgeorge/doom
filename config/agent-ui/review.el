@@ -128,7 +128,7 @@ what it is, its properties, its example drawn, its code."
     (let* ((type (agent-ui-type name))
            (buffer (get-buffer-create (format "Agent UI type: %s" name)))
            (window (display-buffer buffer '(nil (inhibit-same-window . t))))
-           (ctx (agent-ui-context :width (max 20 (1- (window-max-chars-per-line window)))
+           (ctx (agent-ui-context :width (max 20 (agent-ui-window-columns window))
                                   :graphic (display-graphic-p (window-frame window))
                                   :char-width (frame-char-width (window-frame window))
                                   :line-height (frame-char-height (window-frame window)))))

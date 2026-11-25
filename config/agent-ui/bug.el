@@ -102,7 +102,7 @@ pane's width in columns, as its elements are drawn."
   (let* ((window (and (buffer-live-p buffer) (get-buffer-window buffer t)))
          (frame (if window (window-frame window) (selected-frame))))
     (cons (display-graphic-p frame)
-          (if window (max 10 (1- (window-max-chars-per-line window))) agent-ui-default-width))))
+          (if window (max 10 (agent-ui-window-columns window)) agent-ui-default-width))))
 
 (cl-defun agent-ui-bug-report (props &key canvas session cwd by)
   "The bug PROPS tells of (the agent's JSON: title, description, expected,

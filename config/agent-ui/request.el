@@ -154,7 +154,7 @@ PAYLOAD (parsed JSON) as it needs; returns the reply, a plist for
        (agent-ui-check type element)
        (let ((text (agent-ui-render element
                                     (agent-ui-context
-                                     :width (if window (1- (window-max-chars-per-line window))
+                                     :width (if window (agent-ui-window-columns window)
                                               agent-ui-default-width)))))
          ;; --ansi: in its faces' colours, for a terminal.
          (list :ok t :text (if (and (member "ansi" agent-ui--request-options) (fboundp 'agent-ui-ansi))

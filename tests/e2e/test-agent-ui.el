@@ -101,8 +101,8 @@ session's pane, then takes the focus once Emacs is idle a moment."
 
 (ert-deftest e2e-agent-ui/redrawn-when-its-text-is-scaled ()
   "Its text scaled (C-x C-+, C-x C-0): drawn again, within a moment, at its
-window's new width, a column short of it (37 columns of zoomed text were
-drawn at 67 until g r)."
+window's new width, to its last column in the GUI (37 columns of zoomed text
+were drawn at 67 until g r)."
   (let ((agent-ui-display-function #'switch-to-buffer)
         (agent-ui-default-canvas "e2e-scale"))
     (delete-other-windows)
@@ -115,7 +115,8 @@ drawn at 67 until g r)."
               (redisplay t)
               (with-current-buffer canvas
                 (and (not agent-ui--dirty)
-                     (equal agent-ui--width (1- (window-max-chars-per-line window)))
+                     ;; In the GUI, to its last column (a terminal's: one short).
+                     (equal agent-ui--width (window-max-chars-per-line window))
                      (cl-every (lambda (line) (<= (string-width line) agent-ui--width))
                                (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n")))))))
       (unwind-protect

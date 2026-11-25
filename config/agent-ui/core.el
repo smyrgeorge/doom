@@ -380,6 +380,13 @@ each list after ELEMENT's (its default's, if it has none). Signals
 
 ;; ====== DRAWING AN ELEMENT ======
 
+(defun agent-ui-window-columns (window)
+  "The columns an element drawn for WINDOW may take: all its lines hold in a
+graphic frame (a line that wide fits, a cut's arrow in the fringe only past
+it: a column left empty made the right side twice the left), one fewer in
+a terminal (a line as wide as the window ends in its cut's $)."
+  (- (window-max-chars-per-line window) (if (display-graphic-p (window-frame window)) 0 1)))
+
 (cl-defun agent-ui-context (&key (width 80) graphic (tick 0) (char-width 8) (line-height 16) font-size font-ascent
                                  id still)
   "What an element's drawing knows of where it's drawn: WIDTH in characters,

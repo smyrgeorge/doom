@@ -383,9 +383,7 @@ in no window (room made since)."
          (font (agent-ui--font-metrics window)))
     (agent-ui-context
      :width (if window
-                ;; One column short: a line as wide as the window wraps in a
-                ;; terminal.
-                (max 10 (1- (window-max-chars-per-line window)))
+                (max 10 (agent-ui-window-columns window))
               agent-ui-default-width)
      :graphic (display-graphic-p frame)
      :tick agent-ui--tick

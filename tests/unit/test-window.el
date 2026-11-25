@@ -393,6 +393,26 @@ terminal, nor with no padding."
           (run-hooks 'after-setting-font-hook))
         (should (= (length got) 3))))))
 
+(ert-deftest window/an-agent-ui-canvas-s-right-fringe-unpadded ()
+  "An Agent UI canvas (made: `agent-ui-canvas-hook'): its right fringe as
+wide as its left, not padded (its lines drawn to fit, none cut), in the
+windows showing it now and later; another buffer's untouched."
+  (should (memq #'+my/unpadded-right-fringe-h (default-value 'agent-ui-canvas-hook)))
+  (let ((canvas (+test-buffer "canvas")))
+    (cl-letf* ((frame-parameter (symbol-function 'frame-parameter))
+               ((symbol-function 'frame-parameter)
+                (lambda (frame parameter)
+                  (if (eq parameter 'left-fringe) 8 (funcall frame-parameter frame parameter))))
+               (set nil)
+               ((symbol-function 'set-window-fringes)
+                (lambda (window left right &rest _) (push (list window left right) set))))
+      (save-window-excursion
+        (switch-to-buffer canvas)
+        (with-current-buffer canvas (+my/unpadded-right-fringe-h))
+        (should (equal (buffer-local-value 'right-fringe-width canvas) 8))
+        (should (equal set (list (list (selected-window) nil 8))))
+        (should-not (local-variable-p 'right-fringe-width (+test-buffer "other")))))))
+
 ;; ====== LOADED ======
 
 (ert-deftest window/config-emacs-loads-it ()

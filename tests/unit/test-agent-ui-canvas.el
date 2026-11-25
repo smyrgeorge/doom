@@ -384,6 +384,15 @@ started, every later element failing the same way)."
 
 ;; ====== UPDATES ======
 
+(ert-deftest agent-ui-canvas/to-its-windows-last-column-in-the-gui ()
+  "An element drawn for a window takes all its columns in the GUI (a line
+that wide fits: a column left empty made its right side twice its left),
+one fewer in a terminal (a line as wide as it ends in its cut's $)."
+  (cl-letf (((symbol-function 'window-max-chars-per-line) (lambda (&rest _) 99)))
+    (should (= (agent-ui-window-columns (selected-window)) 98))
+    (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
+      (should (= (agent-ui-window-columns (selected-window)) 99)))))
+
 (ert-deftest agent-ui-canvas/updated-later-together ()
   (+test-auc
     (agent-ui-show '(:id "a" :type "meter" :value 1))
