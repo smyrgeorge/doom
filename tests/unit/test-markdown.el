@@ -316,6 +316,27 @@ takes."
       (should-not (string-search "prefers-color-scheme" page)))
     (setq buffer-file-name nil))))
 
+(ert-deftest markdown/page-says-the-pointer-it-wants ()
+  "The preview's page says in its title the pointer it wants (Emacs draws its
+own: the I-beam over links too); the browser's page doesn't (it shows its
+hand itself, and the title is its tab's). The preview's watch sets it: the
+hand over a link, else the I-beam; nothing before the page has said."
+  (with-temp-buffer
+    (rename-buffer "notes.md" t)
+    (should (string-search +md-preview--pointer-js (+md-preview--page "")))
+    (should-not (string-search +md-preview--pointer-js (+md-preview--page "" t))))
+  (let ((said nil) (shapes nil))
+    (cl-letf (((symbol-function '+my/webkit-title-json)
+               (lambda (_xwidget prefix) (should (equal prefix "mdp ")) said))
+              ((symbol-function '+my/webkit-pointer)
+               (lambda (window shape) (should (eq window 'w)) (push shape shapes))))
+      (+md-preview--watch 'w 'xw)
+      (should-not shapes)
+      (dolist (cursor '("hand" "text" "other"))
+        (setq said (list :cursor cursor))
+        (+md-preview--watch 'w 'xw)))
+    (should (equal (nreverse shapes) '(hand text text)))))
+
 (defun +test-md--base (page)
   "The folder PAGE's <base> says relative links are in."
   (should (string-match "<base href=\\(?:\"\\([^\"]*\\)\"\\|'\\([^']*\\)'\\)>" page))
@@ -593,8 +614,9 @@ back). Seen run: e2e-markdown/resized-keeps-the-cursor-s-line."
     (let* ((md (+test-md--file "resized.md" "a\nb\nc\nd\ne\n"))
            (preview (+test-md--open-preview md))
            (scroll (format +md-preview--scroll-js 4)))
+      ;; Its watch only sets the pointer (the hand over a link), never scrolls.
       (with-current-buffer preview
-        (should-not +my/webkit-watch-function))
+        (should (eq +my/webkit-watch-function #'+md-preview--watch)))
       (should (string-prefix-p "window.emacsKeepPlace=" scroll))
       (should (string-suffix-p "window.emacsKeepPlace();" scroll))
       (should (string-match-p "})(4);" scroll))

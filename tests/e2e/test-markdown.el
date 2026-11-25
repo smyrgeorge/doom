@@ -402,6 +402,26 @@ item five levels deep still 40 px. At the usual width, the padding as ever."
       (should (+test-md--ready preview-window))
       (should (+test-wait-for (lambda () (+test-md--has preview-window "TYPED before the link")) 5)))))
 
+(ert-deftest e2e-markdown/the-hand-over-a-link ()
+  "The mouse over a link: Emacs shows the hand (it drew its I-beam over the
+whole page, links too); over the text, the I-beam again."
+  (+test-md
+    (+test-md--open)
+    (let ((preview-window (car (+test-md--windows))))
+      (cl-flet ((hover (selector)
+                  (+test-md--js preview-window
+                                (format "document.querySelector(%S).dispatchEvent(new MouseEvent('mousemove',{bubbles:true})); 'ok'"
+                                        selector))
+                  (cl-letf (((symbol-function 'mouse-pixel-position)
+                             (lambda () (cons (window-frame preview-window) (cons 1 1))))
+                            ((symbol-function 'window-at-x-y) (lambda (&rest _) preview-window)))
+                    (+my/webkit--watch))
+                  (with-current-buffer (+test-md--preview)
+                    (get-text-property (point-min) 'pointer))))
+        (should (eq (hover "a[href^=\"https\"]") 'hand))
+        (should (eq (hover "p") 'text))
+        (should (eq (hover "a[href=\"other.md\"]") 'hand))))))
+
 ;; ====== KEYS ======
 
 (ert-deftest e2e-markdown/keys-in-the-preview ()

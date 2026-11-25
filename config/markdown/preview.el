@@ -38,6 +38,12 @@ file's pane (else beside the preview); anything else in the browser."
         (select-window window)
         (find-file file)))))
 
+(defun +md-preview--watch (window xwidget)
+  "WINDOW shows XWIDGET's view of the preview: the mouse pointer its page
+wants (see `+md-preview--pointer-js'), the hand over a link."
+  (when-let* ((state (+my/webkit-title-json xwidget "mdp ")))
+    (+my/webkit-pointer window (if (equal (plist-get state :cursor) "hand") 'hand 'text))))
+
 (defvar +md-preview-mode)               ; below
 
 (defun +md-preview--closed-h ()
@@ -57,7 +63,8 @@ preview off."
 \\{+md-preview-page-mode-map}"
   (setq-local +my/webkit-url-function #'+md-preview--url
               +my/webkit-background #'+md-preview--page-color
-              +my/webkit-link-function #'+md-preview--follow)
+              +my/webkit-link-function #'+md-preview--follow
+              +my/webkit-watch-function #'+md-preview--watch)
   (add-hook '+my/webkit-load-functions #'+md-preview--loaded nil t)
   ;; What the views don't cover, in the page's colour.
   (+md-preview--paint-background)

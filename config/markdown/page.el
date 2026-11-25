@@ -31,6 +31,21 @@
      if(t) t.scrollIntoView();
    });")
 
+;; The mouse pointer: Emacs draws its own over the page (see POINTER in
+;; config/webkit/input.el), the I-beam over links too, where WebKit would show
+;; its hand. So the page says in its title which one it wants under the mouse
+;; ("mdp " and JSON, see `+md-preview--watch'): the hand over a link or what
+;; the page's style gives one (a details' summary), else the I-beam.
+(defconst +md-preview--pointer-js
+  "(function(){
+     var said='';
+     document.addEventListener('mousemove',function(e){
+       var t=e.target instanceof Element?e.target:null, next='text';
+       if(t && (t.closest('a[href]') || getComputedStyle(t).cursor==='pointer')) next='hand';
+       if(next!==said){said=next; document.title='mdp '+JSON.stringify({cursor:next});}
+     },{passive:true});
+   })();")
+
 ;; The cursor's line a third of the way down; also the page's reading place
 ;; (see READING PLACE in config/webkit/js.el): its view resized (its pane, a
 ;; pane opening or closing beside it, the view moved to a pane of another
@@ -128,6 +143,8 @@ drawn as it loads (in Emacs, the update script draws them)."
            ".markdown-body ul,.markdown-body ol{padding-left:1.2em;}}</style>")
    "<script src='https://cdn.jsdelivr.net/gh/highlightjs/cdn-release/build/highlight.min.js'></script>"
    "<script>" +md-preview--anchors-js
+   ;; Not in the browser: it shows its hand itself (and the title is its tab's).
+   (unless browser +md-preview--pointer-js)
    "document.addEventListener('DOMContentLoaded',function(){"
    +md-preview--highlight-js "});</script>"
    ;; ```mermaid blocks as diagrams (markdown/mermaid.el).
