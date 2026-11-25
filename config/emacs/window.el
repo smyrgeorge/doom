@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/config/emacs/window.el -*- lexical-binding: t; -*-
-;; The frame and its windows: maximized, fringes, new windows get focus
+;; The frame and its windows: maximized, new windows get focus
 ;; (config/emacs.el, FRAMES AND WINDOWS). Loaded from config/emacs.el.
 
 ;; THE FRAME
@@ -11,42 +11,6 @@
     (set-frame-parameter nil 'fullscreen 'maximized)))
 
 (add-hook 'window-setup-hook #'+my/maximize-frame-h)
-
-;; FRINGES (config/emacs.el). A frame's character width is known once it's
-;; graphical and its font set; a terminal's has no fringes. As this file
-;; loads, Doom hasn't set the font yet (it does after config.el), so the
-;; width was the startup font's (15 px, not 16): set again whenever Doom sets
-;; the font (`after-setting-font-hook': at startup, a daemon's first frame,
-;; doom/reload-font, big-font mode, a bigger or smaller font).
-(defun +my/right-fringe (width)
-  "Every window's right fringe `+my/right-fringe-padding' characters of WIDTH
-pixels wider than Doom's 8 (config/emacs.el, FRINGES)."
-  (fringe-mode (cons (or (frame-parameter nil 'left-fringe) 8)
-                     (+ 8 (* +my/right-fringe-padding width)))))
-
-(defun +my/right-fringe-h ()
-  "The right fringe for the font Doom has set (see FRINGES), in a graphical
-frame."
-  (when (and +my/right-fringe-padding (display-graphic-p))
-    (+my/right-fringe (frame-char-width))))
-
-(when +my/right-fringe-padding
-  (+my/right-fringe (if (display-graphic-p) (frame-char-width) 8)))
-
-(add-hook 'after-setting-font-hook #'+my/right-fringe-h)
-
-(defun +my/unpadded-right-fringe-h ()
-  "The current buffer's right fringe as wide as its left, not padded (see
-FRINGES): an Agent UI canvas (its lines drawn to fit, none cut:
-config/agent-ui.el), the sidebar (its selected line highlighted across:
-the bar had twice the room on its right). Its windows now, and any it's
-shown in later."
-  (setq-local right-fringe-width (or (frame-parameter nil 'left-fringe) 8))
-  (dolist (window (get-buffer-window-list nil nil t))
-    (set-window-fringes window nil right-fringe-width)))
-
-(add-hook 'agent-ui-canvas-hook #'+my/unpadded-right-fringe-h)
-(add-hook 'treemacs-mode-hook #'+my/unpadded-right-fringe-h)
 
 ;; NEW WINDOWS GET FOCUS (config/emacs.el). The command's end: once
 ;; `post-command-hook' runs at the level it ran at (a prompt it shows runs

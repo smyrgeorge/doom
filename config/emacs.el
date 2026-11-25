@@ -72,17 +72,6 @@
 (defvar +my/focus-new-windows t
   "When non-nil, select windows that `display-buffer' creates for a command.")
 
-;; FRINGES
-;; Every window's right fringe is a character wider (16 px instead of Doom's 8):
-;; the arrows of lines cut off at the window's edge sit in the middle of it
-;; instead of against the text. File windows get it on the left instead
-;; (config/stripe.el, PADDING): the stripe is on their right. Agent UI's
-;; canvases don't (their lines are drawn to fit, none cut: config/agent-ui.el),
-;; nor the sidebar (its selected line is highlighted across, from fringe to
-;; fringe: the bar had twice the room on its right).
-(defvar +my/right-fringe-padding 1
-  "Columns added to every window's right fringe (nil: none).")
-
 ;; CHILD FRAMES (config/emacs/childframe.el)
 ;; Frames laid over a window, without borders, never focused: the notices
 ;; (config/banner.el), the error stripe (config/stripe.el), WebKit's cover while

@@ -62,8 +62,8 @@ window first shows the buffer."
                                                     (not (frame-parent f))))
                                    (cons (selected-frame) (frame-list))))))
     (let ((left (or (frame-parameter frame 'left-fringe) 8)))
-      ;; The right one not padded, though every window's is (config/emacs.el,
-      ;; FRINGES): the strip beside it, and a wrapped line's space before it.
+      ;; The right one Doom's, whatever the frame's: the strip beside it, and a
+      ;; wrapped line's space before it.
       (setq-local left-fringe-width (+ left (* columns (frame-char-width frame)))
                   right-fringe-width left))))
 

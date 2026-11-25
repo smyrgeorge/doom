@@ -60,11 +60,11 @@ none (the last line stops at the bottom), or t for no limit.")
 ;; PADDING
 ;; File windows (those with the stripe) get a character's width of space more
 ;; on the left of the text: their left fringe is that much wider (8 -> 16
-;; px), the git gutter in its middle. Their right fringe stays Doom's 8 px,
-;; though every other window's is padded (config/emacs.el, FRINGES): the strip
-;; is beside it, and a wrapped line ends a space short of it, so a padded one
-;; made the right side half again the left (~25 px against 16). The arrows of
-;; lines cut off at the edge and flycheck's slim ones fit in it.
+;; px), the git gutter in its middle. Their right fringe stays Doom's 8 px:
+;; the strip is beside it, and a wrapped line ends a space short of it, so a
+;; padded one made the right side half again the left (~25 px against 16).
+;; The arrows of lines cut off at the edge and flycheck's slim ones fit in
+;; it.
 (defvar +my/stripe-padding 1
   "Columns of space added to the left fringe of file windows (nil: none).")
 

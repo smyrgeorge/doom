@@ -1,7 +1,7 @@
 ;;; tests/unit/test-window.el -*- lexical-binding: t; -*-
 ;; config/emacs/window.el: new windows get focus (evil's splits, and windows
-;; that `display-buffer' opens for a command), a wider right fringe, the frame
-;; maximized at startup.
+;; that `display-buffer' opens for a command), the frame maximized at startup;
+;; the fringes Doom's.
 
 (+test-load "config/emacs")
 
@@ -20,24 +20,10 @@ set), new windows getting focus."
   "The command ending, as the command loop has it: `post-command-hook' run."
   (run-hooks 'post-command-hook))
 
-(defun +test-window--fringe-mode-args (&rest bindings)
-  "What config/emacs/window.el gives `fringe-mode' when loaded, BINDINGS
-\((FUNCTION . DEFINITION)...) standing in meanwhile; :none if not called."
-  (let ((got :none)
-        (saved (mapcar (lambda (b) (cons (car b) (symbol-function (car b)))) bindings)))
-    (unwind-protect
-        (progn
-          (dolist (b bindings) (fset (car b) (cdr b)))
-          (cl-letf (((symbol-function 'fringe-mode) (lambda (value) (setq got value))))
-            (+test-load "config/emacs/window")))
-      (dolist (s saved) (fset (car s) (cdr s))))
-    got))
-
 ;; ====== SETTINGS ======
 
 (ert-deftest window/settings-defaults ()
-  (should (eq (default-value '+my/focus-new-windows) t))
-  (should (= (default-value '+my/right-fringe-padding) 1)))
+  (should (eq (default-value '+my/focus-new-windows) t)))
 
 (ert-deftest window/evil-splits-go-below-and-right ()
   (should (eq evil-split-window-below t))
@@ -328,92 +314,19 @@ window, it goes on in the file's (recentring it) up to its prompt, q there."
 
 ;; ====== FRINGES ======
 
-(ert-deftest window/right-fringe-a-character-wider-in-a-terminal ()
-  "A terminal has no character width in pixels: 8 more."
-  (should (equal (frame-parameter nil 'right-fringe) 16))
-  (should (equal (+test-window--fringe-mode-args) '(8 . 16))))
-
-(ert-deftest window/right-fringe-a-character-wider-in-the-gui ()
-  (should (equal (+test-window--fringe-mode-args
-                  (cons 'display-graphic-p (lambda (&rest _) t))
-                  (cons 'frame-char-width (lambda (&rest _) 9)))
-                 '(8 . 17))))
-
-(ert-deftest window/right-fringe-padding ()
-  (let ((+my/right-fringe-padding 2))
-    (should (equal (+test-window--fringe-mode-args) '(8 . 24)))
-    (should (equal (+test-window--fringe-mode-args
-                    (cons 'display-graphic-p (lambda (&rest _) t))
-                    (cons 'frame-char-width (lambda (&rest _) 7)))
-                   '(8 . 22))))
-  (let ((+my/right-fringe-padding 0))
-    (should (equal (+test-window--fringe-mode-args) '(8 . 8))))
-  ;; nil: fringes left alone.
-  (let ((+my/right-fringe-padding nil))
-    (should (eq (+test-window--fringe-mode-args) :none))))
-
-(ert-deftest window/left-fringe-kept ()
-  (let ((frame-parameter (symbol-function 'frame-parameter)))
-    (should (equal (+test-window--fringe-mode-args
-                    (cons 'frame-parameter
-                          (lambda (frame parameter)
-                            (if (eq parameter 'left-fringe) 12
-                              (funcall frame-parameter frame parameter)))))
-                   '(12 . 16)))
-    ;; None known: Doom's 8.
-    (should (equal (+test-window--fringe-mode-args
-                    (cons 'frame-parameter
-                          (lambda (frame parameter)
-                            (unless (eq parameter 'left-fringe)
-                              (funcall frame-parameter frame parameter)))))
-                   '(8 . 16)))))
-
-(ert-deftest window/right-fringe-once-doom-sets-the-font ()
-  "Doom sets the font after config.el: the fringe set again then, and on each
-change of font (doom/reload-font, big-font mode), for its width; not in a
-terminal, nor with no padding."
-  (should (memq #'+my/right-fringe-h after-setting-font-hook))
-  (let (got)
-    (cl-letf (((symbol-function 'fringe-mode) (lambda (value) (push value got)))
-              ((symbol-function 'frame-char-width) (lambda (&rest _) 8)))
-      ;; A terminal: nothing.
-      (run-hooks 'after-setting-font-hook)
-      (should-not got)
-      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t)))
-        (run-hooks 'after-setting-font-hook)
-        (should (equal got '((8 . 16))))
-        ;; Big-font mode: a wider character.
-        (cl-letf (((symbol-function 'frame-char-width) (lambda (&rest _) 11)))
-          (run-hooks 'after-setting-font-hook))
-        (should (equal (car got) '(8 . 19)))
-        (let ((+my/right-fringe-padding 2))
-          (run-hooks 'after-setting-font-hook))
-        (should (equal (car got) '(8 . 24)))
-        (let ((+my/right-fringe-padding nil))
-          (run-hooks 'after-setting-font-hook))
-        (should (= (length got) 3))))))
-
-(ert-deftest window/an-agent-ui-canvas-s-right-fringe-unpadded ()
-  "An Agent UI canvas (made: `agent-ui-canvas-hook'), the sidebar
-\(`treemacs-mode-hook': its selected line's bar had twice the room on its
-right): its right fringe as wide as its left, not padded, in the windows
-showing it now and later; another buffer's untouched."
-  (should (memq #'+my/unpadded-right-fringe-h (default-value 'agent-ui-canvas-hook)))
-  (should (memq #'+my/unpadded-right-fringe-h (default-value 'treemacs-mode-hook)))
-  (let ((canvas (+test-buffer "canvas")))
-    (cl-letf* ((frame-parameter (symbol-function 'frame-parameter))
-               ((symbol-function 'frame-parameter)
-                (lambda (frame parameter)
-                  (if (eq parameter 'left-fringe) 8 (funcall frame-parameter frame parameter))))
-               (set nil)
-               ((symbol-function 'set-window-fringes)
-                (lambda (window left right &rest _) (push (list window left right) set))))
-      (save-window-excursion
-        (switch-to-buffer canvas)
-        (with-current-buffer canvas (+my/unpadded-right-fringe-h))
-        (should (equal (buffer-local-value 'right-fringe-width canvas) 8))
-        (should (equal set (list (list (selected-window) nil 8))))
-        (should-not (local-variable-p 'right-fringe-width (+test-buffer "other")))))))
+(ert-deftest window/fringes-doom-s ()
+  "Doom's fringes, 8 px each side: no window's right fringe padded a character
+any more (it was, for the arrows of cut lines: canvases, file windows and the
+sidebar each had to take it back, its extra room on their right looking
+lopsided), nor set again as Doom sets the font (its fringe-mode, over every
+frame, child frames too, ran out of memory once)."
+  (should (equal (frame-parameter nil 'right-fringe) (frame-parameter nil 'left-fringe)))
+  (should-not (boundp '+my/right-fringe-padding))
+  (dolist (symbol '(+my/right-fringe +my/right-fringe-h +my/unpadded-right-fringe-h))
+    (should-not (fboundp symbol)))
+  (should-not (memq '+my/right-fringe-h after-setting-font-hook))
+  (should-not (memq '+my/unpadded-right-fringe-h (bound-and-true-p agent-ui-canvas-hook)))
+  (should-not (memq '+my/unpadded-right-fringe-h (bound-and-true-p treemacs-mode-hook))))
 
 ;; ====== LOADED ======
 

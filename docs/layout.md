@@ -14,7 +14,7 @@ What each file and folder of this config is for.
 | `config/banner.el`, `banner/` | [Notices](editor.md#notices) |
 | `config/beads.el`, `beads/` | [Issues](issues.md): Beads, mended for bd 1.x |
 | `config/editor.el`, `editor/` | [The editor](editor.md): tabs, `Option+Enter`, `Cmd+B`, the sticky header, spelling |
-| `config/emacs.el`, `emacs/` | Emacs itself: what differs between macOS and Linux ([the keys](keybindings.md), other apps, the clipboard's images, notifications), the frame, fringes, focus of new windows, frames laid over a window (notices, the error stripe), Emacs [in a terminal](terminal.md), garbage collection, [profiling](agent-shell.md#profiling-emacs), this config byte-compiled when Emacs is idle |
+| `config/emacs.el`, `emacs/` | Emacs itself: what differs between macOS and Linux ([the keys](keybindings.md), other apps, the clipboard's images, notifications), the frame, focus of new windows, frames laid over a window (notices, the error stripe), Emacs [in a terminal](terminal.md), garbage collection, [profiling](agent-shell.md#profiling-emacs), this config byte-compiled when Emacs is idle |
 | `config/examples.el`, `examples/` | [Examples](examples.md) and their screenshots |
 | `config/excalidraw.el`, `excalidraw/` | [Drawings](drawings.md) |
 | `config/git.el`, `git/` | [Magit](git.md#magit), [a file's diff](git.md#file-diff) |

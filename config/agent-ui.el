@@ -246,11 +246,6 @@ FILE): its tests and documentation."
 
 (add-hook 'agent-ui-panel-open-hook #'+my/agent-ui-panel-pdf-notice)
 
-;; FRINGES: a canvas's right fringe as wide as its left, not a character wider
-;; as other windows' (config/emacs.el, FRINGES: room for the arrows of lines
-;; cut at the edge): its lines are drawn to the window's last column, none cut,
-;; so its sides are even (config/emacs/window.el).
-
 ;; A LONE PANEL'S TITLE: a canvas showing one panel only (a dashboard) doesn't
 ;; draw its title over it: its view's bar says it (config/agent-ui/pane.el),
 ;; and in a pane of its own (a project panel), its tab (config/editor/tabs.el).
