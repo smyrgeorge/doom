@@ -9,6 +9,14 @@
 ;; Inside its parent, without borders, never focused, hidden until laid out;
 ;; its window shows a read-only buffer of its own, nothing but its text (no
 ;; mode line, header line, tab line, margins, fringes or cursor).
+;; Its focus redirected to its parent (`redirect-frame-focus', as posframe
+;; does): no-accept-focus keeps the window system's focus away, but Emacs
+;; still made a switch-frame event as the mouse moved into it while mouse
+;; tracking was on (dap-mode's tooltips), or as it was clicked. Run as a
+;; command, that ended a selection made with the mouse, and selected the child
+;; frame: a visual selection vanished as the mouse crossed the stripe or a
+;; notice. Its events now go to its parent; a click on it is still the child's
+;; window's (its position, its buffer's keys).
 (defconst +my/childframe--parameters
   '((fullscreen . nil)
     (no-accept-focus . t)
@@ -57,6 +65,7 @@ about it (`after-make-frame-functions'), and the selected frame stays so."
                                          ,@+my/childframe--parameters))))))
     (unless (eq (selected-frame) selected)
       (select-frame selected 'norecord))
+    (redirect-frame-focus frame parent)
     (with-current-buffer buffer
       (setq-local mode-line-format nil
                   header-line-format nil

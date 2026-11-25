@@ -15,28 +15,36 @@
 ;; ====== A FRAME ======
 
 (defun +test-childframe--make (parameters)
-  "`+my/childframe-make' with PARAMETERS: (FRAME MADE-WITH HOOKS WINDOW), the
-frame made (a stand-in) on a window of this frame, the parameters given to
-`make-frame' and the hooks then."
+  "`+my/childframe-make' with PARAMETERS: (FRAME MADE-WITH HOOKS WINDOW
+REDIRECTED), the frame made (a stand-in) on a window of this frame, the
+parameters given to `make-frame', the hooks then, and its focus redirected
+\(FRAME FOCUS-FRAME)."
   (let* ((window (split-window nil nil 'below))
          (got nil)
+         (redirected nil)
          (frame nil))
     (cl-letf (((symbol-function 'make-frame)
                (lambda (made-with)
                  (setq got (list made-with after-make-frame-functions before-make-frame-hook))
                  'child))
+              ((symbol-function 'redirect-frame-focus)
+               (lambda (frame focus) (setq redirected (list frame focus))))
               ((symbol-function 'frame-root-window)
                (let ((orig (symbol-function 'frame-root-window)))
                  (lambda (&optional f) (if (eq f 'child) window (funcall orig f))))))
       (setq frame (+my/childframe-make (selected-frame) "test-child" parameters)))
-    (list frame (nth 0 got) (cdr got) window)))
+    (list frame (nth 0 got) (cdr got) window redirected)))
 
 (ert-deftest childframe/a-frame-inside-its-parent-without-borders-or-focus ()
   "Inside the parent, without borders, taking no focus, hidden until laid out;
-other code isn't told about it."
+other code isn't told about it. Its focus its parent's: the mouse moving into
+it, or a click, makes no switch-frame (it ended a selection made with the
+mouse, and selected the child frame: a visual selection vanished as the mouse
+crossed the stripe or a notice, mouse tracking on)."
   (+test-with-reset
     (pcase-let* ((parent (selected-frame))
-                 (`(,frame ,parameters ,hooks ,window) (+test-childframe--make nil)))
+                 (`(,frame ,parameters ,hooks ,window ,redirected) (+test-childframe--make nil)))
+      (should (equal redirected (list 'child parent)))
       (should (eq frame 'child))
       (should (eq (alist-get 'parent-frame parameters) parent))
       (should (eq (alist-get 'minibuffer parameters) (minibuffer-window parent)))

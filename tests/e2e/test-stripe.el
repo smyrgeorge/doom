@@ -84,6 +84,9 @@ strip took its room, drawn in nothing)."
     (let* ((window (selected-window))
            (frame (+test-stripe--frame window)))
       (should (eq (frame-parent frame) (window-frame window)))
+      ;; Its focus its parent's: the mouse moving over it, mouse tracking on,
+      ;; makes no switch-frame (a visual selection vanished then).
+      (should (eq (frame-focus frame) (window-frame window)))
       (should (+test-stripe--placed-p frame window))
       ;; Beside the text, at the window's right edge.
       (should (= (+ (car (frame-position frame)) (frame-pixel-width frame))

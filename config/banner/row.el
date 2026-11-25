@@ -13,13 +13,16 @@
 
 (defun +my/banner--clicked-window ()
   "The window whose notice was clicked: the one under the notices' frame
-selected by the click, or (a terminal's header line) the one clicked."
-  (or (car (seq-find (lambda (entry) (eq (nth 1 entry) (selected-frame)))
-                     +my/banner--frames))
-      (let ((window (and (mouse-event-p last-input-event)
-                         (posn-window (event-start last-input-event)))))
-        (and (window-live-p window) window))
-      (selected-window)))
+clicked (its focus is its parent's: the click doesn't select it,
+config/emacs/childframe.el), or selected, or (a terminal's header line) the
+one clicked."
+  (let* ((window (and (mouse-event-p last-input-event)
+                      (posn-window (event-start last-input-event))))
+         (clicked (and (window-live-p window) (window-frame window))))
+    (or (car (seq-find (lambda (entry) (memq (nth 1 entry) (list clicked (selected-frame))))
+                       +my/banner--frames))
+        (and (window-live-p window) window)
+        (selected-window))))
 
 (defun +my/banner--button (label function face buffer header &optional help)
   "LABEL (of FACE) calling FUNCTION in BUFFER when clicked. HEADER: it's in the
