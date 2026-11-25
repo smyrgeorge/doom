@@ -2,14 +2,16 @@
 # GitHub Actions watched: the github workflow's third step
 # (.agent-workflow/workflows/github.yml). The runs of origin's main (its last
 # commit, as pushed) watched until they're all done: finished already, their
-# verdict at once; none at all (GITHUB_APPEAR seconds), said, on. While it
+# verdict at once; none at all (GITHUB_APPEAR seconds): said, on, if none
+# was to run (see none_ran below), else the run asks you. While it
 # waits, a line each time where they are changes (07b23a4: 2 of 4 done ·
 # Tests ✓ · End-to-end tests …): its run's pane shows them as they come.
 #
 # Exit status: 0 all passed (or none ran); 1 one failed: its failed jobs'
 # logs printed (the workflow gives them to its ci agent, which fixes the
 # code or its test and commits; then the job runs again from its push); 2 it
-# can't (gh failing, a run cancelled): the run asks you.
+# can't (gh failing, a run cancelled, none started though one should have):
+# the run asks you.
 #
 # gh is asked about GITHUB_REMOTE's own repository (-R, from its URL), not
 # its default one (upstream, in a fork).
@@ -43,6 +45,33 @@ slug=${slug%/}
 slug=${slug%.git}
 [ -n "$slug" ] && repo=(-R "$slug")
 
+# No run showed up in time: nothing to check (0) only when none was to run:
+# its message asks GitHub to skip them ([skip ci]...), or no workflow of its
+# tree runs on a push. Else one should have run and GitHub didn't start it
+# (an outage, Actions turned off, the repository moved): the run asks you
+# (2), never green with nothing checked.
+none_ran() {
+  if git log -1 --format=%B "$target" | grep -Eiq '\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|^skip-checks: *true'; then
+    echo "github-watch.sh: ${target:0:7} asks GitHub to skip its Actions (its message): nothing to check"
+    exit 0
+  fi
+  local file expected=
+  while IFS= read -r file; do
+    case $file in *.yml|*.yaml) ;; *) continue ;; esac
+    # on: push, on: [push, ...], or push under on: (a key, a list's item).
+    if git show "$target:$file" 2>/dev/null \
+         | grep -Eq '^[[:space:]]*.?on.?[[:space:]]*:.*push|^[[:space:]]*push[[:space:]]*:|^[[:space:]]*-[[:space:]]*push[[:space:]]*$'; then
+      expected="$expected${expected:+, }${file#.github/workflows/}"
+    fi
+  done < <(git ls-tree -r --name-only "$target" -- .github/workflows 2>/dev/null)
+  if [ -z "$expected" ]; then
+    echo "github-watch.sh: no GitHub Actions run for ${target:0:7} after ${appear}s, and none runs on a push: nothing to check"
+    exit 0
+  fi
+  echo "github-watch.sh: no GitHub Actions run for ${target:0:7} after ${appear}s, though $expected runs on a push: GitHub didn't start it (see the repository's Actions; start it by hand: gh workflow run), then go on" >&2
+  exit 2
+}
+
 waited=0
 said=
 # Where they are, said once it changed: waiting for them to show up, or
@@ -71,8 +100,7 @@ while :; do
   fi
   if [ -z "$runs" ]; then
     if [ "$waited" -ge "$appear" ]; then
-      echo "github-watch.sh: no GitHub Actions run for ${target:0:7} after ${appear}s: nothing to check"
-      exit 0
+      none_ran
     fi
   elif ! printf '%s\n' "$runs" | awk -F'\t' '$2 != "completed" { found = 1 } END { exit !found }'; then
     break

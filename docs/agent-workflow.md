@@ -256,9 +256,12 @@ This config has two workflows of its own in `.agent-workflow/`, samples to start
 - The `ci` agent may read, edit, run the tests and commit. It commits only the files it changed, since your checkout may
   have yours. It never pushes (the script does), and never runs the Actions again.
 - With nothing to push (origin has your main already), it watches the Actions of origin's main. If they're done already,
-  their verdict comes at once. If none show up within 5 minutes, it says so and goes on.
-- The run asks you when a run is cancelled on GitHub, when a push is refused (origin has commits you don't), or when
-  your checkout is off main at a push.
+  their verdict comes at once.
+- If none show up within 5 minutes, it says so and goes on only when none was to run: the commit's message asks GitHub
+  to skip them (`[skip ci]`...), or none of its `.github/workflows/` runs on a push. Otherwise GitHub didn't start one
+  that should have run, and the run asks you, rather than passing with nothing checked.
+- The run asks you when a run is cancelled on GitHub, when a push is refused (origin has commits you don't), when your
+  checkout is off main at a push, or when no Actions run started for a push that should have started one.
 
 Its scripts read these from Emacs's environment (`(setenv "GITHUB_POLL" "60")`):
 

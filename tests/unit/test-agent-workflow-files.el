@@ -963,8 +963,9 @@ esac
   "SCRIPT (github-check.sh...) run in a clone on main of a bare origin (a
 commit there), named NAME, ENV more of its environment (GH_RUNS ...) and
 how it's set up (:ahead a commit origin hasn't, :behind origin one it
-hasn't, :off-main, :no-remote, :no-gh, :logged-out): (EXIT OUTPUT CLONE
-ORIGIN), CLONE your checkout and its worktree."
+hasn't, :off-main, :no-remote, :no-gh, :logged-out; :workflows ((NAME .
+TEXT)...) in .github/workflows/ and :message the message of origin's
+commit): (EXIT OUTPUT CLONE ORIGIN), CLONE your checkout and its worktree."
   (let* ((dir (+test-awf--dir name))
          (origin (expand-file-name "origin.git" dir))
          (clone (file-name-as-directory (expand-file-name "clone" dir)))
@@ -976,8 +977,10 @@ ORIGIN), CLONE your checkout and its worktree."
     (funcall git dir "clone" "-q" origin clone)
     (funcall git clone "checkout" "-q" "-b" "main")
     (+test-awf--file clone "a.el" "one\n")
-    (funcall git clone "add" "a.el")
-    (funcall git clone "commit" "-q" "-m" "first")
+    (pcase-dolist (`(,name . ,text) (plist-get env :workflows))
+      (+test-awf--file clone (concat ".github/workflows/" name) text))
+    (funcall git clone "add" "-A")
+    (funcall git clone "commit" "-q" "-m" (or (plist-get env :message) "first"))
     (funcall git clone "push" "-q" "origin" "main")
     (+test-awf--gh bin)
     (when (plist-get env :ahead)
@@ -1064,7 +1067,9 @@ asks (2)."
 (ert-deftest agent-workflow-files/github-watch-sh ()
   "github-watch.sh: origin's main's runs green: 0; one failed: 1, its
 failed jobs' lines; still running: watched until done; none at all: 0,
-said; cancelled: 2."
+said, if none was to run (no workflow runs on a push, or its message skips
+them), else 2, the run asks (none was started: run 4 of the github
+workflow went green, nothing checked); cancelled: 2."
   (pcase-let ((`(,exit ,out) (+test-awf--github "watch-green" "github-watch.sh"
                                                 :runs "7\tcompleted\tsuccess\tTests\n8\tcompleted\tskipped\tLint\n")))
     (should (eql exit 0))
@@ -1091,7 +1096,28 @@ said; cancelled: 2."
     (should (string-match-p "green" out)))
   (pcase-let ((`(,exit ,out) (+test-awf--github "watch-none" "github-watch.sh")))
     (should (eql exit 0))
-    (should (string-match-p "no GitHub Actions run" out)))
+    (should (string-match-p "no GitHub Actions run for [0-9a-f]\\{7\\} after 0s, and none runs on a push: nothing to check" out)))
+  ;; A workflow running on a push (each way YAML says it), none started:
+  ;; asked, the workflows named; one on other events only: nothing to check.
+  (pcase-dolist (`(,name ,text)
+                 '(("watch-expected-block" "name: Tests\non:\n  push:\n    branches: [main]\n  pull_request:\njobs: {}\n")
+                   ("watch-expected-flow" "name: Tests\non: [push, pull_request]\njobs: {}\n")
+                   ("watch-expected-word" "name: Tests\n\"on\": push\njobs: {}\n")
+                   ("watch-expected-list" "name: Tests\non:\n  - pull_request\n  - push\njobs: {}\n")))
+    (ert-info (name :prefix "case: ")
+      (pcase-let ((`(,exit ,out) (+test-awf--github name "github-watch.sh"
+                                                    :workflows `(("tests.yml" . ,text) ("README.md" . "push:\n")))))
+        (should (eql exit 2))
+        (should (string-match-p "no GitHub Actions run for [0-9a-f]\\{7\\} after 0s, though tests.yml runs on a push: GitHub didn't start it" out)))))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-other-events" "github-watch.sh"
+                                                :workflows '(("nightly.yaml" . "on:\n  schedule:\n    - cron: '0 3 * * *'\n  workflow_dispatch:\njobs: {}\n")))))
+    (should (eql exit 0))
+    (should (string-match-p "none runs on a push: nothing to check" out)))
+  (pcase-let ((`(,exit ,out) (+test-awf--github "watch-skipped" "github-watch.sh"
+                                                :workflows '(("tests.yml" . "on: push\njobs: {}\n"))
+                                                :message "Docs only [skip ci]")))
+    (should (eql exit 0))
+    (should (string-match-p "asks GitHub to skip its Actions (its message): nothing to check" out)))
   (pcase-let ((`(,exit ,out) (+test-awf--github "watch-cancel" "github-watch.sh"
                                                 :runs "11\tcompleted\tcancelled\tTests\n")))
     (should (eql exit 2))
