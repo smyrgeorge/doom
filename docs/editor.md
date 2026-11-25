@@ -237,3 +237,5 @@ function it's in and its code, beside a preview of the selected one. In a pane u
 - A thin line marks column 120, or a project's `.editorconfig` `max_line_length`.
 - The line you're on is always shown whole, at a window's bottom too, as in an agent's prompt. Only a scroll leaves it
   cut.
+- On macOS, no input-source bubble (ABC's "A") by Emacs's cursor; other apps keep it. From Emacs's next start; set
+  `+my/macos-input-source-bubble` to `t` in config.el to bring it back.

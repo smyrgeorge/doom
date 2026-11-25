@@ -4,6 +4,8 @@
 ;; not run (tests/helper.el records the apps it starts, `+test-os-runs'); and
 ;; ImageMagick's rotating for real where it's installed.
 
+(+test-load "config/emacs")             ; its settings (`+my/macos-input-source-bubble')
+
 ;; ====== HELPERS ======
 
 (defmacro +test-os--with-programs (programs &rest body)
@@ -432,3 +434,65 @@ starting with - isn't taken for an option; neither: none (nil)."
     (should (equal +test-os-runs
                    '(("notify-send" "--app-name=Emacs" "--icon=emacs" "--" "Claude Code" "-1 test still failing")
                      ("notify-send" "--app-name=Emacs" "--icon=emacs" "--" "Title" "Body"))))))
+
+;; ====== MACOS'S INPUT-SOURCE BUBBLE ======
+
+(defmacro +test-os--with-bubble-preference (value &rest body)
+  "BODY on macOS with a GUI display, Emacs's preference for the input-source
+bubble VALUE (nil: none); what's written recorded in `writes' (latest
+first)."
+  (declare (indent 1))
+  `(let ((writes nil) (preference ,value))
+     (cl-letf (((symbol-function 'x-display-list) (lambda () '("ns")))
+               ((symbol-function 'ns-get-resource)
+                (lambda (_owner name)
+                  (should (equal name "TSMLanguageIndicatorEnabled"))
+                  preference))
+               ((symbol-function 'ns-set-resource)
+                (lambda (_owner name value)
+                  (should (equal name "TSMLanguageIndicatorEnabled"))
+                  (push value writes)
+                  (setq preference value))))
+       (+test-on-macos ,@body))))
+
+(ert-deftest os/input-source-bubble-off-by-default ()
+  (should-not (default-value '+my/macos-input-source-bubble))
+  (should (memq '+my/os-input-source-bubble-h window-setup-hook))
+  (should (memq '+my/os-input-source-bubble-h server-after-make-frame-hook)))
+
+(ert-deftest os/input-source-bubble-turned-off-once ()
+  "Off: Emacs's preference \"0\", written only when it isn't already."
+  (let ((+my/macos-input-source-bubble nil))
+    (+test-os--with-bubble-preference nil
+      (+my/os-input-source-bubble-h)
+      (+my/os-input-source-bubble-h)
+      (should (equal writes '("0"))))
+    ;; `defaults write -bool NO' reads "0" too.
+    (+test-os--with-bubble-preference "0"
+      (+my/os-input-source-bubble-h)
+      (should-not writes))
+    (+test-os--with-bubble-preference "1"
+      (+my/os-input-source-bubble-h)
+      (should (equal writes '("0"))))))
+
+(ert-deftest os/input-source-bubble-back-on ()
+  "On: Emacs's preference removed, macOS's default (the bubble) again."
+  (let ((+my/macos-input-source-bubble t))
+    (+test-os--with-bubble-preference "0"
+      (+my/os-input-source-bubble-h)
+      (+my/os-input-source-bubble-h)
+      (should (equal writes '(nil))))
+    (+test-os--with-bubble-preference nil
+      (+my/os-input-source-bubble-h)
+      (should-not writes))))
+
+(ert-deftest os/input-source-bubble-only-on-macos-with-a-display ()
+  "Linux, or Emacs without a GUI display (a terminal, a daemon before its
+first frame): nothing read or written."
+  (let ((+my/macos-input-source-bubble nil))
+    (+test-os--with-bubble-preference nil
+      (+test-on-linux (+my/os-input-source-bubble-h))
+      (cl-letf (((symbol-function 'x-display-list) #'ignore)
+                ((symbol-function 'ns-get-resource) (lambda (&rest _) (error "Read"))))
+        (+my/os-input-source-bubble-h))
+      (should-not writes))))

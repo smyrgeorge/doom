@@ -12,7 +12,7 @@
 ;; What differs between them (config/emacs/os.el: `+my/macos-p', the +my/os-
 ;; functions): the keys, and the other apps and programs files go to (another
 ;; app, the file manager, the printer, the clipboard's images, image editing),
-;; desktop notifications.
+;; desktop notifications, macOS's input-source bubble.
 
 ;; KEYS
 ;; On macOS this config's keys use Cmd (Super, `s-'), as macOS's apps do.
@@ -48,6 +48,15 @@
 ;; click brings Emacs forward.
 ;; Linux: the desktop's notifications, through D-Bus (`notifications-notify':
 ;; a click runs the caller's function), else notify-send.
+
+;; MACOS'S INPUT-SOURCE BUBBLE (`+my/os-input-source-bubble-h')
+;; Since macOS 14 a bubble with the input source's icon (ABC's "A") comes up by
+;; the text cursor now and then (entering insert state...). Off in Emacs only:
+;; macOS's preference for it (TSMLanguageIndicatorEnabled) set in Emacs's own
+;; (org.gnu.Emacs), as a GUI Emacs starts. macOS reads it once a run, as Emacs
+;; starts: a change counts from the next start.
+(defvar +my/macos-input-source-bubble nil
+  "Non-nil: macOS's input-source bubble by Emacs's cursor, as in other apps.")
 
 ;; FRAMES AND WINDOWS (config/emacs/window.el)
 ;; The frame is maximized at startup.

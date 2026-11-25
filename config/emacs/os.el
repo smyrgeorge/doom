@@ -1,6 +1,7 @@
 ;;; $DOOMDIR/config/emacs/os.el -*- lexical-binding: t; -*-
-;; What differs between macOS and Linux: the keys, and the other apps and
-;; programs files go to (config/emacs.el, MACOS AND LINUX, says which).
+;; What differs between macOS and Linux: the keys, the other apps and
+;; programs files go to (config/emacs.el, MACOS AND LINUX, says which), and
+;; macOS's input-source bubble.
 ;; Loaded from config/emacs.el, first: the other files use it.
 
 (defun +my/macos-p ()
@@ -259,3 +260,24 @@ macOS a click brings Emacs forward). Non-nil if it was shown."
   (if (+my/macos-p)
       (+my/os--notify-macos title body)
     (+my/os--notify-linux title body on-click)))
+
+;; MACOS'S INPUT-SOURCE BUBBLE (config/emacs.el)
+(defconst +my/os--input-source-bubble-key "TSMLanguageIndicatorEnabled"
+  "macOS's preference for the input-source bubble by an app's text cursor:
+read from the app's own preferences when the system-wide one isn't set, once
+a run, as the app starts.")
+
+(defun +my/os-input-source-bubble-h ()
+  "macOS's input-source bubble on or off for Emacs, as
+`+my/macos-input-source-bubble' says (config/emacs.el): Emacs's preference
+\"0\", or none; written only when it differs. Needs a GUI display: the
+preferences are Emacs.app's (`ns-set-resource')."
+  (when (and (+my/macos-p) (fboundp 'ns-set-resource) (x-display-list))
+    (let ((now (ns-get-resource nil +my/os--input-source-bubble-key)))
+      (if +my/macos-input-source-bubble
+          (when now (ns-set-resource nil +my/os--input-source-bubble-key nil))
+        (unless (equal now "0")
+          (ns-set-resource nil +my/os--input-source-bubble-key "0"))))))
+
+(add-hook 'window-setup-hook #'+my/os-input-source-bubble-h)
+(add-hook 'server-after-make-frame-hook #'+my/os-input-source-bubble-h)
