@@ -255,9 +255,9 @@ closed: its views and folder gone."
                  (image (and at (get-text-property (next-single-property-change at 'display) 'display))))
             (should (eq (car-safe image) 'image))
             (let ((size (image-size image t)))
-              ;; As wide as the text the canvas draws (a column short of
-              ;; its window's), and some lines high.
-              (should (= (car size) (* (frame-char-width) (1- (window-max-chars-per-line window)))))
+              ;; As wide as the text the canvas draws (all its window's
+              ;; columns, in a graphic frame), and some lines high.
+              (should (= (car size) (* (frame-char-width) (window-max-chars-per-line window))))
               (should (> (cdr size) (* 4 (frame-char-height))))))))
       (kill-buffer session)
       (should-not (buffer-live-p canvas))
