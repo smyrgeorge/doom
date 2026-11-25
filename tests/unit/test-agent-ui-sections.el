@@ -240,14 +240,14 @@ again unfolds it. Folded from Lisp too."
     ;; TAB on it.
     (with-current-buffer canvas
       (agent-ui--flush)
-      (goto-char (point-min))
+      (goto-char (agent-ui--start))
       (should (equal (key-binding (kbd "TAB")) #'agent-ui-section-toggle))
       (agent-ui-section-toggle))
     (should (equal (mapcar (lambda (line) (car (split-string line " ─")))
                            (+test-aus-lines canvas))
                    '("▸ A · 2 hidden" "▾ B" "in b")))
     (with-current-buffer canvas
-      (goto-char (point-min))
+      (goto-char (agent-ui--start))
       (agent-ui-section-toggle))
     ;; The cursor in it, folded: on its divider.
     (with-current-buffer canvas
@@ -256,13 +256,13 @@ again unfolds it. Folded from Lisp too."
       (search-forward "second"))
     (agent-ui-section canvas "a" :folded t)
     (with-current-buffer canvas
-      (should (= (point) (point-min))))
+      (should (= (point) (agent-ui--start))))
     (should (plist-get (car (agent-ui-sections canvas)) :folded))
     (agent-ui-show '(:id "three" :type "text" :text "third") :canvas canvas :section "a")
     (should (equal (car (+test-aus-lines canvas)) (concat "▸ A · 3 hidden " (make-string 25 ?─))))
     (should (equal (cdr (+test-aus-lines canvas)) (list (concat "▾ B " (make-string 36 ?─)) "in b")))
     (with-current-buffer canvas
-      (goto-char (point-min))
+      (goto-char (agent-ui--start))
       (agent-ui-section-toggle))
     (should (equal (mapcar (lambda (line) (car (split-string line " ─")))
                            (+test-aus-lines canvas))
@@ -323,7 +323,8 @@ closed. A canvas with sections isn't empty."
       (agent-ui-clear :canvas canvas)
       (should-not (agent-ui-sections canvas))
       (should-not (agent-ui-elements :canvas canvas))
-      (should (equal (with-current-buffer canvas (buffer-string)) "")))))
+      ;; Its top line left alone.
+      (should (equal (with-current-buffer canvas (buffer-string)) "\n")))))
 
 ;; ====== A CANVAS SHOWN IN ANOTHER'S SECTION ======
 
@@ -538,7 +539,7 @@ TAB; its help says so."
       (agent-ui-section canvas "b")
       (with-current-buffer canvas
         (agent-ui--flush)
-        (goto-char (point-min))
+        (goto-char (agent-ui--start))
         (should (equal (key-binding (kbd "RET")) #'agent-ui-section-open))
         (should (string-match-p "RET: open what it shows" (get-text-property (point) 'help-echo)))
         (agent-ui-section-open)

@@ -40,8 +40,10 @@ tests' types: meter (VALUE/MAX), spinner (animated), broken (fails)."
          (kill-buffer canvas)))))
 
 (defun +test-auc-text (&optional canvas)
+  "CANVAS's text under its top line (an empty line of its own: checked)."
   (with-current-buffer (or canvas (agent-ui-canvas))
-    (buffer-substring-no-properties (point-min) (point-max))))
+    (should (eql (char-after (point-min)) ?\n))
+    (buffer-substring-no-properties (1+ (point-min)) (point-max))))
 
 (defun +test-auc-flush ()
   (with-current-buffer (agent-ui-canvas) (agent-ui--flush)))
@@ -118,6 +120,40 @@ current after the window closed)."
                               (+test-auc-message #'agent-ui-show '(:type "meter")
                                                  :canvas (current-buffer)))))))
 
+(ert-deftest agent-ui-canvas/a-top-line-of-its-own ()
+  "A canvas starts with an empty line of its own, the cursor on it: its first
+element (an image, say: a box cursor frames it whole) under it. Its elements
+shown, replaced, removed, the canvas cleared: the line stays, the cursor on
+it. It alone is nothing shown (`agent-ui-canvas-shows-p')."
+  (+test-auc
+    (with-current-buffer canvas
+      (should (equal (buffer-string) "\n"))
+      (should (= (point) 1))
+      (should-not (agent-ui-canvas-shows-p canvas))
+      (agent-ui-show '(:id "a" :type "meter" :value 1))
+      (should (agent-ui-canvas-shows-p canvas))
+      (should (equal (buffer-substring-no-properties 1 2) "\n"))
+      (should-not (get-text-property 1 'agent-ui-id))
+      (should (equal (get-text-property 2 'agent-ui-id) "a"))
+      (should (= (point) 1))
+      (agent-ui-show '(:id "a" :type "meter" :value 2))
+      (agent-ui-update "a" '(:value 3))
+      (agent-ui--flush)
+      (should (equal (buffer-string) "\n3/10\n\n"))
+      (should (= (point) 1))
+      (agent-ui-remove "a")
+      (should (equal (buffer-string) "\n"))
+      (should-not (agent-ui-canvas-shows-p canvas))
+      (agent-ui-show '(:id "b" :type "meter"))
+      (goto-char (point-max))
+      (let ((agent-ui-close-emptied-functions nil))
+        (agent-ui-clear))
+      (should (equal (buffer-string) "\n"))
+      (should (= (point) 1)))
+    (with-temp-buffer
+      (insert "text")
+      (should-not (agent-ui-canvas-shows-p (current-buffer))))))
+
 ;; Only showing an element makes a canvas: looking at one doesn't.
 (ert-deftest agent-ui-canvas/made-by-showing-only ()
   (+test-auc
@@ -145,10 +181,12 @@ current after the window closed)."
     ;; Drawn at once, a blank line after each.
     (should (equal (+test-auc-text) "1/10\n\nB\n2/10\n\n"))
     (should (equal (agent-ui-elements) '((:id "a" :type "meter") (:id "b" :type "meter"))))
-    ;; Each element's text knows its id.
+    ;; Each element's text knows its id (under the canvas's top line, no
+    ;; element's).
     (with-current-buffer canvas
-      (should (equal (get-text-property 1 'agent-ui-id) "a"))
-      (should (equal (get-text-property 7 'agent-ui-id) "b")))
+      (should-not (get-text-property 1 'agent-ui-id))
+      (should (equal (get-text-property 2 'agent-ui-id) "a"))
+      (should (equal (get-text-property 8 'agent-ui-id) "b")))
     ;; Its type a string, as JSON's.
     (should (equal (agent-ui-get "b") '(:id "b" :type "meter" :value 2 :title "B")))))
 
@@ -376,11 +414,11 @@ narrower, a panel's border after it in line; in a terminal, as it is."
       (agent-ui-show '(:id "a" :type "meter" :marks ("✎ a")))
       (should (equal (+test-auc-text) "0/10 ✎ a\n\n"))
       (with-current-buffer canvas
-        (should (equal (get-text-property 7 'display) '(space :width (5))))))
+        (should (equal (get-text-property 8 'display) '(space :width (5))))))
     (agent-ui-show '(:id "a" :type "meter" :marks ("✎ b")))
     (+test-auc-flush)
     (with-current-buffer canvas
-      (should-not (get-text-property 7 'display)))))
+      (should-not (get-text-property 8 'display)))))
 
 (ert-deftest agent-ui-canvas/redrawn-when-the-font-changes ()
   "A frame's font changed (its size): every canvas drawn again, for its new

@@ -685,7 +685,7 @@ cursor was in its pane), the cursor in its Agent UI, else in its session."
 (defun agent-workspace--canvas-killed-h ()
   "A canvas killed showing something: said to the stage (see above). In
 its `kill-buffer-hook'."
-  (when (> (buffer-size) 0)
+  (when (agent-ui-canvas-shows-p (current-buffer))
     (agent-workspace--canvas-gone (current-buffer))))
 
 (defun agent-workspace--canvas-made-h ()
@@ -695,7 +695,7 @@ its `kill-buffer-hook'."
 (defun agent-workspace--canvas-emptied-h ()
   "A canvas changed, emptied: said to the stage (see above). In
 `agent-ui-changed-hook'."
-  (when (= (buffer-size) 0)
+  (unless (agent-ui-canvas-shows-p (current-buffer))
     (agent-workspace--canvas-gone (current-buffer))))
 
 (add-hook 'agent-ui-canvas-hook #'agent-workspace--canvas-made-h)

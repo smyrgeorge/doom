@@ -46,9 +46,11 @@ SESSION, CWD and PAYLOAD (a string), answered by `agent-ui-request'."
                            (buffer-string)))))
 
 (defun +test-aur-text ()
+  "The canvas's text under its top line (an empty line of its own: checked)."
   (with-current-buffer (agent-ui-canvas)
     (agent-ui--flush)
-    (buffer-substring-no-properties (point-min) (point-max))))
+    (should (eql (char-after (point-min)) ?\n))
+    (buffer-substring-no-properties (1+ (point-min)) (point-max))))
 
 ;; ====== OPERATIONS ======
 

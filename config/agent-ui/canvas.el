@@ -179,8 +179,36 @@ if there's none."
       (unless (derived-mode-p 'agent-ui-canvas-mode)
         (agent-ui-canvas-mode)
         (setq agent-ui--canvas-name name)
+        (agent-ui--top-line)
         (run-hooks 'agent-ui-canvas-hook)))
     buffer))
+
+;; ITS TOP LINE
+;; A canvas starts with an empty line of its own, no element's: where the
+;; cursor is when it opens. Its first element may start with an image (stats'
+;; tiles, a chart, a lone panel), and a box cursor on an image frames the
+;; whole of it. Under its bar or tab, a line of room too, as between its
+;; elements. Made with it, put back when it's cleared.
+(defun agent-ui--top-line ()
+  "The current canvas's top line (see above), the cursor on it."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (insert "\n")))
+  (goto-char (point-min)))
+
+(defun agent-ui--start ()
+  "Where the current canvas's elements start: under its top line."
+  (min (point-max) (1+ (point-min))))
+
+(defun agent-ui-canvas-shows-p (buffer)
+  "Whether canvas BUFFER shows something: an element, a section (its top
+line alone is nothing)."
+  (and (buffer-live-p buffer)
+       (with-current-buffer buffer
+         (and (derived-mode-p 'agent-ui-canvas-mode)
+              (or agent-ui--order agent-ui--sections)
+              t))))
 
 (defun agent-ui-canvases ()
   "The canvases' buffers."
@@ -374,6 +402,7 @@ pixels, or nil (not in a window, empty, a terminal)."
   (when-let* ((window window)
               ((display-graphic-p (window-frame window)))
               ((> (buffer-size) 0))
+              ;; Its first character, its top line's.
               (font (ignore-errors (font-at (point-min) window)))
               (info (query-font font)))
     (cons (aref info 2) (aref info 4))))
@@ -1216,6 +1245,7 @@ only. CANVAS emptied: its panes closed, it killed if it's to be
             (with-current-buffer self
               (let ((inhibit-read-only t))
                 (erase-buffer))
+              (agent-ui--top-line)
               (run-hooks 'agent-ui-cleared-hook)
               (agent-ui--close-if-empty)))))
       (agent-ui--close-emptied buffer)))
@@ -1331,12 +1361,12 @@ error."
 (defun agent-ui--section-tail (section)
   "Where what's added at the end of SECTION (a name; nil: the canvas's own
 elements) goes: after its last element's blank line, else after its
-divider's; the canvas's own, else at its start."
+divider's; the canvas's own, else at its start, under its top line."
   (if-let* ((last (car (last (agent-ui--section-keys section)))))
       (+ (agent-ui--entry-end (gethash last agent-ui--entries)) 2)
     (if section
         (+ (agent-ui--section-end (agent-ui--find-section section)) 2)
-      (point-min))))
+      (agent-ui--start))))
 
 (defun agent-ui--make-room (pos)
   "Room at POS of the current canvas for something new before what's there:

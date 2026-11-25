@@ -28,9 +28,11 @@
   (+test-ausrc-wait (lambda () (eq (plist-get (agent-ui-source-status id) :running) :false))))
 
 (defun +test-ausrc-text ()
+  "The canvas's text under its top line (an empty line of its own: checked)."
   (with-current-buffer (agent-ui-canvas)
     (agent-ui--flush)
-    (buffer-substring-no-properties (point-min) (point-max))))
+    (should (eql (char-after (point-min)) ?\n))
+    (buffer-substring-no-properties (1+ (point-min)) (point-max))))
 
 (defun +test-ausrc-error (source)
   (agent-ui-error-message (should-error (agent-ui-source-check source) :type 'agent-ui-error)))

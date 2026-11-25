@@ -148,6 +148,8 @@ Questions have keys of their own ([Types that ask](#types-that-ask)).
   - A question that takes the focus is brought fully into view. Its view is made taller if it must be.
 - **Terminal or GUI:** the frame showing the canvas decides. The GUI draws some elements better (charts as SVG) and has
   elements of its own (images, drawings, web pages). A type without a GUI drawing draws as text in both.
+- **Its top line** is empty, and the cursor is there when the canvas opens. Its first element can start with an image
+  (stat tiles, a chart, a panel), and the cursor on an image frames the whole of it.
 - **Redrawing** an element leaves the cursor and each window's scroll where they were.
 - **Width:** elements fit the canvas window's width. They're drawn again when the window changes size, or the font's
   size changes.

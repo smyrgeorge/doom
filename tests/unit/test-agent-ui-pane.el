@@ -203,8 +203,8 @@ title drawn."
                        (agent-ui--flush)
                        (buffer-substring-no-properties (point-min) (point-max))))))
         (should (agent-ui-pane-window-p cell))
-        (should (string-prefix-p "3 checks\n" (with-current-buffer canvas
-                                                (buffer-substring-no-properties (point-min) (point-max)))))
+        (should (string-prefix-p "\n3 checks\n" (with-current-buffer canvas
+                                                  (buffer-substring-no-properties (point-min) (point-max)))))
         (should-not (string-search "Release v2.4" (funcall text)))
         (should (string-search "Build" (funcall text)))
         (should (equal (+test-aup-bar cell) " Release v2.4"))
@@ -216,13 +216,13 @@ title drawn."
                                                   (agent-ui-context :width 60 :still t))))
         ;; A second element.
         (agent-ui-show '(:id "note" :type "text" :text "a note") :canvas sub)
-        (should (string-prefix-p "Release v2.4\n3 checks\n" (funcall text)))
+        (should (string-prefix-p "\nRelease v2.4\n3 checks\n" (funcall text)))
         (should (equal (+test-aup-bar cell) " release"))
         (should-not (agent-ui-canvas-title canvas))
         (should-not (agent-ui-canvas-label canvas))
         ;; Removed: back.
         (agent-ui-remove "note" :canvas sub)
-        (should (string-prefix-p "3 checks\n" (funcall text)))
+        (should (string-prefix-p "\n3 checks\n" (funcall text)))
         (should (equal (+test-aup-bar cell) " Release v2.4"))
         ;; Retitled.
         (agent-ui-update "release" '(:title "Release v2.5") :canvas sub)
@@ -231,7 +231,7 @@ title drawn."
         ;; A lone table in its place: its title its own.
         (agent-ui-show '(:id "release" :type "table" :title "Tests" :columns ("Test") :rows (("a")))
                        :canvas sub)
-        (should (string-prefix-p "Tests\n" (funcall text)))
+        (should (string-prefix-p "\nTests\n" (funcall text)))
         (should (equal (+test-aup-bar cell) " release"))
         (should-not (agent-ui-canvas-title canvas))))))
 
@@ -438,7 +438,7 @@ now, as small as they need."
     (let* ((window (selected-window))
            (pane (window-total-height window))
            (area (lambda () (window-total-height (window-next-sibling window))))
-           (text "line 1\nline 2\nline 3"))
+           (text "line 1\nline 2"))
       (dolist (canvas (list name (agent-ui-sub-canvas name "b") (agent-ui-sub-canvas name "c")
                             (agent-ui-sub-canvas name "d")))
         (agent-ui-show `(:id "x" :type "text" :text ,text) :canvas canvas))
@@ -466,7 +466,7 @@ the conversation keeping the rest."
     (let* ((agent-ui-pane-min-lines 3)
            (window (selected-window))
            (pane (window-total-height window)))
-      (agent-ui-show '(:id "x" :type "text" :text "one\ntwo") :canvas name)
+      (agent-ui-show '(:id "x" :type "text" :text "one") :canvas name)
       ;; Measured again once drawn (a timer, after the redraw).
       (agent-ui--pane-fit-now)
       (let* ((cell (car (agent-ui--pane-cells (selected-frame))))
@@ -495,7 +495,7 @@ short ones stacked beside the tall one), no empty lines under them."
     (let ((agent-ui-pane-min-lines 3))
       (+test-aup-show name)
       (+test-aup-show (agent-ui-sub-canvas name "b"))
-      (agent-ui-show '(:id "x" :type "text" :text "1\n2\n3\n4") :canvas (agent-ui-sub-canvas name "c"))
+      (agent-ui-show '(:id "x" :type "text" :text "1\n2\n3\n4\n5") :canvas (agent-ui-sub-canvas name "c"))
       (agent-ui--pane-fit-now)
       (pcase-let ((`(,a ,_b ,c) (agent-ui--pane-cells (selected-frame))))
         (should (< (window-total-height a) (window-total-height c)))

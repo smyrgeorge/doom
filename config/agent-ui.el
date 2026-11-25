@@ -20,7 +20,8 @@
 ;; its elements in the order shown, each redrawn in place when it changes,
 ;; `agent-ui-redraw-delay' after (updates within it drawn together); animated
 ;; ones every `agent-ui-animation-interval'. In it: g r redraws it, q kills it.
-;; At most `agent-ui-max-elements'.
+;; At most `agent-ui-max-elements'. Its top line empty, the cursor there when
+;; it opens: not on its first element's image (a box cursor frames it whole).
 
 ;; IN ITS SESSION'S PANE
 ;; A session's Agent UI opens in its session's pane when an element is shown,

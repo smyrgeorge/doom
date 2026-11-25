@@ -68,12 +68,12 @@ after (the tests' forgotten), no window shown, a canvas of its own."
     (should-not (agent-ui-staged-p 'progress))
     (agent-ui-show '(:id "g" :type "dial" :value 70))
     (with-current-buffer (agent-ui-canvas)
-      (should (string-prefix-p "[#######...] 70%" (buffer-string))))
+      (should (string-prefix-p "\n[#######...] 70%" (buffer-string))))
     ;; Again, changed: replaces it, its elements redrawn.
     (agent-ui-stage (replace-regexp-in-string "%d%%" "%d percent" +test-aus-dial))
     (with-current-buffer (agent-ui-canvas)
       (agent-ui--flush)
-      (should (string-prefix-p "[#######...] 70 percent" (buffer-string))))))
+      (should (string-prefix-p "\n[#######...] 70 percent" (buffer-string))))))
 
 (ert-deftest agent-ui-staging/its-warnings-said ()
   (+test-aus

@@ -355,7 +355,7 @@ area in it, or full size): their windows."
 (defun agent-workspace--canvas (agent)
   "AGENT's Agent UI canvas, if it shows something."
   (when-let* ((canvas (agent-workspace--canvas-buffer agent)))
-    (and (> (buffer-size canvas) 0) canvas)))
+    (and (agent-ui-canvas-shows-p canvas) canvas)))
 
 (defun agent-workspace--other-canvases (agent)
   "AGENT's other Agent UI canvases (its session's, --canvas NAME) that show
@@ -366,7 +366,7 @@ something, by name."
     (seq-sort-by (lambda (canvas) (buffer-local-value 'agent-ui--canvas-part canvas)) #'string<
                  (seq-filter (lambda (canvas)
                                (and (buffer-local-value 'agent-ui--canvas-part canvas)
-                                    (> (buffer-size canvas) 0)))
+                                    (agent-ui-canvas-shows-p canvas)))
                              (agent-ui-session-canvases session)))))
 
 (defun agent-workspace-agent-tabs (agent)
