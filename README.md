@@ -16,11 +16,11 @@ own ([Examples](docs/examples.md)).
 
 ### Agent UI
 
-Your agent keeps things in view on a canvas beside its session while it works: a checklist of its steps, a table of
+Your agent keeps things in view under its conversation while it works: a checklist of its steps, a table of
 test results filling in, a build's progress bar, charts (SVG in the GUI, characters in a terminal), each updated in
 place. It draws them with `cmd/agent-ui`, which it's told about, whichever agent it is ([more](docs/agent-ui.md)).
 
-![Agent UI: a canvas beside the conversation](examples/agent-ui.png)
+![Agent UI: an agent's views under its conversation](examples/agent-ui.png)
 
 ### Agent workflow
 

@@ -233,13 +233,16 @@ file gone."
       (should-not (file-exists-p dir)))))
 
 (ert-deftest e2e-examples/agent-ui-charts-as-svg ()
-  "The canvas beside the conversation, played out; its chart an SVG image as
-wide as the canvas's text, the rest text; closed: the file gone."
+  "The session's views under its conversation, played out; its canvas's
+chart an SVG image as wide as the view's text, the rest text; the session
+closed: its views and folder gone."
   (+test-with-reset
-    (pcase-let* ((`(,conversation ,canvas) (+my/example-agent-ui))
-                 (dir (+test-examples--folder conversation)))
-      (should (+test-wait-for #'+my/example-agent-ui-ready 20))
+    (let* ((session (+my/example-agent-ui))
+           (dir (+test-examples--folder session))
+           (canvas nil))
+      (should (+test-wait-for #'+my/example-agent-ui-ready 40))
       (redisplay t)
+      (setq canvas (get-buffer (agent-ui-canvas-buffer-name (agent-ui--session-name session))))
       (let ((window (get-buffer-window canvas)))
         (should window)
         (with-current-buffer canvas
@@ -256,8 +259,8 @@ wide as the canvas's text, the rest text; closed: the file gone."
               ;; its window's), and some lines high.
               (should (= (car size) (* (frame-char-width) (1- (window-max-chars-per-line window)))))
               (should (> (cdr size) (* 4 (frame-char-height))))))))
-      (kill-buffer canvas)
-      (kill-buffer conversation)
+      (kill-buffer session)
+      (should-not (buffer-live-p canvas))
       (should-not (file-exists-p dir)))))
 
 (ert-deftest e2e-examples/messages-one-line-in-80-columns ()

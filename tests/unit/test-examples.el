@@ -449,35 +449,53 @@ the last one's: the template's cells were shared), labels in their boxes."
 
 ;; ====== AGENT UI ======
 
-(ert-deftest examples/agent-ui-a-canvas-filled-in ()
-  "The conversation on the left, the canvas beside it, played out: the
-release's steps, the tests (one failed), the build done, the chart; gone
-once both are closed."
+(ert-deftest examples/agent-ui-a-session-and-its-views ()
+  "An agent-shell session with the stand-in agent, alone in the frame, asked
+to release; its Agent UI played out under it as it runs: its canvas (the
+release's steps, the build done, the chart), its tests (one failed), its
+question; the agent's answer in the conversation; the folder gone once the
+session is closed."
   (+test-examples
-    (pcase-let* ((`(,conversation ,canvas) (+my/example-agent-ui))
-                 (dir (car (buffer-local-value '+my/example--closing conversation))))
-      (should (equal (buffer-name conversation) "release.md"))
-      (should (equal (buffer-name canvas) "Agent UI: example"))
-      ;; Beside it, at once, the conversation keeping the focus.
-      (should (get-buffer-window canvas))
-      (should (eq (window-buffer (selected-window)) conversation))
-      (should (+test-wait-for #'+my/example-agent-ui-ready 20))
-      (with-current-buffer canvas
-        (agent-ui--flush)
+    (let* ((agent-ui-focus-questions nil)
+           (session (+my/example-agent-ui))
+           (dir (car (buffer-local-value '+my/example--closing session)))
+           (name (agent-ui--session-name session)))
+      (should (eq (window-buffer (selected-window)) session))
+      (should (= (length (window-list nil 'nomini)) 1))
+      (should (+test-wait-for #'+my/example-agent-ui-ready 40))
+      (let ((canvas (get-buffer (agent-ui-canvas-buffer-name name)))
+            (tests (get-buffer (agent-ui-canvas-buffer-name (agent-ui-sub-canvas name "tests"))))
+            (ask (get-buffer (agent-ui-canvas-buffer-name (agent-ui-sub-canvas name "ask")))))
+        ;; The session's: its own, its others by name.
+        (should (equal (agent-ui-session-canvases session) (list canvas tests ask)))
         (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas canvas))
-                       '("plan" "tests" "build" "times")))
-        (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                       '("plan" "build" "times")))
+        (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas tests))
+                       '("summary" "tests")))
+        (should (equal (mapcar (lambda (e) (plist-get e :id)) (agent-ui-elements :canvas ask)) '("next")))
+        (dolist (view (list canvas tests ask))
+          (with-current-buffer view (agent-ui--flush)))
+        (let ((text (with-current-buffer canvas (buffer-substring-no-properties (point-min) (point-max)))))
           ;; Each step its time: the build's given, the tests' timed.
-          (should (string-match-p "✗ Run the tests\\(\n\\)? +[0-9]+s +4 passed" text))
+          (should (string-match-p "✗ Run the tests\\(\n\\)? +[0-9]+s +5 passed" text))
           (should (string-match-p "✓ Build +29s" text))
-          (should (string-match-p "– Publish +a test failed" text))
-          (should (string-match-p " checker │ failed │ 0.7s" text))
+          (should (string-match-p "◆ Publish +[0-9]+s +asks you" text))
           (should (string-match-p "12/12  100%  ✓[ \n]built" text))
           (should (string-match-p "● this machine  ● CI" text))
-          (should-not (string-match-p "⚠" text))))
-      (kill-buffer canvas)
-      (should (file-exists-p dir))
-      (kill-buffer conversation)
+          (should-not (string-match-p "⚠" text)))
+        (with-current-buffer tests
+          (should (string-match-p " checker │ failed │ 0.7s" (buffer-string)))
+          (should-not (string-search "running" (buffer-string))))
+        (with-current-buffer ask
+          (should (string-search "How do I go on?" (buffer-string))))
+        ;; Its views under the conversation, its own first.
+        (agent-ui--pane-sync)
+        (should (equal (mapcar #'window-buffer (agent-ui--pane-cells (selected-frame))) (list canvas ask tests))))
+      ;; The agent's tool calls and answer in the conversation.
+      (with-current-buffer session
+        (should (string-search "make test" (buffer-string)))
+        (should (string-search "but checker fails" (buffer-string))))
+      (kill-buffer session)
       (should-not (file-exists-p dir)))))
 
 (ert-deftest examples/panel-the-cpu-filled ()
@@ -497,12 +515,15 @@ it's closed."
       (should-not (file-exists-p dir)))))
 
 (ert-deftest examples/agent-ui-stops-when-closed ()
+  "The session closed as its canvases play out: they stop, gone with it."
   (+test-examples
-    (pcase-let ((`(,conversation ,canvas) (+my/example-agent-ui)))
-      (should (timerp +my/example-agent-ui--timer))
-      (kill-buffer canvas)
+    (let* ((session (+my/example-agent-ui))
+           (canvas (agent-ui-canvas-buffer-name (agent-ui--session-name session))))
+      (should (+test-wait-for (lambda () (timerp +my/example-agent-ui--timer)) 20))
+      (should (get-buffer canvas))
+      (kill-buffer session)
       (should-not +my/example-agent-ui--timer)
-      (kill-buffer conversation))))
+      (should-not (get-buffer canvas)))))
 
 (ert-deftest examples/agent-workflow-a-run-s-pane ()
   "A run's pane in the frame's two windows (its top; its live boxes down),

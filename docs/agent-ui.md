@@ -11,7 +11,7 @@ bar that moves while a build runs, a table of test results filling in, a chart. 
 at the bottom of its session's pane, through a small command line. Everything works in a terminal (`emacs -nw`); the GUI draws some
 elements better (charts as SVG) and has elements of its own (images, drawings, web pages).
 
-![A canvas beside the conversation: steps, tests, a build, a chart](../examples/agent-ui.png)
+![A session with its Agent UI under it: the release's steps, build and chart, a question, the tests](../examples/agent-ui.png)
 ## The model
 
 - An **element** is data: a JSON object with a `type`, an `id` and the type's properties. The agent never writes Lisp

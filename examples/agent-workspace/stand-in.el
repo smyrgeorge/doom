@@ -1,6 +1,7 @@
 ;;; $DOOMDIR/examples/agent-workspace/stand-in.el -*- lexical-binding: t; -*-
 ;; A stand-in coding agent, for the agent workspace's example
-;; (examples/agent-workspace.el) and its tests: it speaks ACP (JSON-RPC, a
+;; (examples/agent-workspace.el), Agent UI's (examples/agent-ui.el) and their
+;; tests: it speaks ACP (JSON-RPC, a
 ;; message a line, on stdin and stdout), as claude-agent-acp does, so
 ;; agent-shell runs a real session with it, offline, at no cost. Run by a
 ;; batch Emacs (agent-shell's mock agent kind runs it):
@@ -8,6 +9,8 @@
 ;;   emacs --batch -Q -l examples/agent-workspace/stand-in.el -f mock-acp-main
 ;;
 ;; What a prompt says decides what it does:
+;;   "Release"     (at its start) runs the tests (failed, 3 s), then the build
+;;                 (3 s), says one test fails, ends its turn
 ;;   "permission"  asks to run a tool (a permission request), runs it once
 ;;                 answered, ends its turn
 ;;   "Look into"   (at its start) the same: asks to run npm install
@@ -91,6 +94,19 @@ batch (the stand-in would exit)."
     (when (getenv "MOCK_ACP_LOG")
       (mock-acp--log `(:branch ,(or (car (process-lines-ignore-status "git" "branch" "--show-current")) :null))))
     (cond
+     ((string-match-p "\\`Release" text)
+      ;; Agent UI's example's (examples/agent-ui.el): the tests run (one
+      ;; fails), the build, as long as its canvas takes to show them.
+      (mock-acp--update session '(:sessionUpdate "tool_call" :toolCallId "v1" :title "make test"
+                                  :kind "execute" :status "in_progress"))
+      (sleep-for 3)
+      (mock-acp--update session '(:sessionUpdate "tool_call_update" :toolCallId "v1" :status "failed"))
+      (mock-acp--update session '(:sessionUpdate "tool_call" :toolCallId "v2" :title "make build"
+                                  :kind "execute" :status "in_progress"))
+      (sleep-for 3)
+      (mock-acp--update session '(:sessionUpdate "tool_call_update" :toolCallId "v2" :status "completed"))
+      (mock-acp--say session "The build is done, but `checker` fails: its test still expects the old error message. I haven't published v2.4; the steps, the tests and the build are under us, and I've asked you there how to go on.")
+      (mock-acp--result id '(:stopReason "end_turn")))
      ((string-match "\\`read \\(.+\\)" text)
       (let ((file (expand-file-name (string-trim (match-string 1 text)))))
         (mock-acp--update session `(:sessionUpdate "tool_call" :toolCallId "r1" :title ,(concat "Read " file)
