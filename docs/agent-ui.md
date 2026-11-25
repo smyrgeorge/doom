@@ -205,9 +205,9 @@ views and their elements come and go; a height you give it stays until what it s
 - A view needs 40 columns, or 80 when it shows a diff, code, a graph or diagram, a heatmap, a timeline or a comparison.
   Short views stack beside a tall one, and the session's own comes first.
 - Views are laid out again when they open or close, not while the agent updates them.
-- Each view scrolls and is selected on its own. Instead of a mode line, it has a bar naming it; the session's own reads
-  `Canvas`. A bar under them all, `Agent UI`, says how many views there are and their keys. The session's mode line
-  stays under the conversation.
+- Each view scrolls and is selected on its own, with a bar over it naming it; the session's own reads `Canvas`. Under
+  the views at the bottom is Doom's mode line, as tall as the panes' beside them. Under the leftmost it says
+  `Agent UI · 2 views` where the major mode would be. The session's mode line stays under the conversation.
 - A canvas showing a single panel with a title (a dashboard) has that title on its bar, not drawn over the panel too. A
   canvas in a pane of its own, such as a project panel, has it in its tab: `Agent UI: TITLE`. Once a second element is
   shown, the title is drawn over the panel again and the bar names the canvas. Snapshots and PDFs keep the title.
@@ -225,6 +225,7 @@ views and their elements come and go; a height you give it stays until what it s
 | `agent-ui-pane-min-lines` | `6` | The fewest lines the conversation and Agent UI each keep |
 | `agent-ui-grid-min-width` | `40` | The fewest columns a view gets |
 | `agent-ui-grid-wide-width` | `80` | The fewest columns a view showing a wide type gets |
+| `agent-ui-pane-mode-line` | `t` | Doom's mode line under the views; `nil`: Agent UI's own bar, a little shorter |
 
 ## Sections
 

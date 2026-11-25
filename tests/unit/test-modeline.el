@@ -364,3 +364,24 @@ cut with …, the position kept; nothing past the window's edge."
   "config.el loads the editor, which loads it."
   (should (member '(load! "config/editor") (+test-modeline--forms "config.el")))
   (should (member '(load! "editor/modeline") (+test-modeline--forms "config/editor.el"))))
+
+;; ====== AGENT UI'S VIEWS ======
+
+(ert-deftest modeline/an-agent-ui-canvas-s-layout ()
+  "An Agent UI canvas's layout: the main one, what Agent UI's bar says
+under its view (`agent-ui-pane-mode-line-text') in place of the major mode;
+elsewhere (no view, a view saying nothing) the major mode."
+  (should (equal (cdr (assq 'agent-ui-canvas-mode doom-modeline-mode-alist)) 'agent-ui))
+  (should (equal (nth 1 (assq 'agent-ui doom-modeline--modelines)) (nth 1 (assq 'main doom-modeline--modelines))))
+  (should (equal (+test-modeline--rhs 'agent-ui) (cl-substitute 'agent-ui 'major-mode (+test-modeline--rhs 'main))))
+  (should (equal (car (last (+test-modeline--rhs 'agent-ui))) " "))
+  (with-temp-buffer
+    (setq mode-name "Agent UI")
+    (let ((said (lambda (text)
+                  (cl-letf (((symbol-function 'agent-ui-pane-mode-line-text) (lambda (&optional _) text))
+                            ((symbol-function 'doom-modeline-segment--major-mode) (lambda () " Agent UI ")))
+                    (string-trim (substring-no-properties (doom-modeline-segment--agent-ui)))))))
+      (should (equal (funcall said '("Agent UI · 2 views")) "Agent UI · 2 views"))
+      (should (equal (funcall said '(nil . "q close")) "q close"))
+      (should (string-match-p "\\`Agent UI · 2 views +q close\\'" (funcall said '("Agent UI · 2 views" . "q close"))))
+      (should (equal (funcall said nil) "Agent UI")))))

@@ -56,8 +56,11 @@ text; nil without one."
   ;; Agent UI shows a session's canvases so (config/agent-ui/pane.el).
   (should (eq agent-ui-display-function #'agent-ui-pane-display))
   (should (eq agent-ui-reveal-function #'agent-ui-pane-reveal))
-  ;; The config says its keys on the first view's bar.
-  (should (equal agent-ui-pane-keys "q close a view · SPC m u hide Agent UI"))
+  ;; Under the views, the config has Doom's mode line, saying what Agent
+  ;; UI's bar said but its keys (config/editor/modeline.el).
+  (should (eq agent-ui-pane-mode-line t))
+  (should-not agent-ui-pane-keys)
+  (should-not (eval (car (get 'agent-ui-pane-mode-line 'standard-value)) t))
   (should (memq #'agent-ui--pane-sync-h (default-value 'window-state-change-functions)))
   (should (assq 'agent-ui-pane window-persistent-parameters)))
 
@@ -152,9 +155,12 @@ least; another, 40."
 (ert-deftest agent-ui-pane/the-first-element-in-the-sessions-pane ()
   "The first element: the session's pane split, Agent UI at its bottom (a
 quarter of it: little to show), a view of its own; the focus stays in the conversation; the conversation
-keeps its mode line, the view has a bar instead (its name, the keys)."
+keeps its mode line, the view has a bar instead (its name, the keys): Agent
+UI's own, without `agent-ui-pane-mode-line'."
   (+test-aup
-    (let ((window (selected-window))
+    (let ((agent-ui-pane-mode-line nil)
+          (agent-ui-pane-keys "q close a view · SPC m u hide Agent UI")
+          (window (selected-window))
           (height (window-total-height)))
       (+test-aup-show name)
       (let ((cell (car (agent-ui--pane-cells (selected-frame))))
@@ -235,6 +241,37 @@ title drawn."
         (should (equal (+test-aup-bar cell) " release"))
         (should-not (agent-ui-canvas-title canvas))))))
 
+(ert-deftest agent-ui-pane/their-buffers-mode-line-under-its-views ()
+  "With `agent-ui-pane-mode-line' (the config's): the views at the bottom
+keep their buffer's own mode line (the editor's, as tall as the windows'
+beside them), the others none; what Agent UI's bar said there, through
+`agent-ui-pane-mode-line-text': what it is and its views under the
+leftmost, its keys under the rightmost (one column: both); a view saying
+nothing (the config: no keys), nil."
+  (+test-aup
+    (let ((agent-ui-pane-mode-line t)
+          (agent-ui-pane-keys "q close"))
+      (+test-aup-show name)
+      (let ((cell (car (agent-ui--pane-cells (selected-frame)))))
+        (should-not (window-parameter cell 'mode-line-format))
+        (should (equal (agent-ui-pane-mode-line-text cell) '("Agent UI" . "q close")))
+        (with-selected-window cell
+          (should (equal (agent-ui-pane-mode-line-text) '("Agent UI" . "q close")))))
+      (+test-aup-show (agent-ui-sub-canvas name "tests"))
+      (+test-aup-show (agent-ui-sub-canvas name "logs"))
+      ;; The first column: the canvas, tests under it; logs beside them.
+      (pcase-let ((`(,a ,b ,c) (agent-ui--pane-cells (selected-frame))))
+        (should (eq (window-parameter a 'mode-line-format) 'none))
+        (should-not (agent-ui-pane-mode-line-text a))
+        (should-not (window-parameter b 'mode-line-format))
+        (should (equal (agent-ui-pane-mode-line-text b) '("Agent UI · 3 views")))
+        (should-not (window-parameter c 'mode-line-format))
+        (should (equal (agent-ui-pane-mode-line-text c) '(nil . "q close")))
+        (let ((agent-ui-pane-keys nil))
+          (should-not (agent-ui-pane-mode-line-text c))))
+      ;; Not a view: nothing.
+      (should-not (agent-ui-pane-mode-line-text (frame-first-window))))))
+
 (ert-deftest agent-ui-pane/its-views-in-columns ()
   "The session's other canvases: views too, its own first. Two short ones
 side by side; a third as tall: dealt into the first column, under the
@@ -242,6 +279,8 @@ session's own (80 columns: two at most), the other column across the whole
 height; each its name on its bar. Agent UI's bar under them: what it is
 under the leftmost column, the keys under the rightmost; the others' none."
   (+test-aup
+   (let ((agent-ui-pane-mode-line nil)
+         (agent-ui-pane-keys "q close a view · SPC m u hide Agent UI"))
     (+test-aup-show name)
     (+test-aup-show (agent-ui-sub-canvas name "tests"))
     (should (equal (+test-aup-cells)
@@ -273,7 +312,7 @@ under the leftmost column, the keys under the rightmost; the others' none."
       (should (string-prefix-p " Agent UI · 3 views" (+test-aup-bar b 'mode-line-format)))
       (should (string-search "q close a view" (+test-aup-bar c 'mode-line-format))))
     ;; The conversation's window: only it, above them.
-    (should (= (length (window-list nil 'nomini)) 4))))
+    (should (= (length (window-list nil 'nomini)) 4)))))
 
 (ert-deftest agent-ui-pane/q-closes-a-view ()
   "q in a view: its canvas killed, the others laid out again, the cursor in

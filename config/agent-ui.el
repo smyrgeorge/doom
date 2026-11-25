@@ -34,9 +34,8 @@
 ;; each a stack of views, as many as fit (`agent-ui-grid-min-width' a view,
 ;; `agent-ui-grid-wide-width' showing a wide type), the tallest dealt first
 ;; into the emptiest column; laid out again when views open or close. Each view
-;; is a window of its own, with a bar naming it; a bar under them says what
-;; Agent UI is and its keys; the session's mode line stays under the
-;; conversation. q closes a view (killed); a view's window closed (SPC w d)
+;; is a window of its own, with a bar naming it; under them Doom's mode
+;; line (see below); the session's mode line stays under the conversation. q closes a view (killed); a view's window closed (SPC w d)
 ;; hides it until an element is shown in it (not updated); SPC m u, in the
 ;; session or a view, hides Agent UI for the session or shows it again (a
 ;; question shows it anyway). A session in no window (another workspace,
@@ -46,7 +45,11 @@
 ;; each): the view in a pane of its own. A canvas
 ;; without a session (from a shell), a project panel: a tiled pane of its own
 ;; (one of tiling's applications).
-(setq agent-ui-pane-keys "q close a view · SPC m u hide Agent UI")
+;; Under the views, Doom's mode line (as tall as the windows' beside them),
+;; saying what Agent UI's bar said (config/editor/modeline.el): what it is,
+;; its views; no keys.
+(setq agent-ui-pane-mode-line t
+      agent-ui-pane-keys nil)
 
 ;; SOURCES
 ;; An element can follow what changes by itself (config/agent-ui/source.el):

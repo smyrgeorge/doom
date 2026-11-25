@@ -63,6 +63,13 @@ pane: in a pane too short for both, a view opens in a pane of its own."
   "The keys said on the bar under Agent UI's views, at its right (nil: none)."
   :type '(choice (const nil) string) :group 'agent-ui)
 
+(defcustom agent-ui-pane-mode-line nil
+  "nil: under Agent UI's views, its own bar (THE BAR UNDER ITS VIEWS). t:
+the views at the bottom keep their buffer's own mode line (the editor's: as
+tall and coloured as its other windows'), the others none; what the bar
+said, for that mode line to say (`agent-ui-pane-mode-line-text')."
+  :type 'boolean :group 'agent-ui)
+
 (defvar agent-ui-pane-search-limit 200000
   "The most steps the search for the best layout takes (see THE LAYOUT): the
 best found by then taken.")
@@ -562,7 +569,10 @@ changed or went (`agent-ui-title-changed-hook')."
 ;; spans the layout: each column's last view's mode line (all at its bottom)
 ;; drawn as one line, the leftmost's saying what it is, the rightmost's ending
 ;; with the keys (one column: both), the others' the bar only; in its own
-;; face, the same whichever window is selected.
+;; face, the same whichever window is selected. With `agent-ui-pane-mode-line',
+;; those views keep their buffer's own mode line instead (the editor's, as
+;; tall as its other windows'), saying the same through
+;; `agent-ui-pane-mode-line-text'.
 (defun agent-ui--pane-footer (count left right)
   "The mode line of a view at the layout's bottom, COUNT views in all (see
 above): LEFT, the leftmost (what Agent UI is); RIGHT, the rightmost (the
@@ -576,6 +586,19 @@ keys)."
                       'face 'agent-ui-pane-bar)
           (if keys (propertize keys 'face 'agent-ui-pane-bar-keys) ""))))
 
+(defun agent-ui-pane-mode-line-text (&optional window)
+  "What Agent UI's bar would say under WINDOW (default: the selected one,
+the one whose mode line is drawn), a view at the layout's bottom, when its
+mode line is its buffer's own (`agent-ui-pane-mode-line'): (LEFT . RIGHT),
+LEFT what it is (\"Agent UI · 2 views\", the leftmost's), RIGHT the keys
+\(the rightmost's), each nil where it says none; nil where it says neither,
+and elsewhere."
+  (pcase (window-parameter window 'agent-ui-pane-footer)
+    (`(,count ,left ,right)
+     (let ((what (and left (if (> count 1) (format "Agent UI · %d views" count) "Agent UI")))
+           (keys (and right agent-ui-pane-keys)))
+       (and (or what keys) (cons what keys))))))
+
 (defun agent-ui--pane-set (window parameter value)
   "WINDOW's PARAMETER set to VALUE, unless it is already."
   (unless (equal (window-parameter window parameter) value)
@@ -584,18 +607,22 @@ keys)."
 (defun agent-ui--pane-decorate (window cells)
   "CELLS, the views' windows in WINDOW's pane (a session's): each its bar
 (its name), no tab line; the mode lines of those at the bottom Agent UI's
-bar (see above), the others none; closing one dismisses its view (see
-above)."
+bar, or their buffer's own (see above), the others none; closing one
+dismisses its view (see above)."
   (let* ((bottom (nth 3 (window-edges (window-next-sibling window))))
          (row (sort (seq-filter (lambda (cell) (= (nth 3 (window-edges cell)) bottom)) cells)
                     (lambda (a b) (< (car (window-edges a)) (car (window-edges b)))))))
     (dolist (cell cells)
       (agent-ui--pane-set cell 'tab-line-format 'none)
       (agent-ui--pane-set cell 'header-line-format (agent-ui--pane-bar (window-buffer cell)))
-      (agent-ui--pane-set cell 'mode-line-format
-                          (if (memq cell row)
-                              (agent-ui--pane-footer (length cells) (eq cell (car row)) (eq cell (car (last row))))
-                            'none))
+      (let ((footer (and (memq cell row)
+                         (list (length cells) (eq cell (car row)) (eq cell (car (last row)))))))
+        (agent-ui--pane-set cell 'agent-ui-pane-footer footer)
+        (agent-ui--pane-set cell 'mode-line-format
+                            (cond ((not footer) 'none)
+                                  ;; Its buffer's own, saying it.
+                                  (agent-ui-pane-mode-line nil)
+                                  (t (apply #'agent-ui--pane-footer footer)))))
       (set-window-parameter cell 'delete-window #'agent-ui--pane-delete-cell)
       (set-window-dedicated-p cell t))))
 
@@ -820,7 +847,8 @@ to it again, soon."
   "CELL, a view's window that can't go (the frame's last): a window like
 any, showing its view."
   (set-window-dedicated-p cell nil)
-  (dolist (parameter '(agent-ui-pane mode-line-format tab-line-format header-line-format delete-window))
+  (dolist (parameter '(agent-ui-pane agent-ui-pane-footer mode-line-format tab-line-format header-line-format
+                       delete-window))
     (set-window-parameter cell parameter nil)))
 
 (defun agent-ui--pane-detach (frame &optional session)

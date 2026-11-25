@@ -204,3 +204,28 @@ window (`+my/modeline-fit-a')."
   (advice-add 'doom-modeline-def-modeline :after #'+my/modeline-fit-layout-a)
   (dolist (modeline doom-modeline--modelines)
     (+my/modeline-fit-layout-a (car modeline))))
+
+;; AGENT UI'S VIEWS
+;; Under a session's Agent UI views (config/agent-ui/pane.el), doom-modeline's
+;; mode line, as tall and coloured as the windows' beside them: Agent UI's
+;; own bar was a header line's, shorter (`agent-ui-pane-mode-line', set in
+;; config/agent-ui.el). A canvas's layout, wherever it shows (a view, a
+;; run's pane, a project panel): the main one, with what Agent UI's bar said
+;; in place of the major mode (it said Agent UI too): "Agent UI · 2 views"
+;; under the leftmost view (its keys, muted, under the rightmost: this config
+;; says none); elsewhere the major mode.
+(after! doom-modeline
+  (doom-modeline-def-segment agent-ui
+    "What Agent UI's bar says under this view (`agent-ui-pane-mode-line-text'),
+else the major mode."
+    (if-let* ((text (and (fboundp 'agent-ui-pane-mode-line-text) (agent-ui-pane-mode-line-text))))
+        (let ((sep (doom-modeline-spc)))
+          (concat
+           (when (car text)
+             (concat sep (propertize (car text) 'face (doom-modeline-face 'doom-modeline-buffer-major-mode))))
+           (when (cdr text)
+             (concat sep (propertize (cdr text) 'face (doom-modeline-face 'shadow))))))
+      (doom-modeline-segment--major-mode)))
+  (pcase-let ((`(,_ ,lhs ,rhs) (assq 'main doom-modeline--modelines)))
+    (doom-modeline-def-modeline 'agent-ui lhs (cl-substitute 'agent-ui 'major-mode rhs)))
+  (add-to-list 'doom-modeline-mode-alist '(agent-ui-canvas-mode . agent-ui)))
