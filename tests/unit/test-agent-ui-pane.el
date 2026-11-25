@@ -183,6 +183,58 @@ keeps its mode line, the view has a bar instead (its name, the keys)."
         (agent-ui--pane-sync)
         (should (eq (car (agent-ui--pane-cells (selected-frame))) cell))))))
 
+(ert-deftest agent-ui-pane/a-lone-panels-title-on-its-bar ()
+  "A canvas showing one element only, a panel with a title (a dashboard):
+its title on its view's bar and its tab's label (config/agent-ui.el), not
+drawn over the panel too, from its first drawing (its caption still, its
+children's titles too). A second element: the title drawn over it again,
+the bar the canvas's name; removed: back. Retitled: the bar follows. Drawn
+for a picture (a snapshot, a PDF): its title kept. A lone table: its own
+title drawn."
+  (+test-aup
+    (let ((sub (agent-ui-sub-canvas name "release")))
+      (agent-ui-show '(:id "release" :type "panel" :title "Release v2.4" :caption "3 checks"
+                       :children ((:id "build" :type "text" :title "Build" :text "green")))
+                     :canvas sub)
+      (let* ((canvas (+test-aup-canvas name "release"))
+             (cell (get-buffer-window canvas))
+             (text (lambda ()
+                     (with-current-buffer canvas
+                       (agent-ui--flush)
+                       (buffer-substring-no-properties (point-min) (point-max))))))
+        (should (agent-ui-pane-window-p cell))
+        (should (string-prefix-p "3 checks\n" (with-current-buffer canvas
+                                                (buffer-substring-no-properties (point-min) (point-max)))))
+        (should-not (string-search "Release v2.4" (funcall text)))
+        (should (string-search "Build" (funcall text)))
+        (should (equal (+test-aup-bar cell) " Release v2.4"))
+        (should (equal (agent-ui-canvas-title canvas) "Release v2.4"))
+        (should (equal (agent-ui-canvas-label canvas) "Agent UI: Release v2.4"))
+        (should (memq #'agent-ui-canvas-label +my/tabs-label-functions))
+        (should (string-prefix-p "Release v2.4\n3 checks\n"
+                                 (agent-ui-render (agent-ui-get "release" :canvas sub)
+                                                  (agent-ui-context :width 60 :still t))))
+        ;; A second element.
+        (agent-ui-show '(:id "note" :type "text" :text "a note") :canvas sub)
+        (should (string-prefix-p "Release v2.4\n3 checks\n" (funcall text)))
+        (should (equal (+test-aup-bar cell) " release"))
+        (should-not (agent-ui-canvas-title canvas))
+        (should-not (agent-ui-canvas-label canvas))
+        ;; Removed: back.
+        (agent-ui-remove "note" :canvas sub)
+        (should (string-prefix-p "3 checks\n" (funcall text)))
+        (should (equal (+test-aup-bar cell) " Release v2.4"))
+        ;; Retitled.
+        (agent-ui-update "release" '(:title "Release v2.5") :canvas sub)
+        (should (equal (+test-aup-bar cell) " Release v2.5"))
+        (should-not (string-search "Release v2" (funcall text)))
+        ;; A lone table in its place: its title its own.
+        (agent-ui-show '(:id "release" :type "table" :title "Tests" :columns ("Test") :rows (("a")))
+                       :canvas sub)
+        (should (string-prefix-p "Tests\n" (funcall text)))
+        (should (equal (+test-aup-bar cell) " release"))
+        (should-not (agent-ui-canvas-title canvas))))))
+
 (ert-deftest agent-ui-pane/its-views-in-columns ()
   "The session's other canvases: views too, its own first. Two short ones
 side by side; a third as tall: dealt into the first column, under the

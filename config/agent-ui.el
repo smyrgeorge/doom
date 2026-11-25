@@ -242,6 +242,11 @@ FILE): its tests and documentation."
 
 (add-hook 'agent-ui-panel-open-hook #'+my/agent-ui-panel-pdf-notice)
 
+;; A LONE PANEL'S TITLE: a canvas showing one panel only (a dashboard) doesn't
+;; draw its title over it: its view's bar says it (config/agent-ui/pane.el),
+;; and in a pane of its own (a project panel), its tab (config/editor/tabs.el).
+(add-hook '+my/tabs-label-functions #'agent-ui-canvas-label)
+
 ;; PAGES AND FILES an element opens (RET on an html card, an image): a page in
 ;; WebKit in a pane where it can (config/html.el), else the browser.
 (defun +my/agent-ui-open-page (page)

@@ -206,6 +206,9 @@ views and their elements come and go; a height you give it stays until what it s
 - Each view scrolls and is selected on its own. Instead of a mode line, it has a bar naming it; the session's own reads
   `Canvas`. A bar under them all, `Agent UI`, says how many views there are and their keys. The session's mode line
   stays under the conversation.
+- A canvas showing a single panel with a title (a dashboard) has that title on its bar, not drawn over the panel too. A
+  canvas in a pane of its own, such as a project panel, has it in its tab: `Agent UI: TITLE`. Once a second element is
+  shown, the title is drawn over the panel again and the bar names the canvas. Snapshots and PDFs keep the title.
 - [Tiling](editor.md#tiling) treats the session's pane as one pane, Agent UI with it: arranging, resizing, moving it to
   the main pane, fullscreen. Closing the conversation's pane closes its views.
 - While the session is in no window (another buffer in its pane, another workspace), Agent UI waits and shows with the

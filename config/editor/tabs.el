@@ -132,7 +132,8 @@ tabs are the other workspace's."
 ;; lib.rs, lib.rs<2>, even when they're in different projects. Label file tabs
 ;; with the file name instead of the buffer name, and when two tabs in the same
 ;; window share a file name, with the shortest distinguishing path, e.g.
-;; crate-a/src/lib.rs.
+;; crate-a/src/lib.rs. A tab visiting no file: its buffer's name, unless
+;; `+my/tabs-label-functions' give it a label (an Agent UI canvas its title).
 (defun +my/tabs-unique-label (file others)
   "Return the shortest trailing part of FILE's path not shared by OTHERS."
   (let* ((split (lambda (f) (reverse (split-string (abbreviate-file-name f) "/" t))))
@@ -156,7 +157,12 @@ tabs are the other workspace's."
                                                 f)))
                                        buffers))))
         (if others (+my/tabs-unique-label file others) name))
-    (buffer-name buffer)))
+    (or (+my/tabs--own-label buffer) (buffer-name buffer))))
+
+(defun +my/tabs--own-label (buffer)
+  "The label `+my/tabs-label-functions' give BUFFER (visiting no file), or nil."
+  (and (not (buffer-file-name buffer))
+       (run-hook-with-args-until-success '+my/tabs-label-functions buffer)))
 
 ;; THE BAR
 ;; An image as tall as the tab row: in the accent colour on the current tab,
@@ -353,11 +359,13 @@ tab-line finds nowhere to scroll to."
 ;; to); a scroll of your own (its arrows) stays.
 (defun +my/tabs-cache-key (tabs)
   "TABS' cache key (`tab-line-cache-key-function'): tab-line's own first (it
-reads them by place), which of them have unsaved changes, and the width the
+reads them by place), which of them have unsaved changes, the labels given
+them (`+my/tabs-label-functions': a canvas's title), and the width the
 window's tabs are laid out for."
   (append (tab-line-cache-key-default tabs)
           (list (mapcar (lambda (tab) (and (bufferp tab) (buffer-file-name tab) (buffer-modified-p tab)))
                         tabs)
+                (mapcar (lambda (tab) (and (bufferp tab) (+my/tabs--own-label tab))) tabs)
                 (window-body-width nil t))))
 
 (defun +my/tabs-resized-a (&rest _)

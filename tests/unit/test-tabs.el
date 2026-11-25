@@ -470,6 +470,25 @@ workspaces' buffers its history has."
     (let ((help (+test-tabs--plain "*Help*")))
       (should (equal (+my/tabs-label help (list help)) "*Help*")))))
 
+(ert-deftest tabs/label-given-by-a-function ()
+  "A tab visiting no file: the label the first of `+my/tabs-label-functions'
+gives it (an Agent UI canvas its lone panel's title), else its buffer's
+name; a file's tab never asks them."
+  (+test-tabs
+    (let* ((notes (+test-tabs--plain "notes"))
+           (file (+test-tabs--file "a.txt"))
+           (asked nil)
+           (+my/tabs-label-functions
+            (list (lambda (buffer) (push buffer asked) nil)
+                  (lambda (buffer) (and (eq buffer notes) "My notes")))))
+      (should (equal (+my/tabs-label notes (list notes file)) "My notes"))
+      (should (equal (+my/tabs-label file (list notes file)) "a.txt"))
+      (should-not (memq file asked))
+      (+test-tabs--show file notes)
+      (should (string-search "My notes" (+test-tabs--tab-line)))
+      (let ((+my/tabs-label-functions nil))
+        (should (equal (+my/tabs-label notes (list notes)) "notes"))))))
+
 ;; ====== HOW TABS LOOK ======
 
 (ert-deftest tabs/format-text-and-properties ()
@@ -592,13 +611,20 @@ workspaces' buffers its history has."
         (should (eq (nth 2 key) (window-parameter nil 'tab-line-hscroll)))
         ;; Unsaved files only.
         (should (equal (nth (length own) key) '(nil nil)))
+        ;; The labels given to tabs visiting no file: none here.
+        (should (equal (nth (1+ (length own)) key) '(nil nil)))
         ;; The width the tabs are laid out for.
-        (should (equal (car (last key)) (window-body-width nil t))))
-      (with-current-buffer a (insert "change"))
-      (should (equal (car (last (+my/tabs-cache-key (list notes a)) 2)) '(nil t)))
-      ;; Tabs of tab-line's other form (alists): no error.
-      (should (equal (car (last (+my/tabs-cache-key (list `((name . "a") (buffer . ,a)))) 2))
-                     '(nil))))))
+        (should (equal (car (last key)) (window-body-width nil t)))
+        (with-current-buffer a (insert "change"))
+        (should (equal (nth (length own) (+my/tabs-cache-key (list notes a))) '(nil t)))
+        ;; A label given: in the key, so the tab line is drawn again when
+        ;; it changes.
+        (let ((+my/tabs-label-functions (list (lambda (buffer) (and (eq buffer notes) "Notes!")))))
+          (should (equal (nth (1+ (length own)) (+my/tabs-cache-key (list notes a))) '("Notes!" nil))))
+        ;; Tabs of tab-line's other form (alists): no error.
+        (let ((alists (list `((name . "a") (buffer . ,a)))))
+          (should (equal (nth (length (tab-line-cache-key-default alists)) (+my/tabs-cache-key alists))
+                         '(nil))))))))
 
 (defun +test-tabs--shown ()
   "The selected window's tab line as tab-line lays it out (its cache used):

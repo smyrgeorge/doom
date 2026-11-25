@@ -62,6 +62,10 @@ removed, cleared; not when the canvas closes.")
 (defvar agent-ui-cleared-hook nil
   "Run in a canvas once it's cleared (every element removed at once).")
 
+(defvar agent-ui-title-changed-hook nil
+  "Run in a canvas once its title changed (`agent-ui-canvas-title'): its
+lone panel's, come, changed or gone. Its view's bar names it again.")
+
 (defvar agent-ui-removed-functions nil
   "Called in a canvas with an element's id once it's gone (removed, or its
 canvas killed).")
@@ -81,8 +85,9 @@ one's are drawn.")
 (cl-defstruct (agent-ui--entry (:constructor agent-ui--make-entry))
   "An element of a canvas: its key (ID: its id, SECTION/ID in a section, see
 SECTIONS below), itself (a plist, its own id in it), where it's drawn, and
-what's drawn there: (ELEMENT WIDTH GRAPHIC FOOTER), its type's :extend
-editing it (FOOTER: a line drawn under it, `agent-ui-footer-functions');
+what's drawn there: (ELEMENT WIDTH GRAPHIC FOOTER UNTITLED), its type's
+:extend editing it (FOOTER: a line drawn under it, `agent-ui-footer-functions';
+UNTITLED: its title not drawn, `agent-ui-canvas-title');
 SHOWN, it as it was shown, before updates and its sources' changes (its
 data left out: what a panel saved from it keeps); PART, in a section
 hosting a session's canvas, the session's other canvas it was shown on
@@ -101,6 +106,9 @@ hosting a session's canvas, the session's other canvas it was shown on
   "The size of a character cell its elements were drawn for, in pixels:
 \(WIDTH HEIGHT) (their images, their glyphs evened out are sized from it).")
 (defvar-local agent-ui--counter 0 "For ids made for elements shown without one.")
+(defvar-local agent-ui--untitled nil
+  "(ID . TITLE): the canvas's lone panel and its title, not drawn on it (see
+`agent-ui-canvas-title'), as last seen; nil: none.")
 (defvar-local agent-ui--hidden nil
   "Why the canvas's pane couldn't open (an error's message), until it does.")
 (defvar-local agent-ui--sections nil
@@ -423,6 +431,69 @@ was in no window, at the default width) all drawn again soon."
       (agent-ui--dirty-all))
     (setq agent-ui--width width)))
 
+;; A LONE PANEL'S TITLE
+;; A canvas showing one element only, a panel with a title (a dashboard),
+;; has the title in its view's bar (config/agent-ui/pane.el; a pane of its
+;; own: its tab), not drawn over the panel too: two headings for one thing.
+;; A second element shown, a section: drawn over it again, the bar the
+;; canvas's name. Its snapshot, its PDF and what's sent to the prompt keep
+;; it: drawn by `agent-ui-render' as ever.
+
+(defun agent-ui--lone-panel ()
+  "The current canvas's lone panel (see above): (ID . TITLE) if it has no
+sections and one element only, a panel with a title (its newlines spaces);
+else nil."
+  (when-let* (((null agent-ui--sections))
+              ((null (cdr agent-ui--order)))
+              (id (car agent-ui--order))
+              (entry (gethash id agent-ui--entries))
+              (element (agent-ui--entry-element entry))
+              ((equal (plist-get element :type) "panel"))
+              (title (plist-get element :title))
+              ((stringp title))
+              ((not (string-blank-p title))))
+    (cons id (string-trim (replace-regexp-in-string "[\n\r]+" " " title)))))
+
+(defun agent-ui-canvas-title (&optional buffer)
+  "The title of canvas BUFFER (default: the current one) when it shows a
+lone panel (see above): its bar or tab says it, the canvas doesn't draw it
+over the panel. nil otherwise."
+  (let ((buffer (or buffer (current-buffer))))
+    (and (buffer-live-p buffer)
+         (eq (buffer-local-value 'major-mode buffer) 'agent-ui-canvas-mode)
+         (with-current-buffer buffer (cdr (agent-ui--lone-panel))))))
+
+(defun agent-ui-canvas-label (buffer)
+  "What names canvas BUFFER where its name would (a tab): \"Agent UI:
+TITLE\" when it shows a lone panel (see above), nil otherwise."
+  (when-let* ((title (agent-ui-canvas-title buffer)))
+    (agent-ui-canvas-buffer-name title)))
+
+(defun agent-ui--untitled-p (entry)
+  "Whether ENTRY is its canvas's lone panel, its title not drawn (see above)."
+  (equal (agent-ui--entry-id entry) (car (agent-ui--lone-panel))))
+
+(defun agent-ui--entry-context (entry ctx)
+  "CTX for drawing ENTRY: its title not drawn if it's the lone panel (see
+above)."
+  (if (agent-ui--untitled-p entry) (plist-put (copy-sequence ctx) :untitled t) ctx))
+
+(defun agent-ui--check-untitled ()
+  "In a canvas, after its elements changed: its lone panel come, gone or
+retitled (see above), it drawn again, with its title or without; its view's
+bar and its tab told (`agent-ui-title-changed-hook')."
+  (when (derived-mode-p 'agent-ui-canvas-mode)
+    (let ((lone (agent-ui--lone-panel)))
+      (unless (equal lone agent-ui--untitled)
+        (let ((ids (seq-filter (lambda (id) (and id (gethash id agent-ui--entries)))
+                               (delete-dups (list (car agent-ui--untitled) (car lone))))))
+          (setq agent-ui--untitled lone)
+          (when ids (agent-ui--dirty ids))
+          (run-hooks 'agent-ui-title-changed-hook)
+          (force-mode-line-update t))))))
+
+(add-hook 'agent-ui-changed-hook #'agent-ui--check-untitled)
+
 (defun agent-ui--draw (entry ctx)
   "Draw ENTRY again, in its place: point and the windows' inside it kept at
 their line and column (its text replaced, they went to its start). In its
@@ -434,6 +505,7 @@ canvas, whatever buffer is current (another's text replaced by it, else)."
   "Draw ENTRY again (see `agent-ui--draw'), in the current canvas, its own."
   (agent-ui--drawn-at ctx)
   (let* ((inhibit-read-only t)
+         (ctx (agent-ui--entry-context entry ctx))
          (start (agent-ui--entry-start entry))
          (end (agent-ui--entry-end entry))
          (places (agent-ui--places-in start end))
@@ -452,7 +524,8 @@ canvas, whatever buffer is current (another's text replaced by it, else)."
     (when places
       (agent-ui--restore-places places start end))
     (setf (agent-ui--entry-drawn entry)
-          (list (agent-ui--entry-element entry) (plist-get ctx :width) (plist-get ctx :graphic) (and footer t)))))
+          (list (agent-ui--entry-element entry) (plist-get ctx :width) (plist-get ctx :graphic) (and footer t)
+                (plist-get ctx :untitled)))))
 
 (defun agent-ui--edit (entry edits &optional head tail)
   "EDITS (see `agent-ui-define''s :extend) done on ENTRY's drawing, in its
@@ -498,10 +571,12 @@ was drawn again whole, each line). Non-nil if so; nil if its type can't
   (let* ((drawn (agent-ui--entry-drawn entry))
          (old (car drawn))
          (new (agent-ui--entry-element entry))
+         (ctx (agent-ui--entry-context entry ctx))
          ;; Drawn at this width, for this kind of frame, no line under it
-         ;; then or now: else drawn whole.
+         ;; then or now, its title drawn then as now: else drawn whole.
          (type (and old (not (eq old new))
-                    (equal (cdr drawn) (list (plist-get ctx :width) (plist-get ctx :graphic) nil))
+                    (equal (cdr drawn) (list (plist-get ctx :width) (plist-get ctx :graphic) nil
+                                             (plist-get ctx :untitled)))
                     ;; Its title and actions as they were: the lines around
                     ;; its drawing the same.
                     (equal (plist-get old :title) (plist-get new :title))

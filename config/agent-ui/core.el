@@ -496,8 +496,10 @@ as a log's counts: 12 files changed), each with the newline after it; nil
 if it has neither (or one that isn't text: the element's error to show).
 Their newlines spaces; a title too long for the width wrapped (it was one
 line cut with …, its rest nowhere; `agent-ui-max-cell-lines' lines at
-most), a caption cut with …."
-  (let ((title (plist-get element :title))
+most), a caption cut with …. CTX's :untitled: its title left out, its
+caption kept (a canvas's lone panel: its bar says it, see
+`agent-ui-canvas-title')."
+  (let ((title (and (not (plist-get ctx :untitled)) (plist-get element :title)))
         (caption (plist-get element :caption))
         (width (plist-get ctx :width)))
     (agent-ui--non-empty
@@ -552,10 +554,14 @@ elements. No newline at its end."
               (props (agent-ui-check type element))
               (draw (or (and (plist-get ctx :graphic) (agent-ui-type-gui type))
                         (agent-ui-type-text type)))
+              (titled (agent-ui--title-text element ctx))
+              ;; Its title left out: its own, not its children's (a
+              ;; panel's, drawn with its context).
+              (ctx (if (plist-get ctx :untitled) (plist-put (copy-sequence ctx) :untitled nil) ctx))
               ;; A question's actions beside its Answer: given to it; a
               ;; title over it, said (:titled: room under it, for a type
               ;; drawing an image).
-              (ctx (if (agent-ui--title-text element ctx) (plist-put (copy-sequence ctx) :titled t) ctx))
+              (ctx (if titled (plist-put (copy-sequence ctx) :titled t) ctx))
               (text (funcall draw props (if (agent-ui--actions-beside-answer-p element)
                                             (plist-put (copy-sequence ctx) :actions (plist-get element :actions))
                                           ctx))))

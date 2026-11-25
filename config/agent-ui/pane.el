@@ -532,9 +532,11 @@ to bottom."
 ;; ====== ITS WINDOWS ======
 
 (defun agent-ui-pane-view-name (view)
-  "VIEW's name: its part's (\"tests\"), a panel's, else Canvas (the
-session's own canvas: Agent UI is the bar's under the views)."
-  (or (buffer-local-value 'agent-ui--canvas-part view)
+  "VIEW's name: the title of the lone panel it shows (`agent-ui-canvas-title':
+not drawn on it then), else its part's (\"tests\"), a panel's, else Canvas
+\(the session's own canvas: Agent UI is the bar's under the views)."
+  (or (agent-ui-canvas-title view)
+      (buffer-local-value 'agent-ui--canvas-part view)
       (and (boundp 'agent-ui-panels--state)
            (when-let* ((panel (buffer-local-value 'agent-ui-panels--state view)))
              (agent-ui-panels--name panel)))
@@ -544,6 +546,15 @@ session's own canvas: Agent UI is the bar's under the views)."
   "VIEW's bar, a header line: its name (see `agent-ui-pane-view-name')."
   (list (propertize (concat " " (string-replace "%" "%%" (agent-ui-pane-view-name view)))
                     'face 'agent-ui-pane-bar-name)))
+
+(defun agent-ui--pane-retitle ()
+  "The bars of the current canvas's views naming it again: its title came,
+changed or went (`agent-ui-title-changed-hook')."
+  (dolist (window (get-buffer-window-list (current-buffer) nil t))
+    (when (window-parameter window 'agent-ui-pane)
+      (agent-ui--pane-set window 'header-line-format (agent-ui--pane-bar (current-buffer))))))
+
+(add-hook 'agent-ui-title-changed-hook #'agent-ui--pane-retitle)
 
 ;; THE BAR UNDER ITS VIEWS
 ;; Agent UI's own, as the session's mode line is the conversation's: what it

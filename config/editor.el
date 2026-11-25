@@ -79,6 +79,11 @@ three times this.")
 with (before its icon), or nil; the first text is used. An agent's avatar on
 its worktree's files (config/agent-workspace.el).")
 
+(defvar +my/tabs-label-functions nil
+  "Functions called with the buffer of a tab visiting no file, each returning
+the tab's label instead of its buffer's name, or nil; the first label is
+used. An Agent UI canvas showing a lone panel: its title (config/agent-ui.el).")
+
 (defvar +my/tabs-real-modes '(ibuffer-mode
                                beads-list-mode beads-detail-mode beads-detail-vui-mode)
   "Major modes whose buffers keep a tab though they visit no file, as files
