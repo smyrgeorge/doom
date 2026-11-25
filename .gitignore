@@ -42,6 +42,9 @@ desktop.ini
 *.log
 *.tmp
 
+# tests/run.sh: how long each test file took in its last run
+/tests/.durations
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db

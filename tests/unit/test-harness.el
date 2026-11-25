@@ -110,13 +110,23 @@ them (DO_NOT_TRACK)."
 
 ;; ====== TESTS/RUN.SH ======
 
+(defvar +test-harness--stdin-open nil
+  "Non-nil: `+test-harness--run-sh''s run.sh reads from a pipe left open
+\(20 s), as from a terminal, not from /dev/null.")
+
+(defvar +test-harness--durations nil
+  "The tests/.durations of `+test-harness--run-sh''s copy of run.sh: its
+text before the run (nil: none), set to its text after (nil: none).")
+
 (defun +test-harness--run-sh (files env &rest names)
   "A copy of tests/run.sh run on FILES, unit tests ((NAME . CONTENT) each),
 ENV added to its environment (\"VAR=value\" each), NAMES the files to run
 (none: all): (STATUS OUTPUT). Its runs' folders in a temp folder of their
-own (TMPDIR); its helper.el loads this one."
+own (TMPDIR); its helper.el loads this one. Its tests/.durations
+`+test-harness--durations', before and after."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-") t)))
-         (tests (expand-file-name "tests/" dir)))
+         (tests (expand-file-name "tests/" dir))
+         (durations (expand-file-name ".durations" tests)))
     (make-directory (expand-file-name "unit/" tests) t)
     (make-directory (expand-file-name "scripts/" dir) t)
     (copy-file (expand-file-name "run.sh" +test-dir) (expand-file-name "run.sh" tests))
@@ -126,20 +136,109 @@ own (TMPDIR); its helper.el loads this one."
     (pcase-dolist (`(,name . ,content) files)
       (with-temp-file (expand-file-name (concat "unit/" name) tests)
         (insert ";;; -*- lexical-binding: t; -*-\n" content)))
-    (let ((process-environment
-           (append env
-                   (list (concat "EMACS=" (expand-file-name invocation-name invocation-directory))
-                         (concat "TMPDIR=" dir) "JOBS=2")
-                   process-environment)))
-      (with-temp-buffer
-        (list (apply #'call-process "bash" nil t nil (expand-file-name "run.sh" tests) "unit" names)
-              (buffer-string))))))
+    (when +test-harness--durations
+      (write-region +test-harness--durations nil durations))
+    (prog1 (let ((process-environment
+                  (append env
+                          (list (concat "EMACS=" (expand-file-name invocation-name invocation-directory))
+                                (concat "TMPDIR=" dir) "JOBS=2")
+                          process-environment)))
+             (with-temp-buffer
+               (list (if +test-harness--stdin-open
+                         (apply #'call-process "bash" nil t nil "-c"
+                                "bash \"$0\" unit \"$@\" < <(exec sleep 20 2>/dev/null)" (expand-file-name "run.sh" tests) names)
+                       (apply #'call-process "bash" nil t nil (expand-file-name "run.sh" tests) "unit" names))
+                     (buffer-string))))
+      (setq +test-harness--durations
+            (and (file-exists-p durations)
+                 (with-temp-buffer (insert-file-contents durations) (buffer-string)))))))
 
 (defun +test-harness--log-folder (output name)
   "The run folder of the file NAME (test-NAME.el) whose full log OUTPUT
 shows."
   (and (string-match (concat "full log: \\(.*/unit-test-" name "\\)/log\\.txt") output)
        (file-name-as-directory (match-string 1 output))))
+
+(defun +test-harness--shown-in-order (output names)
+  "Non-nil if OUTPUT shows the results of the files NAMES (test-a...) in
+that order."
+  (let ((at (mapcar (lambda (name) (string-match (concat "unit +" name " ") output)) names)))
+    (and (not (memq nil at)) (equal at (sort (copy-sequence at) #'<)))))
+
+(ert-deftest harness/run-sh-longest-first-each-result-as-it-ends ()
+  "tests/run.sh starts the longest files first, as long as each took in its
+last run (tests/.durations), a file marked slow first when no run timed it;
+each result shows as its file ends, not in file order (the first one was
+shown after 200 s: test-actions.el started after every slow one). Each
+file's time written back for the next run, the other files' and kinds'
+kept. One at a time (JOBS=1): the order they end in, they start in."
+  (let ((files '(("test-a.el" . "(ert-deftest run/a () (should t))\n")
+                 ("test-b.el" . "(ert-deftest run/b () (should t))\n")
+                 ("test-c.el" . ";; run.sh: slow (marked).\n(ert-deftest run/c () (should t))\n"))))
+    (let ((+test-harness--durations nil))
+      (pcase-let ((`(,status ,output) (+test-harness--run-sh files '("RAM_DISK=0" "JOBS=1"))))
+        (should (= status 0))
+        (should (+test-harness--shown-in-order output '("test-c" "test-a" "test-b")))
+        (dolist (name '("a" "b" "c"))
+          (should (string-match-p (format "^unit test-%s 1 [0-9]+$" name) +test-harness--durations)))))
+    (let ((+test-harness--durations
+           "unit test-a 1 3\nunit test-b 1 40\nunit test-c 1 1\nunit test-gone 1 7\ne2e test-a 1 99\n"))
+      (pcase-let ((`(,status ,output) (+test-harness--run-sh files '("RAM_DISK=0" "JOBS=1"))))
+        (should (= status 0))
+        (should (+test-harness--shown-in-order output '("test-b" "test-a" "test-c")))
+        (should (string-match-p "^unit test-gone 1 7$" +test-harness--durations))
+        (should (string-match-p "^e2e test-a 1 99$" +test-harness--durations))
+        (should-not (string-match-p "^unit test-b 1 40$" +test-harness--durations))
+        (should (= (length (split-string +test-harness--durations "\n" t)) 5))))
+    ;; Only some run: the others' times kept.
+    (let ((+test-harness--durations "unit test-a 1 3\nunit test-b 1 40\n"))
+      (+test-harness--run-sh files '("RAM_DISK=0" "JOBS=1") "a")
+      (should (string-match-p "^unit test-b 1 40$" +test-harness--durations))
+      (should (string-match-p "^unit test-a 1 [0-9]+$" +test-harness--durations)))))
+
+(ert-deftest harness/run-sh-tests-read-nothing ()
+  "A test asking (y-or-n-p) gets no answer: its Emacs's stdin /dev/null,
+whatever run.sh's is (a terminal, a pipe left open), the question an error
+at once. Bash 3.2 gave it run.sh's stdin once a loop had read from <<<:
+the question waited on the terminal, the file never ended."
+  (let ((+test-harness--stdin-open t)
+        (start (float-time)))
+    (pcase-let ((`(,status ,output)
+                 (+test-harness--run-sh '(("test-asks.el" . "(ert-deftest run/asks () (should-error (y-or-n-p \"Go? \")))\n"))
+                                        '("RAM_DISK=0"))))
+      (should (= status 0))
+      (should (string-match-p "unit +test-asks +1 tests" output))
+      (should (< (- (float-time) start) 15)))))
+
+(ert-deftest harness/run-sh-a-lane-for-the-shortest ()
+  "With 4 slots or more, one takes the shortest file first, the others the
+longest (results show from the start); a file running alone first, by
+itself, then both lanes (it isn't starved by the short ones). Each file
+notes when it started, then takes 2 s."
+  (let* ((when (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-when-") t)))
+         (file (lambda (name &optional mark)
+                 (cons (format "test-%s.el" name)
+                       (format "%s(ert-deftest run/%s () (write-region (format \"%%f\" (float-time)) nil %S) (sleep-for 2))\n"
+                               (if mark (concat mark "\n") "") name (expand-file-name name when)))))
+         (files (list (funcall file "a") (funcall file "b") (funcall file "c") (funcall file "d")
+                      (funcall file "e") (funcall file "f") (funcall file "g" ";; run.sh: alone (by the clock)")))
+         (+test-harness--durations
+          "unit test-a 1 50\nunit test-b 1 40\nunit test-c 1 30\nunit test-d 1 20\nunit test-e 1 1\nunit test-f 1 2\nunit test-g 1 3\n"))
+    (pcase-let ((`(,status ,_) (+test-harness--run-sh files '("RAM_DISK=0" "JOBS=4"))))
+      (should (= status 0))
+      (let* ((started (mapcar (lambda (name)
+                                (cons name (with-temp-buffer
+                                             (insert-file-contents (expand-file-name name when))
+                                             (string-to-number (buffer-string)))))
+                              '("a" "b" "c" "d" "e" "f" "g")))
+             (g (alist-get "g" started nil nil #'equal))
+             (others (cl-remove "g" started :key #'car :test #'equal))
+             (first (apply #'min (mapcar #'cdr others))))
+        ;; g alone, before them.
+        (should (>= first (+ g 1.5)))
+        ;; The first wave (within 1.5 s of the first): the 3 longest, and the shortest.
+        (should (equal (sort (mapcar #'car (seq-filter (lambda (s) (< (cdr s) (+ first 1.5))) others)) #'string<)
+                       '("a" "b" "c" "e")))))))
 
 (ert-deftest harness/run-sh-keeps-a-failed-file-s-log ()
   "tests/run.sh with TEST_LOGS: a failed file's log copied there too, as

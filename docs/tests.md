@@ -17,8 +17,9 @@ A failing or flaky test is a bug to fix in the config, not a test to relax.
 
 ## Running them
 
-Test files run several at once, and their results show in file order. `Ctrl+C` stops them all. These variables change
-how they run:
+Test files run several at once, the longest first, and each result shows as soon as its file ends. In a terminal, a line
+under the results says how many files are done and running. `Ctrl+C` stops them all. These variables change how they
+run:
 
 | Setting | Default | What |
 |---|---|---|
@@ -28,6 +29,7 @@ how they run:
 | `EMACS_GUI` | macOS's `/Applications/Emacs.app`, else `emacs` | The GUI Emacs for the end-to-end tests |
 | `E2E_TIMEOUT` | 180 | Seconds each end-to-end test file may take |
 | `E2E_WINDOW` | Off screen | `front`: show the end-to-end tests' frames whole, each a step down and right of the one before |
+| `NICE` | 10 | How nice the tests' Emacsen are: they keep every CPU busy, so your apps go first (`0`: as any other) |
 | `RAM_DISK` | 4096 | On macOS, the size in MB of the RAM disk for the unit tests' folders (`0`: on the disk) |
 | `TEST_LOGS` | None | A folder: each failed file's log is copied there, as `KIND-NAME.txt` (`unit-test-tabs.txt`) |
 
@@ -39,6 +41,9 @@ how they run:
   run. It takes memory only as it's written, and is hidden from the Finder. It's gone once the unit tests end; a failed
   file's folder is copied beside its log first.
 - The end-to-end tests' folders stay on the disk, as WebKit reads no page from another volume.
+- Each run writes how long each file took to `tests/.durations` (kept out of git), and the next run starts the longest
+  first: the run ends once its longest file does, the short ones filling in beside it. With 4 or more at once, one of
+  them takes the shortest first for the first 30 seconds, so results show from the start.
 
 ## The end-to-end tests' frames
 
@@ -88,8 +93,8 @@ A line in a test file changes how it runs:
 | Line | What |
 |---|---|
 | `;; run.sh: alone` | It runs before the others, with none beside it: for a test timing itself by the clock (`test-large-files.el`) |
-| `;; run.sh: slow` | It starts before the rest, so its time runs beside theirs rather than after |
-| `;; run.sh: split N` | It starts before the rest, in N Emacsen at once, each running every Nth of its tests by name. Its result is still one line (`21 tests · 44.4 s, in 3 parts`) |
+| `;; run.sh: slow` | It starts before the rest when no run has timed it yet (a new clone, CI), so its time runs beside theirs rather than after |
+| `;; run.sh: split N` | It runs in N Emacsen at once, each running every Nth of its tests by name, started first as a slow one is. Its result is still one line (`21 tests · 44.4 s, in 3 parts`) |
 
 ## On Linux
 
