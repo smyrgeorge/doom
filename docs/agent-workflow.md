@@ -836,7 +836,7 @@ cmd/agent-workflow unpause
 | `.agent-shell/agent-workflow/runs/ISSUE/N/journal.jsonl` | Every event of the issue's run N, one JSON line each, as it happens |
 | `state.json` beside it | The run as it stands |
 | `workflow.yml` beside it | The workflow as the run started |
-| The issue | In progress. Its metadata (`workflow`, `workflow_run`, `workflow_state`, `workflow_jobs`), the running job as a label (`job:review`), and what each job said, in its notes. Written as `agent-workflow` |
+| The issue | In progress. Its metadata (`workflow`, `workflow_run`, `workflow_state`, `workflow_jobs`), the running job as a label (`job:review`), and what each job said, in its notes. Written as `agent-workflow`, in the background: a moment after the journal |
 
 ## A dry run
 

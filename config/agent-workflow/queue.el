@@ -349,11 +349,10 @@ said on its issue."
   (if (agent-workflow-run-checkout-p run)
       ;; In your checkout: its work is there; its issue, if it has one, done.
       (when (agent-workflow-run-ticket-p run)
-        (agent-workflow--bd (agent-workflow-run-project run)
-                            (list "close" (agent-workflow-run-issue run) "--reason"
+        (agent-workflow--bd-close (agent-workflow-run-project run) (agent-workflow-run-issue run)
                                   (format "Done in your checkout, on %s"
                                           (or (agent-workflow--checkout-branch (agent-workflow-run-project run))
-                                              "a detached HEAD")))))
+                                              "a detached HEAD"))))
     (ignore-errors (agent-workflow-worktree-remove (agent-workflow-run-project run) (agent-workflow-run-issue run)))
     (agent-workflow--branch-end run))
   ;; Where it is now (its worktree gone, merged, its branch deleted), said.

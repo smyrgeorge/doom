@@ -943,8 +943,11 @@ jobs:
     (let* ((bd nil)
            (main (agent-workflow-main-branch project))
            (agent-workflow-from-shell t))
+      ;; No bd: neither read nor written (writes are queued: beads.el).
       (cl-letf (((symbol-function 'agent-workflow--bd)
-                 (lambda (_project args &optional _actor) (push args bd) (cons 0 "[]"))))
+                 (lambda (_project args &optional _actor) (push args bd) (cons 0 "[]")))
+                ((symbol-function 'agent-workflow--bd-later)
+                 (lambda (_project _id &rest spec) (push spec bd))))
         (pcase-let* ((`(,started . ,refused) (agent-workflow-run "solo" project))
                      (run (car started)))
           (should-not refused)

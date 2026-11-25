@@ -68,4 +68,5 @@ the workflow as it is now). Runs not over are read back as Emacs starts, waiting
 
 `.agent-shell/agent-workflow/runs/ISSUE/N/`: `journal.jsonl` (every event, a JSON line), `state.json` (the run as it
 stands), `workflow.yml` (as it started), `log.txt` (the journal as lines you read), `logs/` (scripts' output). On the issue: in progress, its metadata (`workflow`, `workflow_run`,
-`workflow_state`, `workflow_jobs`), the running job as a label (`job:review`), each job's notes.
+`workflow_state`, `workflow_jobs`), the running job as a label (`job:review`), each job's notes: written in
+the background, a moment after the journal (the record).

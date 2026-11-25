@@ -362,12 +362,16 @@ changes. Over (done, cancelled, failed), it stays so: only sending it back
 
 (defun agent-workflow--issue-summary (run)
   "RUN's summary written on its issue: its metadata, the label of the job
-running (job:NAME), the others' taken off. No ticket: nothing."
+running (job:NAME), the others' taken off. Queued once while it waits,
+made as its turn comes: the run as it is then (beads.el, WRITES). No
+ticket: nothing."
   (when (agent-workflow-run-ticket-p run)
-    (agent-workflow--issue-summary-write run)))
+    (agent-workflow--bd-later (agent-workflow-run-project run) (agent-workflow-run-issue run)
+                              :key run :make (lambda () (agent-workflow--issue-summary-args run)))))
 
-(defun agent-workflow--issue-summary-write (run)
-  "RUN's summary written on its issue (`agent-workflow--issue-summary')."
+(defun agent-workflow--issue-summary-args (run)
+  "bd's arguments writing RUN's summary on its issue, as RUN is now
+\(`agent-workflow--issue-summary'); the labels it's known to have, so."
   (let* ((running (car (seq-find (lambda (job) (eq (plist-get (cdr job) :status) 'running))
                                  (agent-workflow-run-jobs run))))
          (labels (seq-filter (lambda (label) (string-prefix-p "job:" label))
@@ -388,7 +392,7 @@ running (job:NAME), the others' taken off. No ticket: nothing."
           (append (seq-remove (lambda (label) (string-prefix-p "job:" label))
                               (plist-get (agent-workflow-run-info run) :labels))
                   (and running (list (concat "job:" running)))))
-    (apply #'agent-workflow--bd-write (agent-workflow-run-project run) (agent-workflow-run-issue run) args)))
+    (append (list "update" (agent-workflow-run-issue run)) args)))
 
 ;; ====== IF ======
 

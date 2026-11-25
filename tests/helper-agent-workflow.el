@@ -66,7 +66,9 @@ starters, no runs or agents before or after; skipped without bd."
        (unwind-protect (progn ,@body)
          (mapc #'agent-workflow-stop-agent agent-workflow--agents)
          (when (timerp agent-workflow--wait-timer) (cancel-timer agent-workflow--wait-timer))
-         (setq agent-workflow--wait-timer nil)))))
+         (setq agent-workflow--wait-timer nil)
+         ;; Its writes on its issues done: none left for the next test.
+         (agent-workflow-bd-writes-wait)))))
 
 (defun +test-awr--issue (project title &rest args)
   "An issue of PROJECT: TITLE, a feature unless ARGS say (bd create's). Its id."
@@ -78,7 +80,10 @@ starters, no runs or agents before or after; skipped without bd."
       (alist-get 'id (json-parse-string (buffer-string) :object-type 'alist)))))
 
 (defun +test-awr--bd (project &rest args)
-  "bd ARGS in PROJECT, its JSON."
+  "bd ARGS in PROJECT, its JSON; once the engine's writes queued are
+written (they're written in the background: config/agent-workflow/
+beads.el, WRITES)."
+  (should (agent-workflow-bd-writes-wait))
   (let ((default-directory project))
     (with-temp-buffer
       (unless (eql 0 (apply #'call-process "bd" nil (list t nil) nil (append args '("--json"))))

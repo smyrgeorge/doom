@@ -557,11 +557,10 @@ the step over."
     (agent-workflow--journal run "merged" :job job :step index :branch branch :into main
                              :already (if already t :false) :empty (if empty t :false))
     (when (agent-workflow-run-ticket-p run)
-      (agent-workflow--bd (agent-workflow-run-project run)
-                          (list "close" (agent-workflow-run-issue run) "--reason"
+      (agent-workflow--bd-close (agent-workflow-run-project run) (agent-workflow-run-issue run)
                                 (if empty
                                     (format "Nothing to merge: %s has no commit" branch)
-                                  (format "Merged %s into %s" branch main))))))
+                                  (format "Merged %s into %s" branch main)))))
   (agent-workflow-step-ended run job))
 
 (setq agent-workflow-step-functions
