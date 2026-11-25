@@ -3715,22 +3715,26 @@ weren't counted: 3 figures wrapped 2 and 1 from 50 to 79 columns)."
     ;; Too narrow: they wrap still.
     (should (= (funcall rows-of three 40) 2))))
 
-(ert-deftest agent-ui-elements/stats-padded ()
-  "PAD: its tiles half a line lower (at a canvas's top they touched its
-edge), the image as much taller; without it, at its top."
-  (let ((drawn (lambda (pad)
-                 (let ((svg (plist-get (cdr (get-text-property
-                                             0 'display (agent-ui-render (list :type "stats" :pad pad :figures '((:label "a" :value 1)))
-                                                                         (agent-ui-context :width 60 :graphic t
-                                                                                           :char-width 8 :line-height 16))))
-                                       :data)))
+(ert-deftest agent-ui-elements/stats-tiles-at-its-top ()
+  "Its tiles at its image's top (at a canvas's top, its empty top line is
+above them: no pad of its own, it's gone); under a title, a line lower,
+the image as much taller."
+  (should-not (cl-find :pad (agent-ui-type-props (agent-ui-type "stats")) :key #'agent-ui-prop-key))
+  (let ((drawn (lambda (title)
+                 (let* ((text (agent-ui-render (append (list :type "stats" :figures '((:label "a" :value 1)))
+                                                       (and title (list :title title)))
+                                               (agent-ui-context :width 60 :graphic t
+                                                                 :char-width 8 :line-height 16)))
+                        (svg (plist-get (cdr (get-text-property (if title (1+ (string-search "\n" text)) 0)
+                                                                'display text))
+                                        :data)))
                    (list (and (string-match "<svg [^>]*height=\"\\([0-9.]+\\)\"" svg) (string-to-number (match-string 1 svg)))
                          (and (string-match "<rect [^>]*y=\"\\([0-9.]+\\)\"" svg) (string-to-number (match-string 1 svg))))))))
-    (pcase-let ((`(,height ,y) (funcall drawn :false))
-                (`(,padded-height ,padded-y) (funcall drawn t)))
+    (pcase-let ((`(,height ,y) (funcall drawn nil))
+                (`(,titled-height ,titled-y) (funcall drawn "Run")))
       (should (= y 0))
-      (should (= padded-y 8))
-      (should (= padded-height (+ height 8))))))
+      (should (= titled-y 16))
+      (should (= titled-height (+ height 16))))))
 
 (ert-deftest agent-ui-elements/stats-narrow-pane-and-unit ()
   "Under 16 columns a tile is no wider than the pane (it was 128 px in 96);
