@@ -202,6 +202,33 @@ the text, and back up when it goes."
       (+my/banner-close 'test)
       (should (+test-wait-for (lambda () (= (cdr (frame-position frame)) top)) 3)))))
 
+(ert-deftest e2e-stripe/child-frames-keep-their-fringes ()
+  "Every frame's fringes changed (`fringe-mode', over every frame, child frames
+too): the strip's and the notices' frames keep theirs, none, and the strip
+its width, still laid over the margin (8 and 16 px fringes made the strip 7
+-> 31 px wide, over the file's text, and a notice wider than its parent; the
+running Emacs ran out of memory as it did that)."
+  (+test-stripe
+    (+test-stripe--file "f.el" 400)
+    (+my/banner-show 'test "A notice" :actions '(("Do" . ignore)))
+    (let* ((window (selected-window))
+           (strip (+test-stripe--frame window))
+           (width (frame-pixel-width strip))
+           (before (cons (frame-parameter nil 'left-fringe) (frame-parameter nil 'right-fringe))))
+      (should (+test-wait-for (lambda () (nth 1 (assq window +my/banner--frames))) 3))
+      (unwind-protect
+          (progn
+            (fringe-mode '(8 . 16))
+            (+test-sleep 0.3)
+            (should (equal (frame-parameter nil 'right-fringe) 16))
+            (dolist (frame (list strip (nth 1 (assq window +my/banner--frames))))
+              (should (equal (frame-parameter frame 'left-fringe) 0))
+              (should (equal (frame-parameter frame 'right-fringe) 0)))
+            (should (= (frame-pixel-width strip) width))
+            (should (+test-wait-for (lambda () (+test-stripe--placed-p strip window)) 3)))
+        (fringe-mode before)
+        (+my/banner-close 'test)))))
+
 ;; ====== THE IMAGE ======
 
 (ert-deftest e2e-stripe/the-band-and-the-marks ()

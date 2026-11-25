@@ -45,8 +45,17 @@
     (desktop-dont-save . t))
   "A child frame's parameters (see A FRAME), besides its parent and minibuffer.")
 
+(defconst +my/childframe--laid-out
+  '(parent-frame minibuffer visibility width height left top)
+  "A child frame's parameters its feature sets as it lays it out (see ITS OWN
+PARAMETERS): not given back.")
+
 (defvar +my/childframe--buffers nil
   "(FRAME . BUFFER) for each frame `+my/childframe-make' made (see ITS BUFFER).")
+
+(defvar +my/childframe--own nil
+  "(FRAME . PARAMETERS) for each frame `+my/childframe-make' made: those it was
+made with but `+my/childframe--laid-out' (see ITS OWN PARAMETERS).")
 
 (defun +my/childframe-make (parent name &optional parameters)
   "A child frame of PARENT (see A FRAME), its buffer \" *NAME*\". PARAMETERS,
@@ -57,12 +66,17 @@ about it (`after-make-frame-functions'), and the selected frame stays so."
          (frame-resize-pixelwise t)
          (buffer (generate-new-buffer (format " *%s*" name)))
          (selected (selected-frame))
-         (frame (make-frame
-                 (append parameters
-                         (cl-remove-if (lambda (parameter) (assq (car parameter) parameters))
-                                       `((parent-frame . ,parent)
-                                         (minibuffer . ,(minibuffer-window parent))
-                                         ,@+my/childframe--parameters))))))
+         (all (append parameters
+                      (cl-remove-if (lambda (parameter) (assq (car parameter) parameters))
+                                    `((parent-frame . ,parent)
+                                      (minibuffer . ,(minibuffer-window parent))
+                                      ,@+my/childframe--parameters))))
+         (frame (make-frame all)))
+    ;; Its own, kept (see ITS OWN PARAMETERS): not where it is, nor its size
+    ;; (laid out by its feature).
+    (push (cons frame (cl-remove-if (lambda (parameter) (memq (car parameter) +my/childframe--laid-out))
+                                    all))
+          +my/childframe--own)
     (unless (eq (selected-frame) selected)
       (select-frame selected 'norecord))
     (redirect-frame-focus frame parent)
@@ -93,13 +107,32 @@ about it (`after-make-frame-functions'), and the selected frame stays so."
       (delete-frame frame t)
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
+;; ITS OWN PARAMETERS
+;; `modify-all-frames-parameters' sets a parameter on every frame, child frames
+;; too: `fringe-mode' (8 and 16 px fringes on a 7 px strip made it 31 px wide,
+;; over the file's text, and a notice wider than its parent; the running Emacs
+;; ran out of memory as it did that), `scroll-bar-mode'... A child frame made
+;; here gets back at once the value it was made with of each parameter it set
+;; (`+my/childframe--own': A FRAME's, and its feature's: its font, colours...).
+(defun +my/childframe--keep-own-a (alist)
+  "After `modify-all-frames-parameters' set ALIST: the child frames made here
+get back their own values of the parameters it set (see ITS OWN PARAMETERS)."
+  (pcase-dolist (`(,frame . ,own) +my/childframe--own)
+    (when (frame-live-p frame)
+      (when-let* ((back (delq nil (mapcar (lambda (parameter) (assq (car parameter) own)) alist))))
+        (modify-frame-parameters frame back)))))
+
+(advice-add 'modify-all-frames-parameters :after #'+my/childframe--keep-own-a)
+
 ;; ITS BUFFER
 ;; Goes with its frame, however the frame goes: deleted by
 ;; `+my/childframe-delete', with its parent (Emacs deletes a frame's child
 ;; frames with it: a frame closed), or by other code. Else each frame closed
 ;; left a buffer per notice and stripe it had, shown nowhere.
 (defun +my/childframe--deleted-h (frame)
-  "Kill the buffer of FRAME, deleted, if `+my/childframe-make' made it."
+  "Kill the buffer of FRAME, deleted, if `+my/childframe-make' made it; forget
+its own parameters."
+  (setq +my/childframe--own (assq-delete-all frame +my/childframe--own))
   (when-let* ((entry (assq frame +my/childframe--buffers)))
     (setq +my/childframe--buffers (delq entry +my/childframe--buffers))
     (when (buffer-live-p (cdr entry))

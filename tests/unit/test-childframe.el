@@ -60,6 +60,33 @@ crossed the stripe or a notice, mouse tracking on)."
       (should (equal hooks '(nil nil)))
       (kill-buffer (window-buffer window)))))
 
+(ert-deftest childframe/its-own-parameters-kept ()
+  "Made: its parameters kept (A FRAME's, and those given, which replace
+them), but where it is and its size (its feature lays it out). Every frame's
+parameters set (`modify-all-frames-parameters': `fringe-mode'...): it gets
+back its own value of each it has, the others left; deleted: forgotten."
+  (+test-with-reset
+    (should (advice-member-p #'+my/childframe--keep-own-a 'modify-all-frames-parameters))
+    (let ((+my/childframe--own nil))
+     (pcase-let ((`(,frame ,_ ,_ ,window) (+test-childframe--make '((font . "Mono-13") (width . 10)))))
+      (let ((own (cdr (assq frame +my/childframe--own))))
+        (should (equal (alist-get 'font own) "Mono-13"))
+        (should (eql (alist-get 'right-fringe own) 0))
+        (dolist (p '(parent-frame minibuffer visibility width height))
+          (should-not (assq p own))))
+      (let (set)
+        (cl-letf (((symbol-function 'frame-live-p) (lambda (f) (eq f frame)))
+                  ((symbol-function 'modify-frame-parameters) (lambda (f alist) (push (cons f alist) set))))
+          (+my/childframe--keep-own-a '((left-fringe . 8) (right-fringe . 16) (font . "Other-20") (alpha . 90)))
+          (should (equal set (list (cons frame '((left-fringe . 0) (right-fringe . 0) (font . "Mono-13"))))))
+          ;; None of its own set: nothing.
+          (setq set nil)
+          (+my/childframe--keep-own-a '((alpha . 90)))
+          (should-not set)))
+      (+my/childframe--deleted-h frame)
+      (should-not (assq frame +my/childframe--own))
+      (kill-buffer (window-buffer window))))))
+
 (ert-deftest childframe/its-buffer-nothing-but-text ()
   "Its window shows a read-only buffer of its own, \" *NAME*\", without any
 lines of its own (mode line, header line, tab line) or cursor."
