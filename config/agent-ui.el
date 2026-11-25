@@ -162,7 +162,9 @@
       :n "e"  #'agent-ui-edit-item
       ;; Agent UI hidden in its session's pane, or shown again (see above).
       :localleader
-      :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle)
+      :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle
+      ;; A project panel, as it shows now, a PDF beside its file (see below).
+      :desc "Export the panel as a PDF" "e" #'agent-ui-panel-export-pdf)
 
 ;; A FORM, filled in its buffer (config/agent-ui/elements/form.el): typed
 ;; into, so Emacs's keys there, as beads.el's forms (C-c C-c sends it, C-c
@@ -226,6 +228,18 @@ FILE): its tests and documentation."
                name (file-relative-name file doom-user-dir))))))
 
 (add-hook 'agent-ui-kept-functions #'+my/agent-ui-kept-issue)
+
+;; A PROJECT PANEL'S NOTICE (config/banner.el): each one opened (SPC o u; not a
+;; session's canvas) offers to be exported as a PDF, as it shows now, beside
+;; its file (`agent-ui-panel-export-pdf', SPC m e there too).
+(defun +my/agent-ui-panel-pdf-notice ()
+  "Offer the project panel here as a PDF (see above)."
+  (when (fboundp '+my/banner-show)
+    (+my/banner-show 'agent-ui-panel-pdf
+                     "Export this panel as a PDF, as it shows now (SPC m e)."
+                     :actions '(("Export PDF" . agent-ui-panel-export-pdf)))))
+
+(add-hook 'agent-ui-panel-open-hook #'+my/agent-ui-panel-pdf-notice)
 
 ;; PAGES AND FILES an element opens (RET on an html card, an image): a page in
 ;; WebKit in a pane where it can (config/html.el), else the browser.

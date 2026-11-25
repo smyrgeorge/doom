@@ -611,6 +611,7 @@ Emacs restarts. Its data is fetched afresh each time, and none of it is kept, un
 | `SPC o u` | Open one of the current project's panels, in a pane of its own (`M-x agent-ui-open-panel`) |
 | `SPC o U` | The same, in the window you're in (`M-x agent-ui-open-panel-here`) |
 | `gR` (in it) | Read its file again and run it anew |
+| `SPC m e` (in it), or its notice's **Export PDF** | Save it as a PDF, as it shows now, beside its file |
 | `S` (on a canvas) | Save the element at point as one of the project's panels |
 | `q` (in it) | Close it |
 | `M-x agent-ui-panel-forget-project` | Stop trusting one of the projects you trusted |
@@ -624,6 +625,9 @@ Emacs restarts. Its data is fetched afresh each time, and none of it is kept, un
   it's open already, its pane is shown.
 - `q` closes it and kills its buffer. Opened again later, after a restart too, it's read anew and drawn empty, and its
   code fills it.
+- A notice at its top offers its PDF. **Export PDF** saves the panel as it shows now, in your theme's colours, as a
+  one-page PDF beside its file: `.agent-ui/panels/NAME-DATE-TIME.pdf`. The echo area says where. It needs
+  `rsvg-convert`, which `scripts/tools.sh` installs.
 
 ### Its file
 

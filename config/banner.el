@@ -40,7 +40,9 @@
 ;;   "Insert" (into the prompt) and "Discard";
 ;; - an issue list's filter and closed issues (info, config/beads/hidden.el):
 ;;   "Filtered: ..." with "Clear filter"; "N closed issues hidden" (or
-;;   shown) with "Show closed" (or "Hide closed").
+;;   shown) with "Show closed" (or "Hide closed");
+;; - a project panel's PDF (info, config/agent-ui.el): each panel opened offers
+;;   to be exported as a PDF, as it shows now ("Export PDF").
 (defvar +my/banner-types
   '((info    "nf-cod-info"    blue)
     (warning "nf-cod-warning" yellow)

@@ -6,7 +6,7 @@
 ;; left in the session. No agent runs: the session is a buffer, its turn's end
 ;; agent-shell's event called by hand.
 
-(+test-load "config/agent-ui")
+(+test-load "config/emacs/childframe" "config/banner" "config/agent-ui")
 (require 'agent-shell)
 
 (ert-deftest e2e-agent-ui/a-question-waiting-brought-into-view ()
@@ -235,3 +235,41 @@ elements hidden, its divider still there."
             (should (search-forward "in done" nil t))
             (should (invisible-p (match-beginning 0))))
         (kill-buffer canvas)))))
+
+(ert-deftest e2e-agent-ui/a-panel-offers-its-pdf ()
+  "A project panel opened in a GUI frame: its notice offering its PDF over
+it; exported, a real PDF beside its file, its charts drawn in it as images
+(its SVG nests theirs)."
+  (skip-unless (executable-find "rsvg-convert"))
+  (let* ((root (file-name-as-directory (make-temp-file "panel-pdf-" t)))
+         (default-directory root)
+         (agent-ui-panel-allow-function (lambda (_panel) nil))
+         (svg nil)
+         (canvas nil))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name agent-ui-panel-directory root) t)
+          (with-temp-file (expand-file-name "dash.el" (expand-file-name agent-ui-panel-directory root))
+            (insert "(agent-ui-panel :version 1
+ :ui (:type \"panel\" :id \"dash\" :title \"Dash\" :layout \"row\"
+      :children ((:type \"chart\" :id \"load\" :title \"Load\" :values (3 5 4 8 6))
+                 (:type \"gauge\" :id \"busy\" :title \"Busy\" :value 40 :max 100))))\n"))
+          (delete-other-windows)
+          (setq canvas (agent-ui-open-panel "dash"))
+          (redisplay t)
+          (with-current-buffer canvas
+            (should (assq 'agent-ui-panel-pdf +my/banner--list))
+            (should header-line-format))
+          (advice-add 'agent-ui-snapshot-svg :filter-return (lambda (text) (setq svg text)) '((name . e2e-svg)))
+          (let ((pdf (with-current-buffer canvas (agent-ui-panel-export-pdf))))
+            (should (string-prefix-p (expand-file-name agent-ui-panel-directory root) pdf))
+            (should (equal (with-temp-buffer
+                             (set-buffer-multibyte nil)
+                             (insert-file-contents-literally pdf nil 0 5)
+                             (buffer-string))
+                           "%PDF-"))
+            ;; The chart and the gauge drawn as images in it.
+            (should (> (with-temp-buffer (insert svg) (how-many "<svg\\b" (point-min) (point-max))) 2))))
+      (advice-remove 'agent-ui-snapshot-svg 'e2e-svg)
+      (when (buffer-live-p canvas) (kill-buffer canvas))
+      (delete-directory root t))))
