@@ -38,8 +38,9 @@ run:
 - A failed file's log is in the run's folder: the path after `full log:`.
 - `TEST_LOGS` works in `tests/linux/run.sh` too: the folder is mounted in its container.
 - On macOS, the unit tests' folders (their Emacs's init folder, what their tests write) are on a RAM disk made for the
-  run. It takes memory only as it's written, and is hidden from the Finder. It's gone once the unit tests end; a failed
-  file's folder is copied beside its log first.
+  run. It takes memory only as it's written, and is hidden from the Finder. It's gone once the unit tests end, however
+  the run ends (`Ctrl+C`, killed, even with `kill -9`); a failed file's folder is copied beside its log first. A disk
+  an earlier run left is detached as the next one starts.
 - The end-to-end tests' folders stay on the disk, as WebKit reads no page from another volume.
 - Each run writes how long each file took to `tests/.durations` (kept out of git), and the next run starts the longest
   first: the run ends once its longest file does, the short ones filling in beside it. With 4 or more at once, one of

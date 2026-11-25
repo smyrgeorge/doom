@@ -64,6 +64,9 @@ TIMES=$TESTS/.durations
 # A template with X's: GNU's and BSD's mktemp both take it.
 TMP_ROOT=${TMPDIR:-/tmp}
 RUN=$(mktemp -d "${TMP_ROOT%/}/doom-tests.XXXXXXXXXX")
+# Whose run it is: a later run leaves its RAM disk alone while it runs
+# (`ram_disks_left').
+echo $$ >"$RUN/run.pid"
 # Where the unit test files' own folders go: the RAM disk, if there's one
 # (below).
 WORK=$RUN
@@ -393,6 +396,7 @@ ram_disk() {
       diskutil mount nobrowse -mountPoint "$RUN/ram" "$RAM_DEV" >/dev/null 2>&1; then
     touch "$RUN/ram/.metadata_never_index"
     WORK=$RUN/ram
+    ram_disk_watch
   else
     ram_disk_gone
     ui_warn "run.sh: no RAM disk (hdiutil): the tests' folders on the disk"
@@ -405,9 +409,57 @@ ram_disk_gone() {  # the RAM disk detached, its memory given back
   RAM_DEV=''
 }
 
+# The RAM disk detached however the run ends. Its traps do (Ctrl-C, kill,
+# the terminal closed: `stop', then EXIT); kill -9 runs none, and a run
+# killed so left its disk mounted, its memory taken (doom-694). So a
+# watcher of its own, from the disk's making: once the run is gone, its
+# tests still running are stopped and the disk detached, by its mount point
+# (its own: a later run's disk may have its device's name). Not a job of the
+# run (forked twice): not waited for, not stopped with its jobs; deaf to
+# what stops them. Its disk detached first (the run over), it ends too.
+ram_disk_watch() {
+  local run=$$ ram=$RUN/ram
+  (
+    ( trap '' INT TERM HUP QUIT
+      while kill -0 "$run" 2>/dev/null && [ -e "$ram/.metadata_never_index" ]; do
+        sleep 1
+      done
+      [ -e "$ram/.metadata_never_index" ] || exit 0
+      for pidfile in "$RUN"/*/pid; do
+        [ -e "$pidfile" ] && kill "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null
+      done
+      sleep 1
+      hdiutil detach "$ram" -quiet 2>/dev/null || hdiutil detach "$ram" -force -quiet 2>/dev/null
+    ) </dev/null >/dev/null 2>&1 &
+  )
+}
+
+# RAM disks of runs over that weren't detached (a run killed before the
+# watcher above, a crash), detached as a run starts: a run.sh's disk
+# (mounted at doom-tests.*/ram) whose run.pid isn't a run.sh running, or,
+# without one (made before it), whose run's folder hasn't changed for 6
+# hours. Another run going on (another session's) keeps its disk.
+ram_disks_left() {
+  command -v hdiutil >/dev/null 2>&1 || return 0
+  local mnt run pid
+  mount | sed -nE 's|^/dev/disk[0-9]+ on (.*/doom-tests\.[A-Za-z0-9]+/ram) \(hfs.*|\1|p' |
+    while read -r mnt; do
+      run=${mnt%/ram}
+      [ "$run" -ef "$RUN" ] && continue
+      if [ -r "$run/run.pid" ]; then
+        pid=''
+        read -r pid <"$run/run.pid"
+        [ -n "$pid" ] && ps -o command= -p "$pid" 2>/dev/null | grep -q 'run\.sh' && continue
+      else
+        [ -n "$(find "$run" -maxdepth 0 -mmin +360 2>/dev/null)" ] || continue
+      fi
+      hdiutil detach "$mnt" -quiet 2>/dev/null || hdiutil detach "$mnt" -force -quiet 2>/dev/null
+    done
+}
+
 # shellcheck disable=SC2329 # run by the trap below
-stop() {  # Ctrl-C, or the script killed: the tests running stopped too
-  trap - INT TERM
+stop() {  # Ctrl-C, the script killed, its terminal closed: the tests running stopped too
+  trap - INT TERM HUP QUIT
   local pidfile
   # Background jobs of a script ignore Ctrl-C: killed, the files' runs first
   # (their pid files then stay), then the Emacs they started.
@@ -420,7 +472,7 @@ stop() {  # Ctrl-C, or the script killed: the tests running stopped too
   ui_error "run.sh: stopped (logs: $RUN)"
   exit 130
 }
-trap stop INT TERM
+trap stop INT TERM HUP QUIT
 trap ram_disk_gone EXIT
 
 NAMES=("$@")
@@ -436,6 +488,7 @@ if [ "$KIND" = e2e ] || [ "$KIND" = all ]; then
     [ -e "$file" ] && wanted "$file" && E2E+=("$file")
   done
 fi
+ram_disks_left
 [ ${#UNIT[@]} -gt 0 ] && ram_disk
 [ ${#UNIT[@]} -gt 0 ] && run_files unit "$JOBS" "${UNIT[@]}"
 ram_disk_gone

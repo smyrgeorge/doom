@@ -118,15 +118,12 @@ them (DO_NOT_TRACK)."
   "The tests/.durations of `+test-harness--run-sh''s copy of run.sh: its
 text before the run (nil: none), set to its text after (nil: none).")
 
-(defun +test-harness--run-sh (files env &rest names)
-  "A copy of tests/run.sh run on FILES, unit tests ((NAME . CONTENT) each),
-ENV added to its environment (\"VAR=value\" each), NAMES the files to run
-(none: all): (STATUS OUTPUT). Its runs' folders in a temp folder of their
-own (TMPDIR); its helper.el loads this one. Its tests/.durations
-`+test-harness--durations', before and after."
+(defun +test-harness--run-sh-copy (files)
+  "A copy of tests/run.sh in a temp folder of its own (its tests/), FILES its
+unit tests ((NAME . CONTENT) each), its helper.el loading this one,
+`+test-harness--durations' its tests/.durations: the folder."
   (let* ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-") t)))
-         (tests (expand-file-name "tests/" dir))
-         (durations (expand-file-name ".durations" tests)))
+         (tests (expand-file-name "tests/" dir)))
     (make-directory (expand-file-name "unit/" tests) t)
     (make-directory (expand-file-name "scripts/" dir) t)
     (copy-file (expand-file-name "run.sh" +test-dir) (expand-file-name "run.sh" tests))
@@ -137,21 +134,57 @@ own (TMPDIR); its helper.el loads this one. Its tests/.durations
       (with-temp-file (expand-file-name (concat "unit/" name) tests)
         (insert ";;; -*- lexical-binding: t; -*-\n" content)))
     (when +test-harness--durations
-      (write-region +test-harness--durations nil durations))
-    (prog1 (let ((process-environment
-                  (append env
-                          (list (concat "EMACS=" (expand-file-name invocation-name invocation-directory))
-                                (concat "TMPDIR=" dir) "JOBS=2")
-                          process-environment)))
+      (write-region +test-harness--durations nil (expand-file-name ".durations" tests)))
+    dir))
+
+(defun +test-harness--run-sh-env (dir env)
+  "The environment of the copy of run.sh in DIR: ENV (\"VAR=value\" each),
+this Emacs its EMACS, its runs' folders in DIR (TMPDIR), 2 at once."
+  (append env
+          (list (concat "EMACS=" (expand-file-name invocation-name invocation-directory))
+                (concat "TMPDIR=" dir) "JOBS=2")
+          process-environment))
+
+(defun +test-harness--run-sh (files env &rest names)
+  "A copy of tests/run.sh run on FILES, unit tests ((NAME . CONTENT) each),
+ENV added to its environment (\"VAR=value\" each), NAMES the files to run
+(none: all): (STATUS OUTPUT). Its runs' folders in a temp folder of their
+own (TMPDIR); its helper.el loads this one. Its tests/.durations
+`+test-harness--durations', before and after."
+  (let* ((dir (+test-harness--run-sh-copy files))
+         (run-sh (expand-file-name "tests/run.sh" dir))
+         (durations (expand-file-name "tests/.durations" dir)))
+    (prog1 (let ((process-environment (+test-harness--run-sh-env dir env)))
              (with-temp-buffer
                (list (if +test-harness--stdin-open
                          (apply #'call-process "bash" nil t nil "-c"
-                                "bash \"$0\" unit \"$@\" < <(exec sleep 20 2>/dev/null)" (expand-file-name "run.sh" tests) names)
-                       (apply #'call-process "bash" nil t nil (expand-file-name "run.sh" tests) "unit" names))
+                                "bash \"$0\" unit \"$@\" < <(exec sleep 20 2>/dev/null)" run-sh names)
+                       (apply #'call-process "bash" nil t nil run-sh "unit" names))
                      (buffer-string))))
       (setq +test-harness--durations
             (and (file-exists-p durations)
                  (with-temp-buffer (insert-file-contents durations) (buffer-string)))))))
+
+(defun +test-harness--mounted-p (dir)
+  "Non-nil if a file system is mounted at DIR."
+  (string-search (concat " on " (directory-file-name (file-truename dir)) " (")
+                 (with-temp-buffer (call-process "mount" nil t) (buffer-string))))
+
+(defun +test-harness--ram-disk (dir)
+  "A RAM disk of 16 MB mounted at DIR/ram, as run.sh mounts its own."
+  (let ((dev (car (split-string (with-temp-buffer
+                                  (call-process "hdiutil" nil t nil "attach" "-nomount" "ram://32768")
+                                  (buffer-string))))))
+    (make-directory (expand-file-name "ram" dir) t)
+    (should (eql 0 (call-process "newfs_hfs" nil nil nil "-v" "doom-tests" dev)))
+    (should (eql 0 (call-process "diskutil" nil nil nil "mount" "nobrowse" "-mountPoint"
+                                 (expand-file-name "ram" dir) dev)))
+    (should (+test-harness--mounted-p (expand-file-name "ram" dir)))))
+
+(defun +test-harness--detach (dir)
+  "DIR/ram detached, if it's mounted."
+  (when (+test-harness--mounted-p (expand-file-name "ram" dir))
+    (call-process "hdiutil" nil nil nil "detach" (expand-file-name "ram" dir) "-force" "-quiet")))
 
 (defun +test-harness--log-folder (output name)
   "The run folder of the file NAME (test-NAME.el) whose full log OUTPUT
@@ -297,6 +330,69 @@ test by name."
     (should (equal one (cl-loop for name in names for i from 0 when (cl-evenp i) collect name)))
     (should (equal (sort (append one two) #'string<) names))
     (should (equal (+test-part-selector (1+ (length names)) (1+ (length names))) '(member)))))
+
+(ert-deftest harness/run-sh-ram-disk-detached-however-it-ends ()
+  "Killed with kill -9 (no trap runs), its RAM disk detached all the same
+and its test still running stopped: a watcher of its own sees it gone. A
+run so killed left its disk mounted, its memory taken (doom-694)."
+  (skip-unless (and (eq system-type 'darwin) (executable-find "hdiutil")))
+  (let* ((dir (+test-harness--run-sh-copy
+               '(("test-long.el" . "(ert-deftest run/long ()
+  (write-region \"\" nil (expand-file-name \"started\" (getenv \"TEST_TMP\")))
+  (sleep-for 60))\n"))))
+         (process (let ((process-environment (+test-harness--run-sh-env dir '("RAM_DISK=16"))))
+                    (make-process :name "run-sh" :noquery t :buffer nil :connection-type 'pipe
+                                  :command (list "bash" (expand-file-name "tests/run.sh" dir) "unit"))))
+         (started nil))
+    (unwind-protect
+        (progn
+          (setq started (+test-wait-for
+                         (lambda () (car (file-expand-wildcards
+                                          (expand-file-name "doom-tests.*/ram/unit-test-long/started" dir))))
+                         30))
+          (should started)
+          (let* ((run (file-name-as-directory (expand-file-name "../../.." started)))
+                 (emacs (string-to-number (with-temp-buffer
+                                            (insert-file-contents (expand-file-name "unit-test-long/pid" run))
+                                            (buffer-string)))))
+            (should (+test-harness--mounted-p (expand-file-name "ram" run)))
+            (should (process-attributes emacs))
+            (signal-process process 'SIGKILL)
+            (should (+test-wait-for (lambda () (not (+test-harness--mounted-p (expand-file-name "ram" run)))) 15))
+            (should (+test-wait-for (lambda () (not (process-attributes emacs))) 5))))
+      (when (process-live-p process) (delete-process process))
+      (dolist (run (file-expand-wildcards (expand-file-name "doom-tests.*" dir)))
+        (+test-harness--detach run)))))
+
+(ert-deftest harness/run-sh-detaches-disks-left ()
+  "As a run starts, the RAM disks other runs left are detached: one whose
+run.pid isn't a run.sh running, and one without (made before it) untouched
+for 6 hours. Kept: a run's going on (its run.pid a run.sh running), and one
+without a run.pid changed lately (an older run.sh's, running)."
+  (skip-unless (and (eq system-type 'darwin) (executable-find "hdiutil")))
+  (let* ((root (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-left-") t)))
+         (runs (mapcar (lambda (name)
+                         (let ((run (file-name-as-directory (expand-file-name (concat "doom-tests." name) root))))
+                           (make-directory run t)
+                           (cons name run)))
+                       '("dead" "old" "running" "recent")))
+         (running (start-process "run.sh stand-in" nil "bash" "-c" "sleep 60; :" "run.sh")))
+    (unwind-protect
+        (progn
+          (pcase-dolist (`(,_ . ,run) runs) (+test-harness--ram-disk run))
+          (write-region "999999\n" nil (expand-file-name "run.pid" (alist-get "dead" runs nil nil #'equal)))
+          (write-region (format "%d\n" (process-id running)) nil
+                        (expand-file-name "run.pid" (alist-get "running" runs nil nil #'equal)))
+          (set-file-times (alist-get "old" runs nil nil #'equal) (time-subtract nil (* 7 3600)))
+          (pcase-let ((`(,status ,_) (+test-harness--run-sh '(("test-a.el" . "(ert-deftest run/a () (should t))\n"))
+                                                            '("RAM_DISK=0"))))
+            (should (= status 0)))
+          (should-not (+test-harness--mounted-p (expand-file-name "ram" (alist-get "dead" runs nil nil #'equal))))
+          (should-not (+test-harness--mounted-p (expand-file-name "ram" (alist-get "old" runs nil nil #'equal))))
+          (should (+test-harness--mounted-p (expand-file-name "ram" (alist-get "running" runs nil nil #'equal))))
+          (should (+test-harness--mounted-p (expand-file-name "ram" (alist-get "recent" runs nil nil #'equal)))))
+      (delete-process running)
+      (pcase-dolist (`(,_ . ,run) runs) (+test-harness--detach run)))))
 
 (ert-deftest harness/run-sh-on-a-ram-disk ()
   "On macOS, the files' folders (TEST_TMP) on a RAM disk of the run's own,
