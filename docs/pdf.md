@@ -1,8 +1,7 @@
 # PDFs
 
-PDFs open in their tab, drawn by PDF.js: sharp at any zoom, with selectable text, and they reopen where you left them.
-Pages are dark, the colours' hues kept (`+my/pdf-dark-pages` in `config.el`); `SPC m d` turns them light. Try it:
-`M-x +my/example-pdf`.
+PDFs open in their tab, drawn by PDF.js. They're sharp at any zoom, their text can be selected, and they reopen where
+you left them. Try it: `M-x +my/example-pdf`.
 
 ![A PDF with dark pages](../examples/pdf.png)
 
@@ -16,12 +15,14 @@ Pages are dark, the colours' hues kept (`+my/pdf-dark-pages` in `config.el`); `S
 | `W` / `P` | `W` / `P` | Fit the width / the page |
 | `o` / `O` | `o` / `O` | Go to a heading / the sidebar |
 | `C-o` / `C-i`, `Cmd+[` / `Cmd+]` | `C-o` / `C-i`, `Alt+←` / `Alt+→` | Back / forward |
-| `SPC m d` / `SPC m t` | the same | Dark / light pages, the toolbar |
+| `SPC m d` / `SPC m t` | the same | Dark or light pages / the toolbar |
 | `SPC m p` | `SPC m p` | Open in Preview (Linux: the default PDF app) |
 | `Cmd+P` | `Ctrl+P` | Print: Preview's dialog (Linux: the default printer, after asking) |
 | `Option+Enter` | `Alt+Enter` | Actions on the selection |
 | `q` | `q` | Close |
 
-PDFs need an Emacs with xwidgets (WebKit): emacs-plus on macOS; on Linux an Emacs built `--with-xwidgets` (WebKitGTK),
-which most distributions' packages aren't. Without it a PDF opens in Emacs's DocView (it needs `mutool` or Ghostscript's
-`gs`). Printing on Linux needs CUPS's `lp`.
+- Pages are dark, keeping their colours' hues: `+my/pdf-dark-pages` in `config.el`. `SPC m d` turns them light.
+- PDFs need an Emacs with xwidgets (WebKit). On macOS that's emacs-plus. On Linux it's an Emacs built `--with-xwidgets`
+  (WebKitGTK), which most distributions' packages aren't.
+- Without xwidgets, a PDF opens in Emacs's DocView, which needs `mutool` or Ghostscript's `gs`.
+- Printing on Linux needs CUPS's `lp`.

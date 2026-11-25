@@ -1,31 +1,35 @@
 # Mermaid
 
-[Mermaid](https://mermaid.js.org) diagrams. `.mmd` and `.mermaid` files open in mermaid-mode: flowcharts' and sequence
-diagrams' keywords coloured, `TAB` indenting. Its commands draw the diagram as an SVG with `mmdc` (mermaid-cli;
-`scripts/tools.sh` installs it), in the theme's colours, in the background: the SVG opens once drawn (a second or so),
-and an error shows Mermaid's message. ```` ```mermaid ```` blocks are coloured in Markdown files, and drawn in
-[Markdown's live preview](markdown.md) and in [your agent's replies](agent-shell.md#diagrams-in-replies). Try it:
-`M-x +my/example-mermaid`.
+[Mermaid](https://mermaid.js.org) diagrams, drawn in the theme's colours. `.mmd` and `.mermaid` files open with their
+diagram beside them, and ```` ```mermaid ```` blocks are drawn in Markdown's preview and in your agent's replies. Try
+it: `M-x +my/example-mermaid`.
 
 ![A Mermaid file beside its preview](../examples/mermaid.png)
 
+## Mermaid files
+
+`.mmd` and `.mermaid` files open in mermaid-mode. Flowcharts' and sequence diagrams' keywords are coloured, and `TAB`
+indents. Its commands draw the diagram as an SVG with `mmdc` (mermaid-cli), in the background.
+
 | Key | Action |
 |---|---|
-| `SPC m p` | The diagram beside the file, redrawn as you type; again, closed |
+| `SPC m p` | The diagram beside the file, redrawn as you type; again to close it |
 | `SPC m c` | Draw the file as an SVG next to it, and open it |
 | `SPC m b` / `SPC m r` | Draw the buffer / the region |
 | `SPC m f` | Draw a file you pick |
 | `SPC m o` | Open the buffer (or the region) in Mermaid's Live Editor, in the browser |
 | `SPC m d` | Mermaid's docs |
 
-In Org, a `#+begin_src mermaid :file flow.svg` block draws with `C-c C-c`, in the theme's colours too.
+- `scripts/tools.sh` installs `mmdc`.
+- The SVG opens once drawn, in a second or so. An error shows Mermaid's message.
+- In Org, a `#+begin_src mermaid :file flow.svg` block draws with `C-c C-c`, in the theme's colours too.
+- In Markdown files, ```` ```mermaid ```` blocks are coloured. They're drawn in [Markdown's live preview](markdown.md)
+  and in [your agent's replies](agent-shell.md#diagrams-in-replies).
 
 ## Preview
 
-The notice at the top of a Mermaid file has an **Open preview** button: the diagram in a pane beside the file, redrawn
-as you type, in the theme's colours. An error shows Mermaid's message under the last drawing. It's drawn by mermaid.js
-in WebKit (downloaded once); in an Emacs without xwidgets, by `mmdc`, a second or so after you pause: the same keys
-either way. In a terminal, `SPC m p` opens the Live Editor instead.
+`SPC m p`, or the **Open preview** button of the notice at the top of a Mermaid file, shows the diagram in a pane beside
+the file. It's redrawn as you type, in the theme's colours. An error shows Mermaid's message under the last drawing.
 
 | Key | Action |
 |---|---|
@@ -35,10 +39,14 @@ either way. In a terminal, `SPC m p` opens the Live Editor instead.
 | `h` / `l` | Scroll sideways |
 | `q` | Close |
 
+- mermaid.js draws it in WebKit, downloaded once.
+- In an Emacs without xwidgets, `mmdc` draws it, a second or so after you pause. The keys are the same.
+- In a terminal, `SPC m p` opens the Live Editor instead.
+
 ## The theme's colours
 
-Diagrams take their colours from the current theme's faces, and their font from the editor's. After a theme switch,
-the next diagram drawn is in the new theme's colours.
+Diagrams take their colours from the current theme's faces, and their font from the editor's. After a theme switch, the
+next diagram drawn is in the new theme's colours.
 
 | Face | Gives |
 |---|---|

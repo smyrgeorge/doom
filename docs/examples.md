@@ -1,7 +1,13 @@
 # Examples
 
-`M-x +my/example` picks one from a list, `M-x +my/example-NAME` runs one by name. Each shows a feature on files of
-its own, deleted when you close them; the echo area says what to try first.
+Each example shows a feature on files of its own, deleted when you close them. The echo area says what to try first.
+
+| Key | Action |
+|---|---|
+| `M-x +my/example` | Pick an example from a list |
+| `M-x +my/example-NAME` | Run one by name |
+
+The examples, and what to try in each:
 
 | Example | What it shows | Try |
 |---|---|---|
@@ -20,9 +26,14 @@ its own, deleted when you close them; the echo area says what to try first.
 | `agent-workspace` | [An agent crew](agent-workspace.md) in its app: three stand-in agents, offline, each in its worktree | `a` then `A` answers sam's hand, `#ken` in the room, `j` / `k` on the bars, `Q` closes it |
 | `agent-workflow` | [A run's pane](agent-workflow.md#following-a-run) as it runs: its tiles, branch, flow, jobs, live boxes and Log, from its journal (no agent runs: its e2e script does) | `TAB` on a divider folds its section, `RET` on a commit or a file opens it, Show output, `q` closes it |
 
-`scripts/screenshots.sh [NAME...]` takes the screenshots, on macOS only (macOS's `screencapture`; the terminal it runs
-from needs the Screen Recording permission). The examples themselves work on Linux too.
+`scripts/screenshots.sh [NAME...]` takes the screenshots. It runs on macOS only, with macOS's `screencapture`, and the
+terminal it runs from needs the Screen Recording permission. The examples themselves work on Linux too.
 
-To add an example, write `examples/NAME.el` with a `+my/example-NAME` command, list it here and in
-`config/examples.el`, test it in `tests/unit/test-examples.el`, and show its screenshot in the feature's doc. What it
-says in the echo area fits 80 columns; the full keys go in its commentary and in the table above.
+To add an example:
+
+1. Write `examples/NAME.el` with a `+my/example-NAME` command.
+2. List it here and in `config/examples.el`.
+3. Test it in `tests/unit/test-examples.el`.
+4. Show its screenshot in the feature's doc.
+
+What it says in the echo area fits 80 columns. The full keys go in its commentary and in the table above.

@@ -1,18 +1,18 @@
 # Key bindings
 
-The keys this config adds or changes, on macOS and on Linux. PDFs, images, drawings and the merge have their own: see
+The keys this config adds or changes, on macOS and Linux. PDFs, images, drawings and the merge have their own keys: see
 [PDFs](pdf.md), [Images](images.md), [Drawings](drawings.md) and [Resolving conflicts](git.md#resolving-conflicts).
 
-On macOS the keys use `Cmd`, as macOS's apps do. Linux's desktops keep most `Super` keys for themselves (and a terminal
-can't send `Super`), so on Linux each `Cmd` key is a `Ctrl` key, as Linux's apps have them:
+On macOS the keys use `Cmd`, as macOS's apps do. Linux desktops keep most `Super` keys for themselves, and a terminal
+can't send `Super`. So on Linux each `Cmd` key is a `Ctrl` key, as Linux's apps have them:
 
-- `Ctrl` where Vim and Emacs leave it free: `Ctrl+1`..`Ctrl+9`, `Ctrl+=` / `Ctrl+-` / `Ctrl+0`, `Ctrl+P`, `Ctrl+S`;
-- `Ctrl+Shift` where `Ctrl` is Vim's (`Ctrl+B`, `Ctrl+W`, `Ctrl+C`, `Ctrl+V`...), as Linux's terminals copy with
-  `Ctrl+Shift+C`;
-- `Alt+←` / `Alt+→` for back and forward, as browsers.
+- `Ctrl` where Vim and Emacs leave it free: `Ctrl+1`..`Ctrl+9`, `Ctrl+=` / `Ctrl+-` / `Ctrl+0`, `Ctrl+P`, `Ctrl+S`.
+- `Ctrl+Shift` where `Ctrl` is Vim's (`Ctrl+B`, `Ctrl+W`, `Ctrl+C`, `Ctrl+V`...), as Linux terminals copy with
+  `Ctrl+Shift+C`.
+- `Alt+←` / `Alt+→` for back and forward, as in browsers.
 
-The `Cmd` keys also work on Linux as `Super` keys, where the desktop lets them through. macOS gets none of the Linux keys:
-Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
+The `Cmd` keys also work on Linux as `Super` keys, where the desktop lets them through. macOS gets none of the Linux
+keys, so Vim's and Doom's keys stay as they are there. The rules are in `config/emacs.el`.
 
 | macOS | Linux | Action |
 |---|---|---|
@@ -59,5 +59,5 @@ Vim's and Doom's keys stay as they are there. `config/emacs.el` has the rules.
 | `SPC t n` / `SPC t N` | the same | All [notifications](notifications.md) on / off; one kind |
 
 On Linux, `Alt+1`..`Alt+9` stay Doom's workspace keys, and `Alt+←` / `Alt+→` still move by words in insert state. In a
-terminal (`emacs -nw`), neither the `Cmd` keys nor most `Ctrl+Shift` and `Ctrl+digit` keys reach Emacs: use the `SPC`
-and Vim keys there.
+terminal (`emacs -nw`), the `Cmd` keys and most `Ctrl+Shift` and `Ctrl+digit` keys don't reach Emacs. Use the `SPC` and
+Vim keys there.

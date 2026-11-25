@@ -1,5 +1,7 @@
 # Repository layout
 
+What each file and folder of this config is for.
+
 | Path | What |
 |---|---|
 | `init.el`, `packages.el` | Doom modules and extra packages |
@@ -20,6 +22,7 @@
 | `config/markdown.el`, `markdown/` | [Live preview](markdown.md) |
 | `config/mermaid.el`, `mermaid/` | [Mermaid](mermaid.md): mermaid-mode, diagrams in the theme's colours |
 | `config/html.el` | HTML files: a [notice](editor.md#notices) to open them in the browser; a page in WebKit (`+my/html-open-in-emacs`) |
+| `config/image.el`, `image/` | [Images](images.md): the viewer, its toolbar, an image beside its version in Git's HEAD |
 | `config/merge.el`, `merge/` | [Resolving conflicts](git.md#resolving-conflicts) |
 | `config/pdf.el`, `pdf/` | [PDFs](pdf.md) |
 | `config/projectile.el`, `projectile/` | [Projects](search.md#projects) |
@@ -37,5 +40,5 @@
 | `.beads/` | This config's own [issues](issues.md); `hooks/post-commit` syncs them with their Dolt remote (`sync.remote` in `config.yaml`) on each commit |
 | `.agent-workflow/` | This config's own [agent workflows](agent-workflow.md#this-configs-own) (`screenshots`, `github`), their profiles and scripts |
 
-A large feature is a file and a folder: `config/NAME.el` holds its settings and keys, and loads its code from
+A large feature is a file and a folder. `config/NAME.el` holds its settings and keys, and loads its code from
 `config/NAME/`.
