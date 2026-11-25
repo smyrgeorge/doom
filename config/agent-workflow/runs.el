@@ -435,8 +435,7 @@ index, and calling `agent-workflow-step-ended' once it's over.")
 (defun agent-workflow--job-start (run job)
   "JOB of RUN starts: where it works (the issue's worktree, or a reading
 job's snapshot of its branch), the commit it sees there; its first step."
-  (let* ((info (agent-workflow-run-info run))
-         (project (agent-workflow-run-project run))
+  (let* ((project (agent-workflow-run-project run))
          (issue (agent-workflow-run-issue run))
          (edits (agent-workflow--job-edits-p run job))
          ;; Where its branch starts, before it's made: your checkout's
@@ -448,18 +447,16 @@ job's snapshot of its branch), the commit it sees there; its first step."
                                   :commit (let ((default-directory project)) (agent-workflow--git "rev-parse" "HEAD")))
                           (agent-workflow-worktree-base project issue (agent-workflow--run-branch run)))
                         (list :branch nil :commit nil)))))
+         ;; Its branch's worktree (made if it isn't there) and its commit,
+         ;; read once: each git call costs 10-40 ms (doom-8y4).
+         (worktree (agent-workflow--run-worktree run))
          (where (if edits
-                    (let ((worktree (agent-workflow--run-worktree run)))
-                      (list (car worktree) (cdr worktree)
-                            (let ((default-directory (car worktree))) (agent-workflow--git "rev-parse" "HEAD"))))
-                  (agent-workflow-snapshot project issue job :type (plist-get info :type)
-                                           :title (plist-get info :title) :branch (agent-workflow--run-branch run)
-                                           :from (and (agent-workflow-run-checkout-p run)
-                                                      (agent-workflow--run-worktree run))))))
-    ;; The branch where this round of it starts: what discarding goes back to.
-    (agent-workflow--job-set run job :start-commit
-                             (let ((default-directory (car (agent-workflow--run-worktree run))))
-                               (agent-workflow--git "rev-parse" "HEAD")))
+                    (list (car worktree) (cdr worktree)
+                          (let ((default-directory (car worktree))) (agent-workflow--git "rev-parse" "HEAD")))
+                  (agent-workflow-snapshot project issue job :from worktree))))
+    ;; The branch where this round of it starts: what discarding goes back
+    ;; to. Its commit now, the one it sees (a snapshot's too: made at it).
+    (agent-workflow--job-set run job :start-commit (nth 2 where))
     (agent-workflow--job-set run job :status 'running :step 0 :why nil :dir (nth 0 where) :commit (nth 2 where)
                              :snapshot (and (not edits) where)
                              :round (or (plist-get (agent-workflow--job run job) :round) 1))

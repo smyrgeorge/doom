@@ -148,6 +148,70 @@ with its branch kept."
       (should (equal (cdr (agent-workflow-worktree project "demo-1" :type "bug" :title "Other"))
                      "feat/demo-1-pool")))))
 
+(defmacro +test-awp--counting (function &rest body)
+  "BODY with FUNCTION's calls counted in `calls'."
+  (declare (indent 1))
+  `(let ((calls 0) (real (symbol-function ,function)))
+     (cl-letf (((symbol-function ,function) (lambda (&rest args) (cl-incf calls) (apply real args))))
+       ,@body)))
+
+(ert-deftest agent-workflow-pool/a-worktree-listed-once ()
+  "Made, reused or removed: git's worktrees listed once each, not again
+for its lock and its branch (doom-8y4: git called again and again)."
+  (+test-awp--with-project "listed"
+    (+test-awp--counting 'agent-workflow--worktrees
+      (should (equal (cdr (agent-workflow-worktree project "demo-1" :type "feature" :title "A pool"))
+                     "feat/demo-1-pool"))
+      (should (= calls 1))
+      (should (plist-get (agent-workflow--worktree-entry project (agent-workflow-worktree-directory project "demo-1"))
+                         :locked))
+      (setq calls 0)
+      (should (equal (cdr (agent-workflow-worktree project "demo-1")) "feat/demo-1-pool"))
+      (should (= calls 1))
+      (setq calls 0)
+      (agent-workflow-worktree-remove project "demo-1")
+      (should (= calls 1))
+      (should-not (file-exists-p (agent-workflow-worktree-directory project "demo-1"))))))
+
+(ert-deftest agent-workflow-pool/a-snapshot ()
+  "Detached at its worktree's commit, made without listing git's
+worktrees; its folder removed by hand (git still noting it): made again
+over it; one there: replaced, nothing of it kept."
+  (+test-awp--with-project "snapshot"
+    (let* ((from (agent-workflow-worktree project "demo-1" :type "feature" :title "A pool"))
+           (dir (agent-workflow-snapshot-directory project "demo-1" "review"))
+           (head (let ((default-directory (car from))) (+test-awp--git "rev-parse" "HEAD"))))
+      (+test-awp--counting 'agent-workflow--worktrees
+        (should (equal (agent-workflow-snapshot project "demo-1" "review" :from from)
+                       (list dir "feat/demo-1-pool" head)))
+        (should (equal (let ((default-directory dir)) (+test-awp--git "rev-parse" "HEAD")) head))
+        (delete-directory dir t)
+        (should (string-match-p "demo-1@review" (+test-awp--git "worktree" "list")))
+        (agent-workflow-snapshot project "demo-1" "review" :from from)
+        (should (file-exists-p (expand-file-name "README" dir)))
+        (write-region "scratch\n" nil (expand-file-name "scratch.txt" dir))
+        (agent-workflow-snapshot project "demo-1" "review" :from from)
+        (should (file-exists-p (expand-file-name "README" dir)))
+        (should-not (file-exists-p (expand-file-name "scratch.txt" dir)))
+        (should (= calls 0)))
+      (agent-workflow-snapshot-remove project "demo-1" "review")
+      (should-not (file-exists-p dir))
+      (should-not (string-match-p "demo-1@review" (+test-awp--git "worktree" "list"))))))
+
+(ert-deftest agent-workflow-pool/the-main-branch-read-once-a-turn ()
+  "Read from git once a turn (doom-8y4: two git calls each time a job's
+script, agent or pane asked); a change made meanwhile seen the next turn."
+  (+test-awp--with-project "main-branch"
+    (+test-awp--counting 'agent-workflow--main-branch-read
+      (should (equal (agent-workflow-main-branch project) "main"))
+      (should (equal (agent-workflow-main-branch (directory-file-name project)) "main"))
+      (should (= calls 1))
+      (+test-awp--git "branch" "-m" "main" "master")
+      (should (equal (agent-workflow-main-branch project) "main"))
+      (+test-sleep 0.01)
+      (should (equal (agent-workflow-main-branch project) "master"))
+      (should (= calls 2)))))
+
 (ert-deftest agent-workflow-pool/no-worktree-without-a-commit ()
   (let ((dir (file-name-as-directory (make-temp-file (+test-tmp-file "awp-empty-") t))))
     (let ((default-directory dir))

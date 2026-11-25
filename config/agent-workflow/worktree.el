@@ -95,9 +95,26 @@ isn't known, then 4 of its title's words, small ones left out
     (concat (pcase type ("bug" "fix") ("feature" "feat") ("" "task") (_ type)) "/" issue
             (if (string-empty-p words) "" (concat "-" words)))))
 
+(defvar agent-workflow--main-branches nil
+  "Each project's main branch read this turn: ((PROJECT . BRANCH)...),
+forgotten once Emacs is back in its loop (a timer at 0 s).")
+
 (defun agent-workflow-main-branch (project)
   "PROJECT's main branch: origin's HEAD's, else main, else master, else
-the branch your checkout is on."
+the branch your checkout is on. Read from git once a turn: what one
+thing does (a job starting: its script's environment, its agent's
+values, where its work is) asks for it again and again, two git calls
+each (doom-8y4)."
+  (let ((project (file-name-as-directory (expand-file-name project))))
+    (or (cdr (assoc project agent-workflow--main-branches))
+        (let ((branch (agent-workflow--main-branch-read project)))
+          (unless agent-workflow--main-branches
+            (run-at-time 0 nil (lambda () (setq agent-workflow--main-branches nil))))
+          (push (cons project branch) agent-workflow--main-branches)
+          branch))))
+
+(defun agent-workflow--main-branch-read (project)
+  "PROJECT's main branch, read from git (see `agent-workflow-main-branch')."
   (let* ((default-directory project)
          (branches (agent-workflow--git-lines "for-each-ref" "--format=%(refname:short)" "refs/heads/")))
     (or (when-let* ((head (car (agent-workflow--git-lines "symbolic-ref" "--short" "refs/remotes/origin/HEAD")))
@@ -198,10 +215,12 @@ BRANCH), BRANCH the one it's on."
         (if made
             (agent-workflow--git "worktree" "add" (directory-file-name dir) made)
           (agent-workflow--git "worktree" "add" "-b" branch (directory-file-name dir) "HEAD"))))
-    (unless (plist-get (agent-workflow--worktree-entry project dir) :locked)
-      (agent-workflow--git "worktree" "lock" "--reason" (agent-workflow--worktree-reason project issue)
-                           (directory-file-name dir)))
-    (cons dir (plist-get (agent-workflow--worktree-entry project dir) :branch))))
+    ;; As git lists it, read once (locking it doesn't change its branch).
+    (let ((entry (agent-workflow--worktree-entry project dir)))
+      (unless (plist-get entry :locked)
+        (agent-workflow--git "worktree" "lock" "--reason" (agent-workflow--worktree-reason project issue)
+                             (directory-file-name dir)))
+      (cons dir (plist-get entry :branch)))))
 
 (defun agent-workflow-worktree-remove (project issue &optional force)
   "ISSUE's worktree in PROJECT unlocked and removed, its branch kept; a
@@ -209,8 +228,8 @@ user error if it has changes not committed (git refuses), unless FORCE
 \(they're lost)."
   (let ((dir (agent-workflow-worktree-directory project issue))
         (default-directory project))
-    (when (agent-workflow--worktree-entry project dir)
-      (when (plist-get (agent-workflow--worktree-entry project dir) :locked)
+    (when-let* ((entry (agent-workflow--worktree-entry project dir)))
+      (when (plist-get entry :locked)
         (agent-workflow--git "worktree" "unlock" (directory-file-name dir)))
       (apply #'agent-workflow--git "worktree" "remove"
              (append (and force (list "--force")) (list (directory-file-name dir)))))))
@@ -239,9 +258,19 @@ before is replaced. Return (DIR BRANCH COMMIT)."
                (dir (agent-workflow-snapshot-directory project issue job))
                (default-directory project)
                (commit (let ((default-directory worktree)) (agent-workflow--git "rev-parse" "HEAD"))))
-    (agent-workflow-snapshot-remove project issue job)
-    (agent-workflow--git "worktree" "add" "--detach" (directory-file-name dir) commit)
+    (agent-workflow--snapshot-add project issue job commit)
     (list dir branch commit)))
+
+(defun agent-workflow--snapshot-add (project issue job commit)
+  "JOB of ISSUE's snapshot in PROJECT made, detached at COMMIT; one there
+from before replaced. One git still has a note of, its folder gone
+\(removed by hand), is taken over (--force) rather than looked for: that
+took a git worktree list each time, for a folder almost never there."
+  (let ((dir (agent-workflow-snapshot-directory project issue job))
+        (default-directory project))
+    (when (file-exists-p dir)
+      (agent-workflow-snapshot-remove project issue job))
+    (agent-workflow--git "worktree" "add" "--force" "--detach" (directory-file-name dir) commit)))
 
 (defun agent-workflow-snapshot-remove (project issue job)
   "JOB of ISSUE's snapshot in PROJECT removed, whatever it has: nothing of

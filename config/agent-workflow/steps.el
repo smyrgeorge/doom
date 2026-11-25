@@ -425,9 +425,7 @@ file."
             (agent-workflow--wait run job (format "%s: its branch changes what runs the workflows (%s): merge it \
 anyway (go), or stop?" job (string-join files ", ")))))
          (t
-          (let ((default-directory project))
-            (agent-workflow-snapshot-remove project issue "merge-try")
-            (agent-workflow--git "worktree" "add" "--detach" (directory-file-name try) main))
+          (agent-workflow--snapshot-add project issue "merge-try" main)
           (if (let ((default-directory try))
                 (eql 0 (process-file "git" nil nil nil "-c" "user.name=agent workflow"
                                      "-c" "user.email=agent-workflow@localhost"
