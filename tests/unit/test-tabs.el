@@ -714,23 +714,22 @@ theme loaded drops every window's cache."
         (let* ((tabs (+test-tabs--tabs))
                (current (+my/tabs-format b tabs))
                (other (+my/tabs-format a tabs)))
-          ;; The bar first, then the icon, the tab's own one; a tab but the
-          ;; first after a space of the tab line's.
-          (should (equal (substring-no-properties current 0 6) " | B b"))
-          (should (eq (get-text-property 0 'face current) 'tab-line))
-          (should-not (get-text-property 0 'tab current))
+          ;; The bar first, then the icon, the tab's own one; the first tab
+          ;; or not (no space between tabs).
+          (should (equal (substring-no-properties current 0 5) "| B b"))
+          (should (eq (get-text-property 0 'tab current) b))
           (should (equal (substring-no-properties other 0 5) "| A a"))
           ;; The icon keeps its colour (the tab's face comes after it).
-          (should (eq (car (get-text-property 3 'face current)) 'error))
+          (should (eq (car (get-text-property 2 'face current)) 'error))
           ;; The bar: the accent colour on the current tab, the tab's own on others.
           (should (equal (reverse bars) '("bg-highlight" "bg-tab-line-tab-inactive")))
           ;; Clicks still find the tab.
           (should (eq (tab-line--get-tab-property 'tab current) b)))))))
 
-(ert-deftest tabs/no-gap-before-the-first-tab ()
-  "A graphical frame's tab line: the first tab's bar at the window's edge (no
-separator before it), a space between tabs as before. A text terminal's:
-tab-line's `|' separators, as ever."
+(ert-deftest tabs/no-gaps ()
+  "A graphical frame's tab line: no separators, the first tab's bar at the
+window's edge, each tab's bar right after the tab before. A text
+terminal's: tab-line's `|' separators, as ever."
   (should (advice-member-p #'+my/tabs-no-separator-a 'tab-line-format-template))
   (+test-tabs
     (let ((a (+test-tabs--file "a.txt"))
@@ -749,11 +748,12 @@ tab-line's `|' separators, as ever."
             ;; The first tab's bar first: its own, the tab clicked there.
             (should (eq (get-text-property 0 'display first) 'bar))
             (should (eq (get-text-property 0 'tab first) a))
-            ;; The second: a space of the tab line's, then its bar.
-            (should (equal (substring-no-properties second 0 2) " |"))
-            (should-not (get-text-property 0 'tab second))
-            (should (eq (get-text-property 1 'display second) 'bar))
-            (should (eq (tab-line--get-tab-property 'tab second) b))))))))
+            ;; The first ends with its own space (after its ✕); the
+            ;; second starts with its bar, nothing between them.
+            (should (equal (substring-no-properties first -1) " "))
+            (should (eq (get-text-property (1- (length first)) 'tab first) a))
+            (should (eq (get-text-property 0 'display second) 'bar))
+            (should (eq (get-text-property 0 'tab second) b))))))))
 
 (ert-deftest tabs/every-part-of-the-tab-line-has-a-keymap ()
   "The tab line of a pane below another never drags its pane (Emacs drags
@@ -796,10 +796,8 @@ either; its click closes the tab."
           (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
                     ((symbol-function 'nerd-icons-icon-for-buffer) (lambda () nil)))
             (let ((tab (+my/tabs-format b (+test-tabs--tabs))))
-              ;; The space between tabs, then its bar.
-              (should (eq (get-text-property 0 'keymap tab) +my/tabs-line-map))
-              (should (eq (get-text-property 1 'display tab) 'bar))
-              (should (eq (get-text-property 1 'keymap tab) tab-line-tab-map))
+              (should (eq (get-text-property 0 'display tab) 'bar))
+              (should (eq (get-text-property 0 'keymap tab) tab-line-tab-map))
               (should (eq (get-text-property (1- (length tab)) 'keymap tab) tab-line-tab-map))
               (should (eq (get-text-property (1- (length tab)) 'tab tab) b)))
             (should (eq (get-text-property 0 'keymap (+my/tabs-format a (+test-tabs--tabs)))

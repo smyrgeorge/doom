@@ -53,9 +53,9 @@ string's length and text; nil if not shown."
 
 (defun +test-tabs--whole-p (window buffer)
   "Non-nil if BUFFER's tab is drawn whole in WINDOW's tab line: from its
-first character (after the space between tabs) to its last, after its ✕."
+first character (its bar) to its last, after its ✕."
   (pcase-let ((`(,first ,last ,length ,_) (+test-tabs--drawn window buffer)))
-    (and first (<= first 1) (= last (1- length)))))
+    (and first (= first 0) (= last (1- length)))))
 
 (defun +test-tabs--pane (columns)
   "The selected window COLUMNS wide (a window on its right), drawn; it."
@@ -92,7 +92,7 @@ arrows before them, its ✕ inside the window; at the end or in the middle,
 at any width (they cut it at some: 49 columns, macOS's font)."
   (+test-with-reset
     (let* ((buffers (apply #'+test-tabs--files
-                           (append (mapcar (lambda (i) (format "file%02d.txt" i)) (number-sequence 1 9))
+                           (append (mapcar (lambda (i) (format "file%02d.txt" i)) (number-sequence 1 10))
                                    (list +test-tabs--long))))
            (long (car (last buffers)))
            cut)
@@ -155,9 +155,9 @@ narrow pane too."
       (should-not (+test-tabs--off-keymap window))
       ;; Its last pixel the tab line's, filled to there.
       (should (eq (posn-area (posn-at-x-y (1- (window-pixel-width window)) 3 window t)) 'tab-line))
-      ;; Narrow: scrolled, its arrows first.
+      ;; Narrow: scrolled, its arrows first (the tabs before it don't fit).
       (split-window-right 40)
-      (switch-to-buffer (nth 2 buffers))
+      (switch-to-buffer (nth 4 buffers))
       (redisplay t)
       (should (window-parameter window 'tab-line-hscroll))
       (should-not (+test-tabs--off-keymap window))
