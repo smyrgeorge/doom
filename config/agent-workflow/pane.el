@@ -97,8 +97,8 @@ LAST) in seconds; nil before its first.")
 \(`agent-workflow-run-where').")
 
 (defvar-local agent-workflow--pane-where-stamp nil
-  "In a run's pane: its place's stamp as last looked at
-\(`agent-workflow--where-stamp'), while its run waits for you.")
+  "In a run's pane: its place's stamp as git left it once last read
+\(`agent-workflow--where-stamp-read'), while its run waits for you.")
 
 (defvar agent-workflow-pane-where-every 15
   "Seconds between looks at where the work of runs not over is (a commit,
@@ -1036,18 +1036,20 @@ none."
                   (pane (agent-workflow--pane-live run)))
         (setq any t)
         (with-demoted-errors "agent workflow's pane: %S"
-          (if (or
-               ;; Waiting for you, nothing committed or staged since it was
-               ;; last read: git not asked again (no agent at work on it).
-               (and (eq (agent-workflow-run-state run) 'waiting)
-                    (let ((stamp (agent-workflow--where-stamp run)))
-                      (prog1 (and stamp (equal stamp (buffer-local-value 'agent-workflow--pane-where-stamp pane)))
-                        (with-current-buffer pane (setq agent-workflow--pane-where-stamp stamp)))))
-               (equal (agent-workflow-run-where run) (buffer-local-value 'agent-workflow--pane-where-shown pane)))
-              ;; Its header's time and spending, moving on.
-              (let ((agent-ui-display-function #'ignore))
-                (agent-ui-show (agent-workflow--pane-header run) :canvas pane))
-            (agent-workflow--pane-draw run)))))
+          (let* ((waiting (eq (agent-workflow-run-state run) 'waiting))
+                 (stamp (and waiting (agent-workflow--where-stamp run))))
+            (if (or
+                 ;; Waiting for you, nothing committed or staged since it was
+                 ;; last read: git not asked again (no agent at work on it).
+                 (and stamp (equal stamp (buffer-local-value 'agent-workflow--pane-where-stamp pane)))
+                 (equal (agent-workflow-run-where run) (buffer-local-value 'agent-workflow--pane-where-shown pane)))
+                ;; Its header's time and spending, moving on.
+                (let ((agent-ui-display-function #'ignore))
+                  (agent-ui-show (agent-workflow--pane-header run) :canvas pane))
+              (agent-workflow--pane-draw run))
+            (when waiting
+              (with-current-buffer pane
+                (setq agent-workflow--pane-where-stamp (agent-workflow--where-stamp-read stamp run))))))))
     (unless any
       (when (timerp agent-workflow--pane-where-timer)
         (cancel-timer agent-workflow--pane-where-timer))

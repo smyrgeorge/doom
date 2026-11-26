@@ -442,6 +442,51 @@ one ls-files --others."
           (should (= (seq-count (lambda (args) (equal (car args) "ls-files")) calls) 1))))
       (agent-workflow--cancel run))))
 
+(ert-deftest agent-workflow-pane/git-left-alone-its-index-rewritten-by-reading ()
+  "Its tick reading git rewrites the worktree's index, as git status and
+diff do when its files are racily clean (changed in the second the index
+was last written, on a git without nanosecond times: Debian's, each read
+in that second): its next tick still asks git nothing. A commit while it
+reads: git asked again at the next."
+  (+test-awp "git-index-rewritten"
+    (let* ((issue (+test-awr--issue project "A gate" "--type" "task"))
+           (run (car (car (agent-workflow-run-ticket (list issue) nil project))))
+           (agent-workflow--where-age 0)
+           (worktree (agent-workflow-worktree-directory project issue))
+           (index nil)
+           (during nil)
+           (calls 0))
+      (+test-awr--finish-step run "build" "built it")
+      (should (+test-awr--wait (lambda () (eq (agent-workflow-run-state run) 'waiting))))
+      (setq index (expand-file-name "index" (let ((default-directory worktree))
+                                              (car (process-lines "git" "rev-parse" "--absolute-git-dir")))))
+      (cl-letf* ((process-file-real (symbol-function 'process-file))
+                 ((symbol-function 'process-file)
+                  (lambda (program &rest args)
+                    (prog1 (apply process-file-real program args)
+                      (when (equal program "git")
+                        (cl-incf calls)
+                        (when (and during (equal (nth 3 args) "status"))
+                          (funcall during)))))))
+        (cl-flet ((git-calls () (setq calls 0) (agent-workflow--pane-where-tick) calls)
+                  (rewrite () (set-file-times index (time-add nil (random 1000)))))
+          ;; Each read rewrites the index: read once, then left alone.
+          (setq during #'rewrite)
+          (rewrite)
+          (should (> (git-calls) 0))
+          (should (= (git-calls) 0))
+          (should (= (git-calls) 0))
+          ;; A commit as it reads: read again.
+          (rewrite)
+          (setq during (lambda ()
+                         (setq during nil)
+                         (+test-awr--commit worktree "c.txt" "a commit")))
+          (should (> (git-calls) 0))
+          (should-not during)
+          (should (> (git-calls) 0))
+          (should (= (git-calls) 0))))
+      (agent-workflow--cancel run))))
+
 (ert-deftest agent-workflow-pane/each-run-its-own-pane ()
   "Two runs of an issue with one workflow (the first failed, its pane kept):
 each its own pane, the second's named with its number; the first's still

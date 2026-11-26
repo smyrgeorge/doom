@@ -307,6 +307,23 @@ committed or staged there in between."
       (mapcar (lambda (name) (file-attribute-modification-time (file-attributes (expand-file-name name git))))
               '("HEAD" "index" "logs/HEAD")))))
 
+(defun agent-workflow--where-stamp-read (before run)
+  "RUN's place's stamp once git was read there (BEFORE, before it was):
+the one git left, to tell what changes next from it. Reading may rewrite
+its index: git status and diff refresh it when its files are racily clean
+\(changed in the second it was last written, on a git without nanosecond
+times, Debian's), each read again within that second, which isn't the
+work changing; so the stamp from before it never matched the next one,
+git read at each look (agent-workflow-pane/git-left-alone-while-it-waits,
+on Linux). A commit, reset or checkout meanwhile (its HEAD, or HEAD's log,
+changed): BEFORE, so it's read again."
+  (let ((after (agent-workflow--where-stamp run)))
+    (if (and before after
+             (equal (nth 0 before) (nth 0 after))
+             (equal (nth 2 before) (nth 2 after)))
+        after
+      before)))
+
 (defun agent-workflow--where-commits (dir base branch)
   "BRANCH's commits since BASE, read in DIR, the latest first: ((SHORT
 SUBJECT)...), `agent-workflow--where-commits-shown' at most."
