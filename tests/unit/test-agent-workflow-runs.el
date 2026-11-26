@@ -233,17 +233,12 @@ agent's: its session's model set, then its effort."
            (log (expand-file-name "awr/effort.log" +test-tmp))
            (sets (lambda ()
                    ;; What its session was set to, in order: (METHOD VALUE)...
-                   (when (file-exists-p log)
-                     (with-temp-buffer
-                       (insert-file-contents log)
-                       (cl-loop for line in (split-string (buffer-string) "\n" t)
-                                for entry = (json-parse-string line :object-type 'plist :null-object nil
-                                                               :false-object nil :array-type 'list)
-                                for params = (plist-get entry :params)
-                                when (member (plist-get entry :method) '("session/set_model" "session/set_config_option"))
-                                collect (list (plist-get entry :method)
-                                              (or (plist-get params :modelId)
-                                                  (format "%s=%s" (plist-get params :configId) (plist-get params :value))))))))))
+                   (cl-loop for entry in (+test-json-lines log)
+                            for params = (plist-get entry :params)
+                            when (member (plist-get entry :method) '("session/set_model" "session/set_config_option"))
+                            collect (list (plist-get entry :method)
+                                          (or (plist-get params :modelId)
+                                              (format "%s=%s" (plist-get params :configId) (plist-get params :value))))))))
       (should (equal (agent-workflow-agent-model build) "haiku"))
       (should (equal (agent-workflow-agent-effort build) "low"))
       (should (equal (+test-awr--wait (lambda () (and (= (length (funcall sets)) 2) (funcall sets))))

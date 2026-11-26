@@ -93,12 +93,7 @@ builder, the stand-in)."
 
 (defun +test-aws--log-entries ()
   "What the stand-in logged: a plist each."
-  (when (file-exists-p +test-aws--log)
-    (with-temp-buffer
-      (insert-file-contents +test-aws--log)
-      (mapcar (lambda (line) (json-parse-string line :object-type 'plist :null-object nil
-                                                :false-object nil :array-type 'list))
-              (split-string (buffer-string) "\n" t)))))
+  (+test-json-lines +test-aws--log))
 
 (defun +test-aws--prompts (name)
   "The prompts the agent NAME got, in order."

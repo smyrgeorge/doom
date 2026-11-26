@@ -75,13 +75,9 @@ before or after."
 
 (defun +test-awi--log-entries (name)
   "The messages the agent NAME's stand-in got: (METHOD . PARAMS) each."
-  (when (file-exists-p +test-awi--log)
-    (with-temp-buffer
-      (insert-file-contents +test-awi--log)
-      (cl-loop for line in (split-string (buffer-string) "\n" t)
-               for entry = (json-parse-string line :object-type 'plist :null-object nil :array-type 'list)
-               when (and (equal (plist-get entry :agent) name) (plist-get entry :method))
-               collect (cons (plist-get entry :method) (plist-get entry :params))))))
+  (cl-loop for entry in (+test-json-lines +test-awi--log)
+           when (and (equal (plist-get entry :agent) name) (plist-get entry :method))
+           collect (cons (plist-get entry :method) (plist-get entry :params))))
 
 (defun +test-awi--said (name)
   "What the agent NAME was told, in order: its prompts' texts, and \"mode

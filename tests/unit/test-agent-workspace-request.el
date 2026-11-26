@@ -141,15 +141,11 @@ each, a note or an issue with a :to."
 
 (defun +test-awq--prompts (name)
   "The prompts the stand-in NAME got, in order."
-  (when (file-exists-p +test-awq--log)
-    (with-temp-buffer
-      (insert-file-contents +test-awq--log)
-      (cl-loop for line in (split-string (buffer-string) "\n" t)
-               for entry = (json-parse-string line :object-type 'plist :null-object nil :array-type 'list)
-               when (and (equal (plist-get entry :agent) name)
-                         (equal (plist-get entry :method) "session/prompt"))
-               collect (mapconcat (lambda (block) (plist-get block :text))
-                                  (plist-get (plist-get entry :params) :prompt) "")))))
+  (cl-loop for entry in (+test-json-lines +test-awq--log)
+           when (and (equal (plist-get entry :agent) name)
+                     (equal (plist-get entry :method) "session/prompt"))
+           collect (mapconcat (lambda (block) (plist-get block :text))
+                              (plist-get (plist-get entry :params) :prompt) "")))
 
 ;; ====== STATUS ======
 

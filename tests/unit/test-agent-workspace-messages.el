@@ -84,13 +84,9 @@ written: the default, on, has its own test."
 
 (defun +test-awg--prompts (name)
   "The prompts the agent NAME's stand-in got, in order."
-  (when (file-exists-p +test-awg--log)
-    (with-temp-buffer
-      (insert-file-contents +test-awg--log)
-      (cl-loop for line in (split-string (buffer-string) "\n" t)
-               for entry = (json-parse-string line :object-type 'plist :null-object nil :array-type 'list)
-               when (and (equal (plist-get entry :agent) name) (equal (plist-get entry :method) "session/prompt"))
-               collect (mapconcat (lambda (b) (plist-get b :text)) (plist-get (plist-get entry :params) :prompt) "")))))
+  (cl-loop for entry in (+test-json-lines +test-awg--log)
+           when (and (equal (plist-get entry :agent) name) (equal (plist-get entry :method) "session/prompt"))
+           collect (mapconcat (lambda (b) (plist-get b :text)) (plist-get (plist-get entry :params) :prompt) "")))
 
 (defun +test-awg--send (from to text)
   "TEXT sent by the agent FROM to TO, as from FROM's shell (cmd/agent-workspace
@@ -153,13 +149,11 @@ plan prompt); his reply back to her (doom-pbk.137)."
                                                    (+test-awg--prompts "ada")))
                                 20)))
       ;; Nothing switched: no plan mode set for ken.
-      (should-not (seq-find (lambda (line)
-                              (let ((entry (json-parse-string line :object-type 'plist :null-object nil)))
-                                (and (equal (plist-get entry :agent) "ken")
-                                     (equal (plist-get entry :method) "session/set_mode")
-                                     (equal (plist-get (plist-get entry :params) :modeId) "plan"))))
-                            (with-temp-buffer (insert-file-contents +test-awg--log)
-                                              (split-string (buffer-string) "\n" t))))
+      (should-not (seq-find (lambda (entry)
+                              (and (equal (plist-get entry :agent) "ken")
+                                   (equal (plist-get entry :method) "session/set_mode")
+                                   (equal (plist-get (plist-get entry :params) :modeId) "plan")))
+                            (+test-json-lines +test-awg--log)))
       (should (string-search "send's reply says which" (agent-workspace--message-context ada))))))
 
 (defun +test-awg--answer (from text)

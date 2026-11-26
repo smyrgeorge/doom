@@ -90,12 +90,7 @@ its value, or nil."
 
 (defun +test-awp--log-entries ()
   "What the stand-in logged: a plist each."
-  (when (file-exists-p +test-awp--log)
-    (with-temp-buffer
-      (insert-file-contents +test-awp--log)
-      (mapcar (lambda (line) (json-parse-string line :object-type 'plist :null-object nil
-                                                :false-object nil :array-type 'list))
-              (split-string (buffer-string) "\n" t)))))
+  (+test-json-lines +test-awp--log))
 
 (defun +test-awp--logged (predicate)
   "The stand-in's entries PREDICATE holds for."

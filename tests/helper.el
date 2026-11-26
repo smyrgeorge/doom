@@ -525,6 +525,22 @@ once each."
     (let ((inhibit-read-only t))
       (erase-buffer))))
 
+(defun +test-json-lines (file)
+  "FILE's lines, a JSON object each (JSON Lines), as plists (null and false
+nil, arrays lists); nil if there's no FILE. Only the lines ended: another
+process appending to FILE (a stand-in agent's log) may be writing its last
+one as it's read. Its write is no line at once to a reader: on Linux's
+tmpfs about one read in a thousand ends mid-line, and CI's once got a
+line's first 164 bytes (json-end-of-file)."
+  (when (file-exists-p file)
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-max))
+      (skip-chars-backward "^\n")
+      (mapcar (lambda (line) (json-parse-string line :object-type 'plist :null-object nil :false-object nil
+                                                :array-type 'list))
+              (split-string (buffer-substring (point-min) (point)) "\n" t)))))
+
 (defun +test-timers-run (&optional seconds)
   "Timers due now run, and those they make due at once (a timer at 0 s):
 until no timer that runs once is due; SECONDS at least (default 0.1),

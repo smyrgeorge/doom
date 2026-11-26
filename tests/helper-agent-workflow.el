@@ -106,16 +106,10 @@ beads.el, WRITES)."
 
 (defun +test-awr--prompts (name)
   "The prompts the stand-ins of the test NAME got, in order."
-  (let ((log (expand-file-name (concat "awr/" name ".log") +test-tmp)))
-    (when (file-exists-p log)
-      (with-temp-buffer
-        (insert-file-contents log)
-        (cl-loop for line in (split-string (buffer-string) "\n" t)
-                 for entry = (json-parse-string line :object-type 'plist :null-object nil :false-object nil
-                                                :array-type 'list)
-                 when (equal (plist-get entry :method) "session/prompt")
-                 collect (mapconcat (lambda (block) (or (plist-get block :text) ""))
-                                    (plist-get (plist-get entry :params) :prompt) ""))))))
+  (cl-loop for entry in (+test-json-lines (expand-file-name (concat "awr/" name ".log") +test-tmp))
+           when (equal (plist-get entry :method) "session/prompt")
+           collect (mapconcat (lambda (block) (or (plist-get block :text) ""))
+                              (plist-get (plist-get entry :params) :prompt) "")))
 
 (defun +test-awr--job (run job)
   "JOB's status in RUN."

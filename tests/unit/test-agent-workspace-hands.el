@@ -45,13 +45,9 @@
 
 (defun +test-awh--prompts (name)
   "The prompts the agent NAME's agent got."
-  (when (file-exists-p +test-awh--log)
-    (with-temp-buffer
-      (insert-file-contents +test-awh--log)
-      (cl-loop for line in (split-string (buffer-string) "\n" t)
-               for entry = (json-parse-string line :object-type 'plist :null-object nil :array-type 'list)
-               when (and (equal (plist-get entry :agent) name) (equal (plist-get entry :method) "session/prompt"))
-               collect (mapconcat (lambda (b) (plist-get b :text)) (plist-get (plist-get entry :params) :prompt) "")))))
+  (cl-loop for entry in (+test-json-lines +test-awh--log)
+           when (and (equal (plist-get entry :agent) name) (equal (plist-get entry :method) "session/prompt"))
+           collect (mapconcat (lambda (b) (plist-get b :text)) (plist-get (plist-get entry :params) :prompt) "")))
 
 (defmacro +test-awh (name &rest body)
   "BODY with two stand-in agents, ada and sam, at the desk in project NAME
