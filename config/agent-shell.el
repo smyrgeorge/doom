@@ -131,6 +131,13 @@ left-to-right ones."
   "Told to every session where diagrams are drawn (see
 DIAGRAMS IN REPLIES above).")
 
+;; NYAN CAT
+;; A session's mode line shows Nyan Cat, animated, for where you are in the
+;; conversation (config/agent-shell/nyan.el); other buffers' don't.
+(defvar +my/agent-shell-nyan-bar-length 16
+  "Nyan Cat's width in a session's mode line, in 8-pixel units (3 for the cat
+alone): half of nyan's own (`nyan-bar-length', 32).")
+
 ;; EVIL KEYS
 ;; With Evil, RET sends the prompt in normal state too (it only moved down a
 ;; line there), and in insert state as before, S-RET a newline. Or, with

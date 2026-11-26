@@ -447,16 +447,68 @@ viewport's), on elsewhere as ever."
 
 (ert-deftest agent-shell/nyan-cat-in-a-session-alone ()
   "Nyan Cat in a session's mode line (`nyan-mode' non-nil in its buffer
-alone), the mode itself never turned on: other buffers keep their mode line."
+alone, half of nyan's width), the mode itself never turned on: other
+buffers keep their mode line."
   (should (memq #'+my/agent-shell-nyan-h agent-shell-mode-hook))
-  (with-temp-buffer
-    (+my/agent-shell-nyan-h)
-    (should (local-variable-p 'nyan-mode))
-    (should nyan-mode))
+  (should (= +my/agent-shell-nyan-bar-length 16))
+  (let ((session (generate-new-buffer " session")))
+    (unwind-protect
+        (with-current-buffer session
+          (+my/agent-shell-nyan-h)
+          (should (local-variable-p 'nyan-mode))
+          (should nyan-mode)
+          (should (= nyan-bar-length 16)))
+      (kill-buffer session)))
   (should-not (default-value 'nyan-mode))
+  (should (= (default-value 'nyan-bar-length) 32))
   (with-temp-buffer
-    (should-not nyan-mode))
-  (should-not (bound-and-true-p nyan-animation-timer)))
+    (should-not nyan-mode)))
+
+(ert-deftest agent-shell/nyan-cat-animated-while-a-session-is-open ()
+  "Nyan Cat's animation (our timer, nyan's `nyan-animation-timer') runs from
+the first session opened to the last one killed; each frame redraws the
+sessions' mode lines in a window, not other buffers'."
+  (require 'nyan-mode)
+  (should-not (timerp nyan-animation-timer))
+  (let ((first (generate-new-buffer " session"))
+        (second (generate-new-buffer " session<2>"))
+        (other (generate-new-buffer " other"))
+        redrawn)
+    (unwind-protect
+        (progn
+          (with-current-buffer first (+my/agent-shell-nyan-h))
+          (should (+my/agent-shell-nyan-ours-p))
+          (let ((timer nyan-animation-timer))
+            (with-current-buffer second (+my/agent-shell-nyan-h))
+            (should (eq nyan-animation-timer timer)))
+          ;; A frame: the next of nyan's 6, the session's mode line in a
+          ;; window redrawn, the other buffer's not.
+          (set-window-buffer (selected-window) first)
+          (with-selected-window (split-window)
+            (set-window-buffer (selected-window) other))
+          (let ((nyan-current-frame 5))
+            (cl-letf (((symbol-function 'force-mode-line-update)
+                       (lambda (&rest _) (push (current-buffer) redrawn))))
+              (+my/agent-shell-nyan-frame))
+            (should (= nyan-current-frame 0)))
+          (should (equal redrawn (list first)))
+          (delete-other-windows)
+          ;; Killed: the animation stops with the last session.
+          (kill-buffer first)
+          (should (+my/agent-shell-nyan-ours-p))
+          (kill-buffer second)
+          (should-not (timerp nyan-animation-timer))
+          ;; nyan's own animation (M-x nyan-mode with its animation on) is
+          ;; left alone when a session is killed.
+          (nyan-start-animation)
+          (let ((third (generate-new-buffer " session<3>")))
+            (with-current-buffer third (+my/agent-shell-nyan-h))
+            (kill-buffer third))
+          (should (timerp nyan-animation-timer)))
+      (nyan-stop-animation)
+      (delete-other-windows)
+      (mapc (lambda (b) (when (buffer-live-p b) (kill-buffer b)))
+            (list first second other)))))
 
 ;; ====== CONTEXT FROM THE CURRENT BUFFER ======
 
