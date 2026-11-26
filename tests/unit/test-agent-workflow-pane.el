@@ -65,9 +65,9 @@ ending without its done makes it wait for you, a moment)."
     (if all names (remove "needs-you" names))))
 
 (defun +test-awp--settle ()
-  "Timers due now run (an answer's given after its command)."
-  (let ((end (+ (float-time) 0.3)))
-    (while (< (float-time) end) (accept-process-output nil 0.02))))
+  "Timers due now run (an answer's given after its command), 0.3 s at
+least: `+test-timers-run'."
+  (+test-timers-run 0.3))
 
 (defun +test-awp--answer (pane label &optional note)
   "PANE's question answered: its button LABEL pressed, NOTE the note it asks

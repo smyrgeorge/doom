@@ -719,9 +719,9 @@ selected, the cursor on its question; none waiting: said."
 ;; ====== A QUESTION TAKES THE FOCUS; ANSWERED, IT GOES ======
 
 (defun +test-aua-settle ()
-  "Timers due now run (an answer's question goes after its command)."
-  (let ((end (+ (float-time) 0.2)))
-    (while (< (float-time) end) (accept-process-output nil 0.02))))
+  "Timers due now run (an answer's question goes after its command), 0.2 s
+at least: `+test-timers-run'."
+  (+test-timers-run 0.2))
 
 (ert-deftest agent-ui-agent/a-question-takes-the-focus ()
   "A question shown: once Emacs is idle a moment, its pane selected, the

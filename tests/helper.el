@@ -525,6 +525,24 @@ once each."
     (let ((inhibit-read-only t))
       (erase-buffer))))
 
+(defun +test-timers-run (&optional seconds)
+  "Timers due now run, and those they make due at once (a timer at 0 s):
+until no timer that runs once is due; SECONDS at least (default 0.1),
+processes' output read meanwhile; 20 s at most. Not by the clock alone:
+Emacs runs the due timers in its list's order, but stops at a repeating
+one it has just set again (its next time to come): those due behind it
+wait for the next `accept-process-output'. Under CI's load, one call took
+the whole wait, an answer's timer not run yet (Linux)."
+  (let* ((start (float-time))
+         (end (+ start (or seconds 0.1)))
+         (limit (+ start 20)))
+    (while (and (< (float-time) limit)
+                (or (< (float-time) end)
+                    (seq-some (lambda (timer) (and (not (timer--repeat-delay timer))
+                                                   (time-less-p (timer--time timer) nil)))
+                              timer-list)))
+      (accept-process-output nil 0.02))))
+
 ;; PDFS
 (defun +test-make-pdf (file &rest args)
   "Write a PDF to FILE: :pages (default 3) pages saying \"Page N text\",

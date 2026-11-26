@@ -2295,9 +2295,8 @@ redraws done."
   (+test-aue-settle))
 
 (defun +test-aue-settle ()
-  "vui's redraws (timers) done."
-  (let ((end (+ (float-time) 0.2)))
-    (while (< (float-time) end) (accept-process-output nil 0.02))))
+  "vui's redraws (timers) done, 0.2 s at least: `+test-timers-run'."
+  (+test-timers-run 0.2))
 
 (ert-deftest agent-ui-elements/form-filled-in-and-sent ()
   "Fill in: the form in its buffer (vui's fields, Emacs's keys there, the

@@ -271,9 +271,8 @@ it. It alone is nothing shown (`agent-ui-canvas-shows-p')."
           (should (get-buffer-window canvas)))))))
 
 (defun +test-auc-settle ()
-  "Timers due now run."
-  (let ((end (+ (float-time) 0.1)))
-    (while (< (float-time) end) (accept-process-output nil 0.02))))
+  "Timers due now run, 0.1 s at least: `+test-timers-run'."
+  (+test-timers-run 0.1))
 
 (ert-deftest agent-ui-canvas/shown-once-the-minibuffer-closes ()
   "An element shown while the minibuffer is open: drawn, its canvas shown
