@@ -214,8 +214,9 @@ views and their elements come and go; a height you give it stays until what it s
   the views at the bottom is Doom's mode line, as tall as the panes' beside them. Under the leftmost it says
   `Agent UI · 2 views` where the major mode would be. The session's mode line stays under the conversation.
 - A canvas showing a single panel with a title (a dashboard) has that title on its bar, not drawn over the panel too. A
-  canvas in a pane of its own, such as a project panel, has it in its tab: `Agent UI: TITLE`. Once a second element is
-  shown, the title is drawn over the panel again and the bar names the canvas. Snapshots and PDFs keep the title.
+  session's canvas in a pane of its own has it in its tab: `Agent UI: TITLE`. Once a second element is shown, the title
+  is drawn over the panel again and the bar names the canvas. Snapshots and PDFs keep the title. A project panel works
+  differently ([Project panels](#project-panels)).
 - [Tiling](editor.md#tiling) treats the session's pane as one pane, Agent UI with it: arranging, resizing, moving it to
   the main pane, fullscreen. Closing the conversation's pane closes its views.
 - While the session is in no window (another buffer in its pane, another workspace), Agent UI waits and shows with the
@@ -636,6 +637,8 @@ Emacs restarts. Its data is fetched afresh each time, and none of it is kept, un
 - `SPC o u` lists the current project's panels. The one you pick opens in a canvas of its own,
   `Agent UI: NAME (PROJECT)`, in its own pane. Its directory is the project's root, and it belongs to no session. If
   it's open already, its pane is shown.
+- Its tab says its name, `Agent UI: NAME`. Its title is drawn in its top border, `╭─ TITLE ───╮`, cut with `…` when the
+  pane is narrow. A panel without a border has its title over it.
 - `q` closes it and kills its buffer. Opened again later, after a restart too, it's read anew and drawn empty, and its
   code fills it.
 - A notice at its top offers its PDF. **Export PDF** saves the panel as it shows now, in your theme's colours, as a

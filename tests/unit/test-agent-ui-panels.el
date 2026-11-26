@@ -232,6 +232,40 @@ selected; opened again: the same; closed, opened again anew (doom-3q5.2)."
               (should-not (plist-get (agent-ui-get "ci" :canvas canvas) :rows)))
           (when (buffer-live-p canvas) (kill-buffer canvas)))))))
 
+(ert-deftest agent-ui-panels/its-name-on-its-tab-its-title-in-its-border ()
+  "A project panel's canvas goes by the panel's name: its tab says Agent UI:
+NAME (its title a sentence long made its tab as long), its lone panel's
+title drawn in the panel's top border, not over it; its view's bar (under a
+session) its name too. A second element: its title over it again, the tab
+still its name. A lone panel without a border: its title over it."
+  (+test-aup `(("service" . ,+test-aup-service))
+    (save-window-excursion
+      (delete-other-windows)
+      (let* ((canvas (agent-ui-open-panel "service"))
+             (text (lambda ()
+                     (with-current-buffer canvas
+                       (agent-ui--flush)
+                       (buffer-substring-no-properties (point-min) (point-max))))))
+        (unwind-protect
+            (progn
+              (should (equal (buffer-local-value 'agent-ui-canvas-name canvas) "service"))
+              (should (equal (agent-ui-canvas-label canvas) "Agent UI: service"))
+              (should-not (agent-ui-canvas-title canvas))
+              (should (string-match-p "^╭─ Service ─+╮$" (funcall text)))
+              (should-not (string-match-p "^Service$" (funcall text)))
+              (should (equal (agent-ui-pane-view-name canvas) "service"))
+              ;; A second element: its title over it, a plain border.
+              (agent-ui-show '(:id "note" :type "text" :text "a note") :canvas canvas)
+              (should (string-match-p "^Service\n╭─+╮$" (funcall text)))
+              (should (equal (agent-ui-canvas-label canvas) "Agent UI: service"))
+              (agent-ui-remove "note" :canvas canvas)
+              (should (string-match-p "^╭─ Service ─+╮$" (funcall text)))
+              ;; Without a border: its title over it.
+              (agent-ui-update "service" '(:border :false) :canvas canvas)
+              (should (string-match-p "^Service$" (funcall text)))
+              (should-not (string-search "╭─ Service" (funcall text))))
+          (when (buffer-live-p canvas) (kill-buffer canvas)))))))
+
 (ert-deftest agent-ui-panels/a-hook-as-one-opens ()
   "`agent-ui-panel-open-hook' runs in a panel's canvas once it has opened,
 not when it's only shown again."

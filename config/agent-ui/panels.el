@@ -317,7 +317,10 @@ from. Returns its canvas."
                                           :canvas canvas :ui (plist-get read :ui))))
         (with-current-buffer canvas
           (setq default-directory root
-                agent-ui-panels--state panel)
+                agent-ui-panels--state panel
+                ;; Its tab says its name, its title in its border
+                ;; (config/agent-ui/canvas.el, A LONE PANEL'S TITLE).
+                agent-ui-canvas-name (plist-get read :name))
           (add-hook 'kill-buffer-hook #'agent-ui-panels--closed nil t)
           (add-hook 'window-buffer-change-functions #'agent-ui-panels--shown nil t))
         (condition-case err

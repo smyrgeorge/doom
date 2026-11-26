@@ -5391,6 +5391,29 @@ frame saying how many more, its bottom border kept; nested ones too."
                                    :children ((:type "text" :text "x") (:type "text" :text "y"))))
                  "x\n\ny")))
 
+(ert-deftest agent-ui-elements/panel-its-title-in-its-border ()
+  "A canvas's lone panel, the canvas going by a name of its own (a project
+panel): its title in its top border (CTX's :border-title), in the title's
+face, cut with … when narrow; a panel in it not given it; no room for a
+character of it: a plain border."
+  (let* ((panel '(:type "panel" :children ((:type "panel" :children ((:type "text" :text "x"))))))
+         (drawn (lambda (width title)
+                  (agent-ui-render panel (plist-put (agent-ui-context :width width) :border-title title))))
+         (draw (lambda (width title) (substring-no-properties (funcall drawn width title)))))
+    (should (string-prefix-p (concat "╭─ Alerts ─────────╮\n"
+                                     "│ ╭──────────────╮ │\n")
+                             (funcall draw 20 "Alerts")))
+    (let ((text (funcall drawn 20 "Alerts")))
+      (should (eq (get-text-property (string-search "Alerts" text) 'face text) 'agent-ui-title))
+      (should (eq (get-text-property 0 'face text) 'agent-ui-muted)))
+    ;; Narrow: cut with …, the border as wide.
+    (should (string-prefix-p "╭─ IC aler… ─╮\n" (funcall draw 14 "IC alerts: Datadog")))
+    ;; No room for it, none given: plain.
+    (should (string-prefix-p "╭────╮\n" (funcall draw 6 "Alerts")))
+    (should (string-prefix-p "╭──────────────────╮\n" (funcall draw 20 nil)))
+    ;; Its children drawn as ever (a nested panel's border plain).
+    (should-not (string-search "Alerts" (substring (funcall draw 20 "Alerts") 20)))))
+
 (ert-deftest agent-ui-elements/panel-nested-and-live ()
   ;; A panel in a panel; an animated child makes it animated.
   (let ((element '(:type "panel" :layout "row"

@@ -106,6 +106,11 @@ hosting a session's canvas, the session's other canvas it was shown on
   "The size of a character cell its elements were drawn for, in pixels:
 \(WIDTH HEIGHT) (their images, their glyphs evened out are sized from it).")
 (defvar-local agent-ui--counter 0 "For ids made for elements shown without one.")
+(defvar-local agent-ui-canvas-name nil
+  "A name of its own the canvas goes by where its name shows (its tab:
+Agent UI: NAME), set by what made it: a project panel's, the panel's name.
+Its lone panel's title is then drawn in the panel's top border, not given
+to its tab (see A LONE PANEL'S TITLE).")
 (defvar-local agent-ui--untitled nil
   "(ID . TITLE): the canvas's lone panel and its title, not drawn on it (see
 `agent-ui-canvas-title'), as last seen; nil: none.")
@@ -464,7 +469,12 @@ was in no window, at the default width) all drawn again soon."
 ;; own: its tab), not drawn over the panel too: two headings for one thing.
 ;; A second element shown, a section: drawn over it again, the bar the
 ;; canvas's name. Its snapshot, its PDF and what's sent to the prompt keep
-;; it: drawn by `agent-ui-render' as ever.
+;; it: drawn by `agent-ui-render' as ever. A canvas with a name of its own
+;; (`agent-ui-canvas-name': a project panel) goes by it, in its tab (Agent
+;; UI: alerts) and its view's bar, and draws its lone panel's title in the
+;; panel's top border (╭─ TITLE ───╮, cut with … when narrow): a title a
+;; sentence long made its tab as long. A panel without a border: its title
+;; drawn over it, as any element's.
 
 (defun agent-ui--lone-panel ()
   "The current canvas's lone panel (see above): (ID . TITLE) if it has no
@@ -481,29 +491,46 @@ else nil."
               ((not (string-blank-p title))))
     (cons id (string-trim (replace-regexp-in-string "[\n\r]+" " " title)))))
 
+(defun agent-ui--canvas-p (buffer)
+  (and (buffer-live-p buffer) (eq (buffer-local-value 'major-mode buffer) 'agent-ui-canvas-mode)))
+
 (defun agent-ui-canvas-title (&optional buffer)
   "The title of canvas BUFFER (default: the current one) when it shows a
 lone panel (see above): its bar or tab says it, the canvas doesn't draw it
-over the panel. nil otherwise."
+over the panel. nil otherwise, and for a canvas with a name of its own (its
+panel's top border says it)."
   (let ((buffer (or buffer (current-buffer))))
-    (and (buffer-live-p buffer)
-         (eq (buffer-local-value 'major-mode buffer) 'agent-ui-canvas-mode)
+    (and (agent-ui--canvas-p buffer)
+         (not (buffer-local-value 'agent-ui-canvas-name buffer))
          (with-current-buffer buffer (cdr (agent-ui--lone-panel))))))
 
 (defun agent-ui-canvas-label (buffer)
   "What names canvas BUFFER where its name would (a tab): \"Agent UI:
+NAME\" for a canvas with a name of its own (a project panel), \"Agent UI:
 TITLE\" when it shows a lone panel (see above), nil otherwise."
-  (when-let* ((title (agent-ui-canvas-title buffer)))
-    (agent-ui-canvas-buffer-name title)))
+  (when-let* ((name (and (agent-ui--canvas-p buffer)
+                         (or (buffer-local-value 'agent-ui-canvas-name buffer)
+                             (agent-ui-canvas-title buffer)))))
+    (agent-ui-canvas-buffer-name name)))
 
 (defun agent-ui--untitled-p (entry)
-  "Whether ENTRY is its canvas's lone panel, its title not drawn (see above)."
-  (equal (agent-ui--entry-id entry) (car (agent-ui--lone-panel))))
+  "Whether ENTRY is its canvas's lone panel, its title not drawn over it
+\(see above): in a canvas with a name of its own, if it has a border (its
+title drawn there)."
+  (and (equal (agent-ui--entry-id entry) (car (agent-ui--lone-panel)))
+       (or (not agent-ui-canvas-name)
+           (not (eq (plist-get (agent-ui--entry-element entry) :border) :false)))))
 
 (defun agent-ui--entry-context (entry ctx)
-  "CTX for drawing ENTRY: its title not drawn if it's the lone panel (see
-above)."
-  (if (agent-ui--untitled-p entry) (plist-put (copy-sequence ctx) :untitled t) ctx))
+  "CTX for drawing ENTRY: its title not drawn over it if it's the lone panel
+\(see above); in a canvas with a name of its own, drawn in its top border
+\(:border-title)."
+  (if (not (agent-ui--untitled-p entry))
+      ctx
+    (let ((ctx (plist-put (copy-sequence ctx) :untitled t)))
+      (if agent-ui-canvas-name
+          (plist-put ctx :border-title (cdr (agent-ui--lone-panel)))
+        ctx))))
 
 (defun agent-ui--check-untitled ()
   "In a canvas, after its elements changed: its lone panel come, gone or

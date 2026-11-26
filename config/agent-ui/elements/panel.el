@@ -16,6 +16,13 @@
 ;;   │ Build              │ Tests           │
 ;;   │ ████████░░  8/12   │  lexer  passed  │
 ;;   ╰──────────────────────────────────────╯
+;;
+;; A canvas's lone panel, the canvas going by a name of its own (a project
+;; panel: config/agent-ui/canvas.el, A LONE PANEL'S TITLE): its title in its
+;; top border (CTX's :border-title), cut with … when narrow, its children
+;; not given it.
+;;
+;;   ╭─ IC alerts: Datadog monitors tagged team:ic, every 2 minutes ───╮
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -324,9 +331,25 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
                                          width height (string-join (nreverse parts)))
                                  'svg t :scale 1 :ascent 'center))))))
 
+(defun agent-ui-panel--top (width title)
+  "A panel's top border, WIDTH columns, TITLE in it (cut with … to fit; nil
+or no room for a character of it: none)."
+  (let ((edge (lambda (s) (propertize s 'face 'agent-ui-muted)))
+        ;; ╭─ TITLE ─╮: 6 columns around it.
+        (room (- width 6)))
+    (if (or (not (stringp title)) (string-blank-p title) (< room 1))
+        (funcall edge (concat "╭" (make-string (- width 2) ?─) "╮"))
+      (let ((text (agent-ui-truncate title room)))
+        (concat (funcall edge "╭─ ")
+                (propertize text 'face 'agent-ui-title)
+                (funcall edge (concat " " (make-string (- width 5 (string-width text)) ?─) "╮")))))))
+
 (defun agent-ui-panel--draw (props ctx)
   (let* ((children (plist-get props :children))
          (width (max 1 (plist-get ctx :width)))
+         (title (plist-get ctx :border-title))
+         ;; Its title its own: not its children's (nested panels).
+         (ctx (if title (plist-put (copy-sequence ctx) :border-title nil) ctx))
          ;; A border where there's room for it and a column inside; no
          ;; child at 0 columns or less (they broke, or hung wrapping).
          (border (and (plist-get props :border) (>= width 6)))
@@ -391,7 +414,7 @@ sides if BORDER. Nil if `agent-ui-snapshot-svg' isn't there."
     (if (not border)
         (mapconcat #'agent-ui-panel--trim-right body "\n")
       (let ((edge (lambda (s) (propertize s 'face 'agent-ui-muted))))
-        (concat (funcall edge (concat "╭" (make-string (- width 2) ?─) "╮")) "\n"
+        (concat (agent-ui-panel--top width title) "\n"
                 (mapconcat (lambda (line)
                              (cond
                               ;; A row as one SVG: its sides drawn in it.

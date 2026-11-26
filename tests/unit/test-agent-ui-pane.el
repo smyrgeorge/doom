@@ -212,6 +212,10 @@ title drawn."
         (should (string-prefix-p "\n3 checks\n" (with-current-buffer canvas
                                                   (buffer-substring-no-properties (point-min) (point-max)))))
         (should-not (string-search "Release v2.4" (funcall text)))
+        ;; A session's canvas: its border plain (a project panel's has its
+        ;; title, test-agent-ui-panels.el), its bar the title.
+        (should-not (buffer-local-value 'agent-ui-canvas-name canvas))
+        (should (string-search "\n╭──" (funcall text)))
         (should (string-search "Build" (funcall text)))
         (should (equal (+test-aup-bar cell) " Release v2.4"))
         (should (equal (agent-ui-canvas-title canvas) "Release v2.4"))
