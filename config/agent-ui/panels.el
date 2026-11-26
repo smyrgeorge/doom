@@ -281,14 +281,124 @@ shown again): this config's notice offering its PDF, say.")
   "\"NAME (PROJECT)\", PROJECT ROOT's folder (no session's: tied to none)."
   (format "%s (%s)" name (file-name-nondirectory (directory-file-name root))))
 
+;; ====== PICKING ONE ======
+;; SPC o u's list, as the agent workspace's role picker has its roles
+;; (config/agent-workspace/new.el): a row each, in columns lined up, fitted
+;; to the minibuffer's width: its icon, its name, its title (what it shows,
+;; cut with …, left out when there's no room), how often it's fetched, open
+;; or not; under the project's name and its panels' folder. One whose file
+;; can't be read: its error instead, dimmed (opening it says it too).
+
+(defconst agent-ui-panels--gap 2
+  "The columns between two of the panel picker's.")
+
+(defun agent-ui-panels--every-text (seconds)
+  "How often a panel fetched every SECONDS is: \"every 2 min\"; \"\" for nil."
+  (cond ((null seconds) "")
+        ((< seconds 60) (format "every %g s" seconds))
+        ((< seconds 3600) (format "every %g min" (/ (round seconds 6) 10.0)))
+        (t (format "every %g h" (/ (round seconds 360) 10.0)))))
+
+(defun agent-ui-panels--picker-facts (root names)
+  "What the panel picker shows of ROOT's panels NAMES, read (never
+evaluated): ((NAME :title TITLE :every TEXT :open BOOL) or (NAME :error
+TEXT)...)."
+  (mapcar (lambda (name)
+            (condition-case err
+                (let ((read (agent-ui-panel-read
+                             (expand-file-name (concat name ".el") (expand-file-name agent-ui-panel-directory root))))
+                      (open (get-buffer (agent-ui-canvas-buffer-name (agent-ui-panel-canvas-name name root)))))
+                  (list name
+                        :title (let ((title (plist-get (plist-get read :ui) :title)))
+                                 (if (stringp title) (string-trim (replace-regexp-in-string "[\n\r]+" " " title)) ""))
+                        :every (agent-ui-panels--every-text (plist-get read :every))
+                        :open (and open (buffer-local-value 'agent-ui-panels--state open) t)))
+              (agent-ui-error (list name :error (agent-ui-error-message err)))
+              (error (list name :error (error-message-string err)))))
+          names))
+
+(defun agent-ui-panels--icon (dim)
+  "A panel's icon in the picker, two columns: nerd-icons' dashboard where
+it and its font are there (in the GUI), else ▦; DIM, dimmed."
+  (let* ((nerd (and (display-graphic-p)
+                    (require 'nerd-icons nil t)
+                    (ignore-errors (find-font (font-spec :family (or (bound-and-true-p nerd-icons-font-family)
+                                                                     "Symbols Nerd Font Mono"))))
+                    (ignore-errors (nerd-icons-mdicon "nf-md-view_dashboard"))))
+         (icon (copy-sequence (or nerd "▦"))))
+    (add-face-text-property 0 (length icon) (if dim 'agent-ui-muted 'agent-ui-accent) t icon)
+    (let ((icon (concat icon (make-string (max 0 (- 2 (string-width icon))) ?\s))))
+      (if (fboundp 'agent-ui-even-glyphs) (agent-ui-even-glyphs icon) icon))))
+
+(defun agent-ui-panels--picker-rows (facts width)
+  "The panel picker's rows for FACTS (`agent-ui-panels--picker-facts'),
+WIDTH columns at most: ((NAME CANDIDATE PREFIX SUFFIX)...), as an
+`:affixation-function' gives them (see above)."
+  (let* ((gap agent-ui-panels--gap)
+         (pad (lambda (text w) (concat text (make-string (max 0 (- w (string-width text))) ?\s))))
+         (widest (lambda (key) (apply #'max 0 (mapcar (lambda (fact)
+                                                       (let ((value (plist-get (cdr fact) key)))
+                                                         (if (stringp value) (string-width value) 0)))
+                                                     facts))))
+         (names (apply #'max 0 (mapcar (lambda (fact) (string-width (car fact))) facts)))
+         (every (funcall widest :every))
+         (open (if (seq-some (lambda (fact) (plist-get (cdr fact) :open)) facts) (string-width "open") 0))
+         ;; The icon, its name, then what's after the title.
+         (start (+ 2 names))
+         (tail (+ (if (> every 0) (+ gap every) 0) (if (> open 0) (+ gap open) 0)))
+         (titled (let ((w (min (funcall widest :title) (- width start gap tail))))
+                   (if (< w 4) 0 w))))
+    (mapcar
+     (lambda (fact)
+       (let* ((name (car fact))
+              (wrong (plist-get (cdr fact) :error))
+              (parts (if wrong
+                         (let ((room (- width start gap)))
+                           (and (>= room 4) (list (agent-ui-truncate wrong room))))
+                       (append
+                        (and (> titled 0)
+                             (list (funcall pad (agent-ui-truncate (plist-get (cdr fact) :title) titled) titled)))
+                        (and (> every 0)
+                             (list (funcall pad (propertize (plist-get (cdr fact) :every) 'face 'agent-ui-muted) every)))
+                        (and (plist-get (cdr fact) :open)
+                             (list (propertize "open" 'face 'agent-ui-success))))))
+              (suffix (string-trim-right
+                       (concat (make-string (- names (string-width name)) ?\s)
+                               (mapconcat (lambda (part) (concat (make-string gap ?\s) part)) parts ""))))
+              (candidate (if wrong (propertize name 'face 'agent-ui-muted) name)))
+         (when wrong
+           (add-face-text-property 0 (length suffix) 'agent-ui-muted t suffix))
+         (list name candidate (agent-ui-panels--icon wrong) suffix)))
+     facts)))
+
 (defun agent-ui-panels--read-name ()
-  "A panel of the current project, picked."
-  (let ((panels (agent-ui-panels)))
+  "A panel of the current project, picked from its rows (see above)."
+  (let* ((root (agent-ui-panel-root))
+         (panels (agent-ui-panels)))
     (unless panels
-      (user-error (if (agent-ui-panel-root)
+      (user-error (if root
                       (format "This project has no panels (%s)" agent-ui-panel-directory)
                     "No project here")))
-    (completing-read "Panel: " panels nil t)))
+    (let* ((facts (agent-ui-panels--picker-facts root panels))
+           (group (concat (file-name-nondirectory (directory-file-name root)) " · "
+                          (directory-file-name agent-ui-panel-directory)))
+           (rows nil)
+           (completion-extra-properties
+            (list :affixation-function
+                  (lambda (names)
+                    (let ((width (1- (window-body-width (or (active-minibuffer-window) (minibuffer-window))))))
+                      (unless (eq (car rows) width)
+                        (setq rows (cons width (agent-ui-panels--picker-rows facts width)))))
+                    (mapcar (lambda (name)
+                              (pcase (assoc name (cdr rows))
+                                (`(,_ ,candidate ,prefix ,suffix) (list candidate prefix suffix))
+                                (_ (list name "" ""))))
+                            names))
+                  :group-function (lambda (name transform) (if transform name group))
+                  ;; By name, as they're listed.
+                  :display-sort-function #'identity
+                  :cycle-sort-function #'identity)))
+      (completing-read "Panel: " panels nil t))))
 
 (defun agent-ui-open-panel (name &optional dir noselect here)
   "Open panel NAME of DIR's project (default: the current buffer's; NAME

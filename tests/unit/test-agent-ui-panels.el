@@ -266,6 +266,74 @@ still its name. A lone panel without a border: its title over it."
               (should-not (string-search "╭─ Service" (funcall text))))
           (when (buffer-live-p canvas) (kill-buffer canvas)))))))
 
+(ert-deftest agent-ui-panels/picked-from-rows ()
+  "SPC o u's list, as the agent workspace's role picker: a row per panel,
+in columns lined up (its icon, its name, its title, how often it's
+fetched, open), under the project and its panels' folder, by name; fitted
+to the width (its title cut with …, none without room). One whose file
+can't be read: its error, dimmed."
+  (+test-aup `(("service" . ,+test-aup-service)
+               ("bad" . "(agent-ui-panel :ui 1)")
+               ("cpu-and-memory" . ";;; -*- lexical-binding: t; -*-
+(agent-ui-panel
+ :ui (:type \"panel\" :id \"p\" :title \"A title long enough to be cut somewhere\"
+      :children ((:type \"text\" :id \"t\" :text \"x\")))
+ :every 120)
+"))
+    (save-window-excursion
+      (let ((canvas (agent-ui-open-panel "service"))
+            seen)
+        (unwind-protect
+            (progn
+              (cl-letf (((symbol-function 'completing-read)
+                         (lambda (prompt collection &rest _)
+                           (setq seen (list prompt collection completion-extra-properties))
+                           "service")))
+                (should (equal (agent-ui-panels--read-name) "service")))
+              (pcase-let* ((`(,prompt ,names ,props) seen)
+                           (rows (funcall (plist-get props :affixation-function) names))
+                           (line (lambda (name)
+                                   (pcase-let ((`(,candidate ,_ ,suffix) (nth (seq-position names name) rows)))
+                                     (substring-no-properties (concat candidate suffix))))))
+                (should (equal prompt "Panel: "))
+                (should (equal names '("bad" "cpu-and-memory" "service")))
+                (should (equal (funcall (plist-get props :group-function) "service" nil)
+                               (concat (file-name-nondirectory (directory-file-name root)) " · .agent-ui/panels")))
+                (should (equal (funcall (plist-get props :group-function) "service" t) "service"))
+                (should (eq (plist-get props :display-sort-function) #'identity))
+                ;; Its icon, two columns.
+                (should (= (string-width (nth 1 (car rows))) 2))
+                ;; Lined up: each column where the others' is.
+                (should (string-match-p "\\`service +Service +every 30 s +open\\'" (funcall line "service")))
+                (should (string-match-p "\\`cpu-and-memory +A title long enough to be cut somewhere +every 2 min\\'"
+                                        (funcall line "cpu-and-memory")))
+                (should (= (string-search "every" (funcall line "service"))
+                           (string-search "every" (funcall line "cpu-and-memory"))))
+                (should (= (string-search "Service" (funcall line "service"))
+                           (string-search "A title" (funcall line "cpu-and-memory"))))
+                (should (eq (get-text-property 0 'face (nth 2 (nth 2 rows))) nil))
+                ;; Can't be read: its error, dimmed, the name too.
+                (pcase-let ((`(,candidate ,_ ,suffix) (car rows)))
+                  (should (string-search "its :ui is what it shows" suffix))
+                  (should (memq 'agent-ui-muted (ensure-list (get-text-property 0 'face candidate))))
+                  (should (memq 'agent-ui-muted (ensure-list (get-text-property (1- (length suffix)) 'face suffix)))))))
+          (when (buffer-live-p canvas) (kill-buffer canvas)))))
+    ;; Narrower: the title cut with …; no room: none.
+    (let* ((facts (agent-ui-panels--picker-facts root '("cpu-and-memory" "service")))
+           (suffix (lambda (width) (substring-no-properties (nth 3 (car (agent-ui-panels--picker-rows facts width)))))))
+      (should (string-search "A title long enoug…" (funcall suffix 50)))
+      (should (string-search "every 2 min" (funcall suffix 50)))
+      (should-not (string-search "A title" (funcall suffix 30)))
+      (should (string-search "every 2 min" (funcall suffix 30))))))
+
+(ert-deftest agent-ui-panels/how-often-said ()
+  (should (equal (agent-ui-panels--every-text nil) ""))
+  (should (equal (agent-ui-panels--every-text 1) "every 1 s"))
+  (should (equal (agent-ui-panels--every-text 0.5) "every 0.5 s"))
+  (should (equal (agent-ui-panels--every-text 120) "every 2 min"))
+  (should (equal (agent-ui-panels--every-text 90) "every 1.5 min"))
+  (should (equal (agent-ui-panels--every-text 7200) "every 2 h")))
+
 (ert-deftest agent-ui-panels/a-hook-as-one-opens ()
   "`agent-ui-panel-open-hook' runs in a panel's canvas once it has opened,
 not when it's only shown again."

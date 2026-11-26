@@ -634,7 +634,9 @@ Emacs restarts. Its data is fetched afresh each time, and none of it is kept, un
 - This config has two of its own in `.agent-ui/panels/`, on macOS and Linux, each filled every second. `cpu` (above)
   shows how busy the CPU is, its load, its last minute and the processes using it most. `memory` shows where the memory
   goes, its pressure and the processes holding the most.
-- `SPC o u` lists the current project's panels. The one you pick opens in a canvas of its own,
+- `SPC o u` lists the current project's panels, a row each: its name, its title, how often it's fetched, and `open` if
+  it's open. Under them, the project's name and its panels' folder. One whose file can't be read shows its error,
+  dimmed. The one you pick opens in a canvas of its own,
   `Agent UI: NAME (PROJECT)`, in its own pane. Its directory is the project's root, and it belongs to no session. If
   it's open already, its pane is shown.
 - Its tab says its name, `Agent UI: NAME`. Its title is drawn in its top border, `╭─ TITLE ───╮`, cut with `…` when the
