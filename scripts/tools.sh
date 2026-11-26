@@ -393,7 +393,9 @@ mmdc_browser() {
     return 0
   fi
   [ "$OS" = apt ] || return 0
-  deps=$(find "$cache" -name deb.deps 2>/dev/null | head -1)
+  # No download there (a dry run, a cache elsewhere): find fails, and with
+  # pipefail the script ended there, saying nothing (exit 1).
+  deps=$(find "$cache" -name deb.deps 2>/dev/null | head -1 || true)
   [ -n "$deps" ] || return 0
   if run $SUDO apt-get satisfy -y -q --no-install-recommends "$(paste -sd, "$deps")"; then
     ui_ok "mmdc's browser's libraries"

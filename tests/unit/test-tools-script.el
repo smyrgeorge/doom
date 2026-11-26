@@ -343,11 +343,16 @@ exit 0
       (should (string-match-p "^  ✔ mmdc's browser" output))
       (should (string-match-p "^  ✖ mmdc .*config/mermaid\\.el) missing$" output)))
     ;; Linux's: the same (dry: no system installer runs); on ARM, where
-    ;; Chrome's headless shell has no build, the system's chromium.
+    ;; Chrome's headless shell has no build, the system's chromium. The
+    ;; download's cache: none (a dry run, a cache elsewhere: on apt, finding
+    ;; its libraries' list there failed, and the script ended, exit 1,
+    ;; saying nothing), or one listing them (apt: installed).
     (dolist (os '("apt" "dnf"))
       (pcase-let ((`(,status . ,output)
                    (+test-tools-script--run os (+test-tools-script--init +test-tools-script--small)
-                                            (concat "PATH=" bin ":/usr/bin:/bin") "DRY_RUN=1" "ARCH=x86_64")))
+                                            (concat "PATH=" bin ":/usr/bin:/bin") "DRY_RUN=1" "ARCH=x86_64"
+                                            (concat "PUPPETEER_CACHE_DIR="
+                                                    (make-temp-file (+test-tmp-file "tools-script/no-cache-") t)))))
         (should (= status 0))
         (should (string-match-p "\\$ npm install -g .*@mermaid-js/mermaid-cli@latest" output))
         (should (string-match-p "\\$ .*/puppeteer browsers install chrome-headless-shell" output))
@@ -355,7 +360,26 @@ exit 0
         (should (string-match-p (format "\\$ \\(sudo \\)?%s install -y -q .*\\_<unzip\\_>"
                                         (if (equal os "apt") "apt-get" "dnf"))
                                 output))
-        (should-not (string-search "chromium" output)))
+        (should-not (string-search "chromium" output))
+        (should-not (string-search "satisfy" output))
+        ;; Checked to the end.
+        (should (string-search "==> Checking" output)))
+      (let ((cache (make-temp-file (+test-tmp-file "tools-script/cache-") t)))
+        (make-directory (expand-file-name "chrome-headless-shell/linux-131/chrome-headless-shell-linux64" cache) t)
+        (with-temp-file (expand-file-name "chrome-headless-shell/linux-131/chrome-headless-shell-linux64/deb.deps"
+                                          cache)
+          (insert "libnss3\nlibgbm1\n"))
+        (pcase-let ((`(,status . ,output)
+                     (+test-tools-script--run os (+test-tools-script--init +test-tools-script--small)
+                                              (concat "PATH=" bin ":/usr/bin:/bin") "DRY_RUN=1" "ARCH=x86_64"
+                                              (concat "PUPPETEER_CACHE_DIR=" cache))))
+          (should (= status 0))
+          (if (equal os "apt")
+              (progn
+                (should (string-match-p "\\$ \\(sudo \\)?apt-get satisfy -y -q --no-install-recommends libnss3,libgbm1$"
+                                        output))
+                (should (string-search "✔ mmdc's browser's libraries" output)))
+            (should-not (string-search "satisfy" output)))))
       (pcase-let ((`(,status . ,output)
                    (+test-tools-script--run os (+test-tools-script--init +test-tools-script--small)
                                             (concat "PATH=" bin ":/usr/bin:/bin") "DRY_RUN=1" "ARCH=aarch64")))
