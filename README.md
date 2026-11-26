@@ -45,7 +45,8 @@ else:
 
 ## Next steps
 
-- [ ] Agent UI in a repository of its own, an Emacs library that works without this config
+- [x] Agent UI in a repository of its own, an Emacs library that works without this config
+  ([smyrgeorge/agent-ui](https://github.com/smyrgeorge/agent-ui))
 - [ ] Agent workflow in a repository of its own, an Emacs library that works without this config
 - [ ] Agent workspace in a repository of its own, an Emacs library that works without this config
 - [ ] Expand what the agent workspace can do
@@ -56,6 +57,12 @@ Every feature has an example on files of its own: `M-x +my/example-NAME` ([Examp
 leader key, and `SPC m` holds the current mode's keys.
 
 ### Agent UI
+
+> [!NOTE]
+> Agent UI has moved to a repository of its own: [smyrgeorge/agent-ui](https://github.com/smyrgeorge/agent-ui), an
+> Emacs package that works without this config (its code, tests and docs are there now). This config installs it
+> (`packages.el`) and adds its own layer on top: Vim's keys, Doom's mode line, bugs filed in its Beads issues
+> (`config/agent-ui.el`).
 
 Your agent shows its work under its conversation: a checklist of its steps, test results filling in, a build's
 progress, charts. Each view is updated in place as the agent works, whichever agent it is. It's built on top of
