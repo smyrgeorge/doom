@@ -221,3 +221,56 @@ selected, RET taking it."
           (use-local-map nil)))
       (should (equal asked "Workflow for demo-3 (a bug: Crash): "))
       (should (equal picked "ours")))))
+
+;; ====== A WORKFLOW WITHOUT A TICKET, A DRY RUN ======
+
+(defconst +test-awk--more-workflows
+  (append '(("deploy" :origin local :description "Deployed from here" :ticketless t :jobs (("ship") ("check")))
+            ("nightly" :origin starter :description "Every night" :ticketless t :jobs (("all"))))
+          +test-awk--workflows)
+  "Workflows that run without a ticket of each origin, and those that take one.")
+
+(defun +test-awk--picker (command)
+  "What COMMAND (interactively) asks to pick from: (PROMPT NAMES ROWS
+GROUPS), ROWS each (NAME PREFIX SUFFIX) as its affixation function gives
+them, GROUPS each name's divider."
+  (cl-letf (((symbol-function 'agent-workflow-workflows) (lambda (_) +test-awk--more-workflows))
+            ((symbol-function 'agent-workflow-project) (lambda (&rest _) "/tmp/"))
+            ((symbol-function 'completing-read)
+             (lambda (prompt names &rest _)
+               (let ((props completion-extra-properties))
+                 (throw 'asked (list prompt names
+                                     (funcall (plist-get props :affixation-function) names)
+                                     (mapcar (lambda (name) (funcall (plist-get props :group-function) name nil))
+                                             names)))))))
+    (catch 'asked (call-interactively command))))
+
+(ert-deftest agent-workflow-pick/run-s-rows ()
+  "M-x agent-workflow-run: the workflows that run without a ticket, as the
+ticket's picker has them: a row of columns each (▶, its name, its
+description, its jobs, lined up), grouped by where it comes from (yours,
+the project's, the starters), none dimmed."
+  (pcase-let ((`(,prompt ,names ,rows ,groups) (+test-awk--picker #'agent-workflow-run)))
+    (should (equal prompt "Run the workflow: "))
+    (should (equal names '("deploy" "github" "nightly")))
+    (should (equal groups (mapcar #'agent-workflow--workflow-group-title '(local project starter))))
+    (pcase-dolist (`(,candidate ,prefix ,_) rows)
+      (should (equal (substring-no-properties prefix) "▶ "))
+      (should-not (memq 'shadow (+test-awk--faces candidate))))
+    (let ((lines (mapcar (lambda (row) (substring-no-properties (concat (nth 0 row) (nth 2 row)))) rows)))
+      (should (string-match-p "\\`deploy +Deployed from here +ship · check\\'" (nth 0 lines)))
+      (should (string-match-p "\\`github +Pushed +green\\'" (nth 1 lines)))
+      ;; Lined up: the descriptions start in one column, the jobs in another.
+      (should (= (string-search "Deployed" (nth 0 lines)) (string-search "Pushed" (nth 1 lines))
+                 (string-search "Every" (nth 2 lines))))
+      (should (= (string-search "ship" (nth 0 lines)) (string-search "green" (nth 1 lines)))))))
+
+(ert-deftest agent-workflow-pick/dry-run-s-rows ()
+  "M-x agent-workflow-dry-run: every workflow, in rows as agent-workflow-run's,
+grouped, the tickets each takes said (for its types; no ticket)."
+  (pcase-let ((`(,prompt ,names ,rows ,_) (+test-awk--picker #'agent-workflow-dry-run)))
+    (should (equal prompt "Dry run of the workflow: "))
+    (should (equal names '("deploy" "mine" "github" "ours" "nightly" "feature" "bugfix")))
+    (should (string-search "no ticket" (nth 2 (nth (seq-position names "github") rows))))
+    (should (string-search "for feature, task" (nth 2 (nth (seq-position names "feature") rows))))
+    (should (equal (substring-no-properties (nth 1 (car rows))) "▶ "))))

@@ -270,7 +270,17 @@ buffer."
   (interactive
    (let* ((project (or (agent-workflow-project) (user-error "Not in a git repository")))
           (workflows (agent-workflow-workflows project))
-          (name (completing-read "Dry run of the workflow: " (mapcar #'car workflows) nil t)))
+          ;; Every workflow, in rows as M-x agent-workflow-run's, the tickets
+          ;; each takes said (config/agent-workflow/queue.el).
+          (name (agent-workflow--read-from-rows
+                 "Dry run of the workflow: "
+                 (lambda (width)
+                   (agent-workflow--rows workflows width nil
+                                         (lambda (workflow)
+                                           (cond ((plist-get (cdr workflow) :ticketless) "no ticket")
+                                                 ((plist-get (cdr workflow) :for)
+                                                  (concat "for " (string-join (plist-get (cdr workflow) :for) ", ")))
+                                                 (t ""))))))))
      (list name
            ;; One with no ticket: none asked.
            (unless (plist-get (cdr (assoc name workflows)) :ticketless)

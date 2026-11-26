@@ -571,40 +571,52 @@ issues): their ids."
 
 (defun agent-workflow--workflow-rows (project info width)
   "The workflow picker's rows for the issue INFO of PROJECT, WIDTH columns
-at most: ((NAME PREFIX SUFFIX ORIGIN FITS)...), every workflow taking a
-ticket, grouped by where it comes from (yours, the project's, the
-starters), those that fit it first in each (its workflow:NAME label's, or
-those whose for: has its type), each a row of columns as the agent
-workspace's role picker has them: a mark (● fits, ○ doesn't), its name,
-its description, its jobs, the types it's for (its label's, said). Those
-that don't fit, dimmed; columns that don't fit the width dropped from the
-right (its jobs first), its description cut with …."
+at most (`agent-workflow--rows'): every workflow taking a ticket, those
+that fit it first in each group (its workflow:NAME label's, or those whose
+for: has its type): ● fits, ○ doesn't, dimmed; the types each is for (its
+label's, said)."
   (let* ((label (seq-find (lambda (label) (string-prefix-p "workflow:" label)) (plist-get info :labels)))
          (labelled (and label (string-remove-prefix "workflow:" label)))
-         (type (plist-get info :type))
-         (workflows (seq-remove (lambda (workflow) (plist-get (cdr workflow) :ticketless))
-                                (agent-workflow-workflows project)))
-         (fits (lambda (workflow)
-                 (if labelled
-                     (equal (car workflow) labelled)
-                   (and (member type (plist-get (cdr workflow) :for)) t))))
+         (type (plist-get info :type)))
+    (agent-workflow--rows
+     (seq-remove (lambda (workflow) (plist-get (cdr workflow) :ticketless))
+                 (agent-workflow-workflows project))
+     width
+     (lambda (workflow)
+       (if labelled
+           (equal (car workflow) labelled)
+         (and (member type (plist-get (cdr workflow) :for)) t)))
+     (lambda (workflow)
+       (cond ((and labelled (equal (car workflow) labelled)) (concat "its " label))
+             ((plist-get (cdr workflow) :for)
+              (concat "for " (string-join (plist-get (cdr workflow) :for) ", ")))
+             (t ""))))))
+
+(defun agent-workflow--rows (workflows width &optional fits for)
+  "The rows of a workflow picker for WORKFLOWS ((NAME . SPEC)...), WIDTH
+columns at most: ((NAME PREFIX SUFFIX ORIGIN FITS)...), grouped by where
+they come from (yours, the project's, the starters), each a row of columns
+as the agent workspace's role picker has them: a mark, its name, its
+description, its jobs, FOR's text (a function of a workflow: the tickets
+it's for). FITS (a function of a workflow): those it fits first in each
+group, marked ● (FOR's text in green), the others ○, dimmed; nil: each
+marked ▶, none dimmed. Columns that don't fit the width dropped from the
+right (its jobs first), its description cut with …."
+  (let* ((fits* (or fits #'always))
          (origins '(local project starter))
          (sorted (seq-mapcat (lambda (origin)
                                (let ((these (seq-filter (lambda (workflow)
                                                           (eq (or (plist-get (cdr workflow) :origin) 'starter) origin))
                                                         workflows)))
-                                 (append (seq-filter fits these) (seq-remove fits these))))
+                                 (append (seq-filter fits* these) (seq-remove fits* these))))
                              origins))
          (cells (mapcar (lambda (workflow)
                           (let ((spec (cdr workflow)))
                             (list :name (car workflow)
-                                  :fits (funcall fits workflow)
+                                  :fits (and (funcall fits* workflow) t)
                                   :description (or (plist-get spec :description) "")
                                   :jobs (mapconcat #'car (plist-get spec :jobs) " · ")
-                                  :for (cond ((and labelled (equal (car workflow) labelled)) (concat "its " label))
-                                             ((plist-get spec :for)
-                                              (concat "for " (string-join (plist-get spec :for) ", ")))
-                                             (t "")))))
+                                  :for (or (and for (funcall for workflow)) ""))))
                         sorted))
          (gap agent-workflow--picker-gap)
          (widest (lambda (key) (apply #'max 0 (mapcar (lambda (cell) (string-width (plist-get cell key))) cells))))
@@ -632,12 +644,15 @@ right (its jobs first), its description cut with …."
                 (suffix (string-trim-right
                          (concat (make-string (- names (string-width (plist-get cell :name))) ?\s)
                                  (mapconcat (lambda (part) (concat (make-string gap ?\s) part)) parts "")))))
-           (if fit
-               (when-let* ((at (and (memq :for shown) (string-search (plist-get cell :for) suffix))))
-                 (add-face-text-property at (+ at (length (plist-get cell :for))) 'success t suffix))
-             (add-face-text-property 0 (length suffix) 'shadow t suffix))
+           (cond ((not fits))
+                 (fit
+                  (when-let* ((at (and (memq :for shown) (string-search (plist-get cell :for) suffix))))
+                    (add-face-text-property at (+ at (length (plist-get cell :for))) 'success t suffix)))
+                 (t (add-face-text-property 0 (length suffix) 'shadow t suffix)))
            (list (plist-get cell :name)
-                 (if fit (propertize "● " 'face 'success) (propertize "○ " 'face 'shadow))
+                 (cond ((not fits) (propertize "▶ " 'face 'font-lock-keyword-face))
+                       (fit (propertize "● " 'face 'success))
+                       (t (propertize "○ " 'face 'shadow)))
                  suffix
                  (or (plist-get (cdr (assoc (plist-get cell :name) workflows)) :origin) 'starter)
                  fit)))
@@ -664,21 +679,18 @@ has listed them. An empty answer is DEFAULT."
             (completing-read prompt names nil t nil nil (unless vertico default)))))
     (if (string-empty-p answer) (or default answer) answer)))
 
-(defun agent-workflow--read-workflow (project issue)
-  "ISSUE's workflow in PROJECT, always asked: every workflow taking a ticket
-\(yours, the project's, the starters), grouped, a row of columns each
-\(`agent-workflow--workflow-rows'), those that fit it first, the first of
-them selected."
-  (let* ((info (agent-workflow-issue project issue))
-         (rows nil)
+(defun agent-workflow--read-from-rows (prompt rows &optional default)
+  "A workflow read with PROMPT from ROWS (a function of a width: its rows,
+`agent-workflow--rows'), each its row of columns, grouped, in their order,
+DEFAULT selected where it is (default: the first): its name. An error if
+there are none."
+  (let* ((cache nil)
          (row-list (lambda ()
                      (let ((width (1- (window-body-width (or (active-minibuffer-window) (minibuffer-window))))))
-                       (unless (eq (car rows) width)
-                         (setq rows (cons width (agent-workflow--workflow-rows project info width))))
-                       (cdr rows))))
-         (all (funcall row-list))
-         (names (mapcar #'car all))
-         (default (car (or (seq-find (lambda (row) (nth 4 row)) all) (car all))))
+                       (unless (eq (car cache) width)
+                         (setq cache (cons width (funcall rows width))))
+                       (cdr cache))))
+         (names (mapcar #'car (funcall row-list)))
          (completion-extra-properties
           (list :affixation-function
                 (lambda (candidates)
@@ -697,11 +709,24 @@ them selected."
                 :display-sort-function #'identity
                 :cycle-sort-function #'identity)))
     (unless names
+      (user-error "No workflow to pick"))
+    (agent-workflow--read-in-place prompt names (or default (car names)))))
+
+(defun agent-workflow--read-workflow (project issue)
+  "ISSUE's workflow in PROJECT, always asked: every workflow taking a ticket
+\(yours, the project's, the starters), grouped, a row of columns each
+\(`agent-workflow--workflow-rows'), those that fit it first, the first of
+them selected."
+  (let* ((info (agent-workflow-issue project issue))
+         (rows (lambda (width) (agent-workflow--workflow-rows project info width)))
+         (all (funcall rows 120)))
+    (unless all
       (user-error "No workflow takes a ticket (M-x agent-workflow-run runs those that don't)"))
-    (agent-workflow--read-in-place
+    (agent-workflow--read-from-rows
      (format "Workflow for %s (a %s%s): " issue (or (plist-get info :type) "task")
              (if-let* ((title (plist-get info :title))) (concat ": " (agent-workflow--fit-text title 40)) ""))
-     names default)))
+     rows
+     (car (or (seq-find (lambda (row) (nth 4 row)) all) (car all))))))
 
 (defun agent-workflow--started (started refused)
   "STARTED runs said to `agent-workflow-started-functions', and with those
@@ -715,20 +740,16 @@ REFUSED ((ID . WHY)...) in the echo area."
                  "; ")))
 
 (defun agent-workflow--read-ticketless (project)
-  "A workflow of PROJECT that runs without a ticket, picked (its
-description beside it): its name."
-  (let* ((workflows (seq-filter (lambda (workflow) (plist-get (cdr workflow) :ticketless))
-                                (agent-workflow-workflows project)))
-         (completion-extra-properties
-          (list :annotation-function
-                (lambda (name)
-                  (when-let* ((description (plist-get (cdr (assoc name workflows)) :description)))
-                    (concat (propertize " " 'display '(space :align-to 24))
-                            (propertize description 'face 'completions-annotations)))))))
+  "A workflow of PROJECT that runs without a ticket, picked from its rows
+\(`agent-workflow--rows': its name, its description, its jobs), grouped by
+where it comes from: its name."
+  (let ((workflows (seq-filter (lambda (workflow) (plist-get (cdr workflow) :ticketless))
+                               (agent-workflow-workflows project))))
     (unless workflows
       (user-error "No workflow of %s runs without a ticket (ticket: false); on a ticket: M-x agent-workflow-run-ticket"
                   (file-name-nondirectory (directory-file-name project))))
-    (completing-read "Run the workflow: " (mapcar #'car workflows) nil t)))
+    (agent-workflow--read-from-rows "Run the workflow: "
+                                    (lambda (width) (agent-workflow--rows workflows width)))))
 
 (defun agent-workflow-run (workflow &optional project)
   "Start a run of WORKFLOW (a name) of PROJECT (default: the current

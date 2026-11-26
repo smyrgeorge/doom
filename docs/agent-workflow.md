@@ -346,8 +346,9 @@ cmd/agent-workflow run doom-epic --workflow quick  # an epic's open issues, with
 
 ### Without a ticket
 
-`M-x agent-workflow-run` starts a workflow that takes no ticket (`ticket: false`). It asks which, showing each one's
-description. From the shell: `cmd/agent-workflow run --workflow NAME`.
+`M-x agent-workflow-run` starts a workflow that takes no ticket (`ticket: false`). It asks which, in rows as an issue's
+workflow is asked: grouped by where each comes from, each row its description and its jobs, marked ▶. From the shell:
+`cmd/agent-workflow run --workflow NAME`.
 
 - The run is named by its workflow and its number: `github · run 3`. The workflow's name stands where an issue's id
   would: in its folder, its worktree, its log and `{issue}`.
@@ -848,6 +849,8 @@ branch, issue or session. It walks the workflow as a run would, wave by wave.
 | `M-x agent-workflow-dry-run` | Walk a workflow, nothing run |
 | `cmd/agent-workflow dry-run NAME` | The same from the shell |
 
+- It asks which workflow in the same rows, every workflow listed, each saying the tickets it takes (`for bug`, or
+  `no ticket`).
 - It shows what would run and which jobs at once, what would wait and why, and what each `if` skips.
 - It shows what an outcome sends back (counted against `max-rounds`), a script fixed and run again, and where the run
   would stop to ask you. Or, once it ends, what happens to its branch.
