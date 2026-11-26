@@ -204,7 +204,12 @@ views and their elements come and go; a height you give it stays until what it s
   columns, each a stack of views, as many columns as fit.
 - A view needs 40 columns, or 80 when it shows a diff, code, a graph or diagram, a heatmap, a timeline or a comparison.
   Short views stack beside a tall one, and the session's own comes first.
-- Views are laid out again when they open or close, not while the agent updates them.
+- When the views need more than half the pane, the layout that hides the fewest of their lines wins.
+- When the pane is too narrow for every view (a wide one in a pane under 80 columns), the ones that fit are shown. The
+  others come back once the pane has room for them.
+- Views are laid out again when they open or close, not while the agent updates them. They're also laid out again when
+  the session's pane changes size: a pane beside it opened or closed, a split, Treemacs, the frame resized, a border
+  dragged (once you let go).
 - Each view scrolls and is selected on its own, with a bar over it naming it; the session's own reads `Canvas`. Under
   the views at the bottom is Doom's mode line, as tall as the panes' beside them. Under the leftmost it says
   `Agent UI · 2 views` where the major mode would be. The session's mode line stays under the conversation.

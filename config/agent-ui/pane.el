@@ -23,7 +23,8 @@
 ;; - The views' windows are made again whenever they don't match (synced at
 ;;   each window change): a view shown or gone, the session in another
 ;;   window, or in none (Agent UI waits, shown with the session), a workspace
-;;   switched to.
+;;   switched to. Its pane resized: its views planned again for its room,
+;;   once the resizing stops (see RESIZED).
 ;; - A view whose window is closed while it shows something stays hidden
 ;;   until an element is shown in it (a new one, or one again; an update
 ;;   doesn't: a bar ticking would bring it back each second); q kills it. Agent UI hidden for a
@@ -119,6 +120,28 @@ were drawn at their widths (see THE LAYOUT).")
 
 (defvar agent-ui--pane-settling nil
   "Non-nil while Agent UI is laid out again once settled (see THE LAYOUT).")
+
+(defvar-local agent-ui--pane-wanted nil
+  "In a session: its views when its Agent UI was last planned, those left
+out for want of room too (see THE LAYOUT).")
+
+(defvar agent-ui-pane-rebuild-limit 20
+  "The most times a session's Agent UI is laid out anew by syncing in a
+second: more is a loop (a layout its sync never takes as in place, each
+rebuild a window change syncing again, Emacs frozen in its redisplay),
+stopped there, its windows left as they are (see SYNCED).")
+
+(defvar-local agent-ui--pane-rebuilds nil
+  "In a session: when its Agent UI was laid out anew by syncing, in the last
+second (`agent-ui-pane-rebuild-limit').")
+
+(defvar-local agent-ui--pane-stopped nil
+  "In a session: non-nil once its Agent UI's rebuilds were stopped, until
+one may be again (`agent-ui-pane-rebuild-limit').")
+
+(defvar-local agent-ui--pane-planned-room nil
+  "In a session: the room of its pane its Agent UI was last planned for,
+\(COLUMNS . LINES) (see RESIZED).")
 
 (defvar-local agent-ui--pane-height nil
   "In a session: the height its Agent UI was last given, in pixels, and its
@@ -254,15 +277,23 @@ canvas's."
 ;; and no column holding more views than it has room for (3 lines each), the
 ;; one with the least height and room left empty together (its tallest
 ;; column's lines, and the lines left empty under the others, on average: a
-;; line more beats half of two columns empty); then the least room left
-;; empty; then the fewest columns (wider views). The
+;; line more beats half of two columns empty), its columns cut at the most
+;; Agent UI takes, each line they hide a line more (3 views of 21, 25 and 39
+;; lines in 33 at most: three columns, 6 lines hidden, not two of 46 and 39,
+;; 19 hidden); then the least room left empty; then the fewest columns
+;; (wider views). The
 ;; room left across is shared out between the columns. Planned when the views
 ;; change (opened, closed), not when their content does: their heights only
 ;; fitted then (see ITS HEIGHT), nothing moving around while the agent works.
 ;; Once, though, after they're laid out: a new view is measured as drawn at
 ;; the default width, its size changes once drawn at its column's; measured
 ;; again then, a layout better by more than half a line made (a ninth view
-;; left it 5 lines off the best). At most 10 views.
+;; left it 5 lines off the best). Planned again too when their pane is
+;; resized (see RESIZED). At most 10 views. More than fit: those wider than
+;; the pane left out (a wide view in a pane narrower than 80 columns), then
+;; the last ones, until the pane has room for them; a layout of some of them
+;; in place as one of all (taken for one to make again, it was rebuilt at
+;; each sync, each rebuild a window change syncing again: Emacs froze).
 
 (defun agent-ui--pane-view-width (view)
   "The fewest columns VIEW needs (see above)."
@@ -339,15 +370,23 @@ columns and MOST lines: (KEY NEEDS HEIGHT), KEY lower is better, NEEDS each
 column's width, HEIGHT the tallest column's lines; nil if they don't fit."
   (let* ((pick (lambda (list column) (mapcar (lambda (index) (nth index list)) column)))
          (needs (mapcar (lambda (column) (apply #'max (funcall pick widths column))) columns))
-         (heights (mapcar (lambda (column) (apply #'+ (funcall pick lines column))) columns))
-         (height (apply #'max heights))
-         (count (length columns)))
+         (heights (mapcar (lambda (column) (apply #'+ (funcall pick lines column))) columns)))
     (when (and (<= (apply #'+ needs) width)
                (<= (* 3 (apply #'max (mapcar #'length columns))) most))
-      ;; The least height and room left empty together (see above), then
-      ;; the least room left empty, then the fewest columns.
-      (let ((empty (- (* height count) (apply #'+ heights))))
-        (list (list (+ height (/ (float empty) count)) empty count) needs height)))))
+      (list (agent-ui--pane-key heights most) needs (apply #'max heights)))))
+
+(defun agent-ui--pane-key (heights most)
+  "The score's key (see above) of columns HEIGHTS lines high (their views'),
+cut at MOST lines: (COST EMPTY COUNT), lower is better. COST the height
+and room left empty together (the tallest column's lines, cut, and the
+lines left empty under the others, on average), each line the cut columns
+hide a line more; then the room left empty, then the columns."
+  (let* ((count (length heights))
+         (shown (mapcar (lambda (height) (min height most)) heights))
+         (tallest (apply #'max shown))
+         (hidden (- (apply #'+ heights) (apply #'+ shown)))
+         (empty (- (* tallest count) (apply #'+ shown))))
+    (list (+ tallest (/ (float empty) count) hidden) empty count)))
 
 (defun agent-ui--pane-moved (columns view from to)
   "COLUMNS with VIEW moved from column FROM to column TO, FROM gone if left
@@ -421,7 +460,6 @@ beats BOUND."
          (sums (make-vector most-columns 0))
          (widest (make-vector most-columns 0))
          (sizes (make-vector most-columns 0))
-         (total (apply #'+ lines))
          (best-key bound)
          (best nil)
          (steps 0))
@@ -431,8 +469,7 @@ beats BOUND."
         (when (> steps agent-ui-pane-search-limit)
           (throw 'enough nil))
         (if (null rest)
-            (let* ((empty (- (* tallest used) total))
-                   (key (list (+ tallest (/ (float empty) used)) empty used)))
+            (let ((key (agent-ui--pane-key (cl-loop for column below used collect (aref sums column)) most)))
               (when (or (null best-key) (agent-ui--pane-key< key best-key))
                 (setq best-key key
                       best (cl-loop for column below used
@@ -448,7 +485,9 @@ beats BOUND."
                      (tallest* (max tallest sum)))
                 (when (and (<= across* width)
                            (< (aref sizes column) room)
-                           ;; The tallest column only grows: can't beat the best.
+                           ;; The tallest column only grows, and a layout's
+                           ;; cost is its lines at least (what's cut, hidden):
+                           ;; can't beat the best.
                            (or (null best-key) (< tallest* (car best-key)))
                            (or (not new) (> view 0) (= column 0)))
                   (let ((saved (list (aref columns column) (aref sums column)
@@ -646,6 +685,22 @@ parameter names it: kept with a workspace's windows)."
   (set-window-next-buffers cell nil)
   (set-window-parameter cell 'agent-ui-pane (buffer-name session)))
 
+(defun agent-ui--pane-fitting (lines widths width most)
+  "The views needing LINES and WIDTHS planned in WIDTH columns and MOST
+lines (see THE LAYOUT), as many as fit: those wider than WIDTH left out,
+then the last ones; 10 at most. (KEPT . PLAN), KEPT their indices in order,
+PLAN's indices into KEPT; (nil) if none fits."
+  (let ((kept (seq-take (cl-loop for need in widths for index from 0
+                                 when (<= need width) collect index)
+                        10))
+        plan)
+    (while (and kept
+                (not (setq plan (agent-ui--pane-plan (mapcar (lambda (index) (nth index lines)) kept)
+                                                     (mapcar (lambda (index) (nth index widths)) kept)
+                                                     width most))))
+      (setq kept (butlast kept)))
+    (cons kept plan)))
+
 (defun agent-ui--pane-attach (window views)
   "VIEWS (canvases) in WINDOW's pane, a session's: WINDOW split, its bottom
 part (as high as they need, see above) a grid of them, a group of their own. Their
@@ -653,15 +708,13 @@ windows; nil without room (WINDOW as it was)."
   (let* ((height (window-total-height window))
          (width (window-total-width window))
          (most (agent-ui--pane-most height (window-buffer window)))
-         (views (seq-take views 10))
-         plan)
-    ;; More views than room: the last ones not shown.
-    (while (and views
-                (not (setq plan (agent-ui--pane-plan (mapcar (lambda (view) (agent-ui--pane-view-lines view window))
-                                                             views)
-                                                     (mapcar #'agent-ui--pane-view-width views)
-                                                     width most))))
-      (setq views (butlast views)))
+         (wanted views)
+         ;; More views than room: those that don't fit left out.
+         (fitting (agent-ui--pane-fitting (mapcar (lambda (view) (agent-ui--pane-view-lines view window)) views)
+                                          (mapcar #'agent-ui--pane-view-width views)
+                                          width most))
+         (views (mapcar (lambda (index) (nth index views)) (car fitting)))
+         (plan (cdr fitting)))
     (let ((lines (and plan (if (buffer-local-value 'agent-ui-pane-full (window-buffer window))
                                most
                              (min most (max agent-ui-pane-min-lines (1+ (ceiling (nth 2 plan)))))))))
@@ -690,6 +743,8 @@ windows; nil without room (WINDOW as it was)."
               (set-window-parameter window 'delete-window #'agent-ui--pane-delete-session-window)
               (with-current-buffer session
                 (setq agent-ui--pane-plan columns
+                      agent-ui--pane-wanted wanted
+                      agent-ui--pane-planned-room (cons width height)
                       agent-ui--pane-height nil
                       agent-ui--pane-settled agent-ui--pane-settling))
               ;; As high as each needs now; again once drawn at their widths.
@@ -790,25 +845,38 @@ more than half a line; once."
   (unless (buffer-local-value 'agent-ui--pane-settled session)
     (with-current-buffer session
       (setq agent-ui--pane-settled t))
-    (let* ((views (agent-ui--pane-views session))
-           (shown (buffer-local-value 'agent-ui--pane-plan session))
-           (index (lambda (view) (seq-position views view)))
-           (now (mapcar (lambda (column) (mapcar index column)) shown)))
-      (unless (seq-some (lambda (column) (memq nil column)) now)
-        (let* ((lines (mapcar (lambda (view) (agent-ui--pane-view-lines view window)) views))
-               (widths (mapcar #'agent-ui--pane-view-width views))
-               (area (window-next-sibling window))
-               (width (window-total-width window))
-               (most (agent-ui--pane-most (+ (window-total-height window)
-                                             (if area (window-total-height area) 0))
-                                          session))
-               (current (agent-ui--pane-score now lines widths width most))
-               (plan (agent-ui--pane-plan lines widths width most))
-               (better (and plan (agent-ui--pane-score (car plan) lines widths width most))))
-          (when (and current better (< (car (car better)) (- (car (car current)) 0.5)))
-            (let ((agent-ui--pane-settling t))
-              (agent-ui--pane-detach (window-frame window) session)
-              (agent-ui--pane-attach window views))))))))
+    (let ((agent-ui--pane-settling t))
+      (agent-ui--pane-better window session))))
+
+(defun agent-ui--pane-better (window session)
+  "SESSION's Agent UI, in WINDOW's pane, planned again as its views are
+drawn now: laid out again if their columns don't fit the pane, if it has
+room for more of them than it shows (some left out, see THE LAYOUT), or a
+layout better by more than half a line does. Non-nil if it was."
+  (let* ((views (agent-ui--pane-views session))
+         (shown (buffer-local-value 'agent-ui--pane-plan session))
+         (index (lambda (view) (seq-position views view)))
+         (now (mapcar (lambda (column) (mapcar index column)) shown)))
+    (when (and now (not (seq-some (lambda (column) (memq nil column)) now)))
+      (let* ((lines (mapcar (lambda (view) (agent-ui--pane-view-lines view window)) views))
+             (widths (mapcar #'agent-ui--pane-view-width views))
+             (area (window-next-sibling window))
+             (width (window-total-width window))
+             (most (agent-ui--pane-most (+ (window-total-height window)
+                                           (if area (window-total-height area) 0))
+                                        session))
+             (current (agent-ui--pane-score now lines widths width most))
+             (fitting (agent-ui--pane-fitting lines widths width most))
+             (kept (car fitting))
+             (columns (mapcar (lambda (column) (mapcar (lambda (index) (nth index kept)) column))
+                              (car (cdr fitting))))
+             (better (and columns (agent-ui--pane-score columns lines widths width most))))
+        (when (or (null current)
+                  (not (equal kept (sort (apply #'append now) #'<)))
+                  (and better (< (car (car better)) (- (car (car current)) 0.5))))
+          (agent-ui--pane-detach (window-frame window) session)
+          (agent-ui--pane-attach window views)
+          t)))))
 
 (defun agent-ui--pane-fit-now ()
   "The sessions waiting, their Agent UI fitted (`agent-ui--pane-fit'),
@@ -882,7 +950,83 @@ its views' windows deleted with it."
   (let ((ignore-window-parameters t))
     (delete-window window)))
 
+;; ====== RESIZED ======
+;; Its session's pane resized another way than by tiling (a pane beside it
+;; closed or split, Treemacs, the frame resized, a border dragged): its
+;; views planned again for the pane's room, `agent-ui-pane-resize-delay'
+;; after its last change (a border dragged: once it's let go, not at each
+;; step), laid out again if their columns don't fit across it or a layout
+;; better by more than half a line does, as once settled (see THE LAYOUT);
+;; the new layout settles again. Its height counts too: the most Agent UI
+;; takes is a share of it. The border between the conversation and Agent UI
+;; moved leaves the pane's room as it is. Tiling lays its panes out with
+;; Agent UI's views out of the way: they're planned anew then (A WINDOW
+;; MANAGER LAYING PANES OUT).
+
+(defvar agent-ui-pane-resize-delay 0.2
+  "Seconds after its session's pane was last resized that Agent UI is
+planned again for it (see RESIZED).")
+
+(defvar agent-ui--pane-resize-timer nil)
+
+(defvar agent-ui--pane-to-replan nil
+  "The sessions whose pane was resized: their Agent UI planned again soon.")
+
+(defun agent-ui--pane-room (window)
+  "The room of WINDOW's pane, a session's, with its Agent UI under it:
+\(COLUMNS . LINES)."
+  (let ((area (window-next-sibling window)))
+    (cons (window-total-width window)
+          (+ (window-total-height window) (if area (window-total-height area) 0)))))
+
+(defun agent-ui--pane-resized (window session)
+  "SESSION's Agent UI, in WINDOW's pane, planned again soon if the pane's
+room isn't the one it was planned for (see RESIZED): each change moves it."
+  (unless (equal (agent-ui--pane-room window) (buffer-local-value 'agent-ui--pane-planned-room session))
+    (cl-pushnew session agent-ui--pane-to-replan)
+    (when (timerp agent-ui--pane-resize-timer)
+      (cancel-timer agent-ui--pane-resize-timer))
+    (setq agent-ui--pane-resize-timer
+          (run-at-time agent-ui-pane-resize-delay nil #'agent-ui--pane-replan-now))))
+
+(defun agent-ui--pane-replan (window session)
+  "SESSION's Agent UI, in WINDOW's pane, planned again for the pane's room
+now (see RESIZED); non-nil if laid out again."
+  (with-current-buffer session
+    (setq agent-ui--pane-planned-room (agent-ui--pane-room window)))
+  (agent-ui--pane-better window session))
+
+(defun agent-ui--pane-replan-now ()
+  "The sessions whose pane was resized, their Agent UI planned again (see
+RESIZED), if still shown as planned; the view selected kept. Not while the
+minibuffer is open (its previews show other buffers in panes): once it's
+closed, a window change, they're synced and planned again."
+  (setq agent-ui--pane-resize-timer nil)
+  (unless (active-minibuffer-window)
+    (let ((sessions agent-ui--pane-to-replan))
+      (setq agent-ui--pane-to-replan nil)
+      (save-current-buffer
+        (dolist (session sessions)
+          (when-let* (((buffer-live-p session))
+                      (window (agent-ui--pane-session-window session))
+                      (frame (window-frame window))
+                      (cells (agent-ui--pane-cells frame session))
+                      ((agent-ui--pane-in-place-p window cells)))
+            (let ((view (and (agent-ui-pane-window-p (selected-window)) (window-buffer (selected-window)))))
+              (with-demoted-errors "Agent UI, laid out for its pane's room: %S"
+                (agent-ui--pane-changing frame (lambda () (agent-ui--pane-replan window session))))
+              (when (and view (not (agent-ui-pane-window-p (selected-window))))
+                (when-let* ((cell (get-buffer-window view frame)))
+                  (when (agent-ui-pane-window-p cell)
+                    (select-window cell 'norecord)))))))))))
+
 ;; ====== SYNCED ======
+;; At each window change: each session's views in its pane, as planned, or
+;; laid out anew. A layout its sync never took as in place would be rebuilt
+;; at each one, each rebuild a window change syncing again within the same
+;; redisplay, Emacs frozen there (some views left out for want of room did,
+;; see THE LAYOUT): `agent-ui-pane-rebuild-limit' rebuilds a second at most,
+;; the windows left as they are after, said once.
 
 (defun agent-ui--pane-under-p (window ancestor)
   "Non-nil if WINDOW is ANCESTOR or inside it."
@@ -904,13 +1048,35 @@ others left where they were, laid out again)."
          (equal (mapcar (lambda (column) (mapcar #'window-buffer column)) (agent-ui--pane-columns cells))
                 (buffer-local-value 'agent-ui--pane-plan (window-buffer window))))))
 
+(defun agent-ui--pane-rebuild-p (session)
+  "Non-nil if SESSION's Agent UI may be laid out anew by syncing now, then
+counted: `agent-ui-pane-rebuild-limit' times a second at most (see SYNCED).
+Said when it's stopped."
+  (let* ((now (float-time))
+         (recent (seq-filter (lambda (time) (< (- now time) 1.0))
+                             (buffer-local-value 'agent-ui--pane-rebuilds session)))
+         (may (< (length recent) agent-ui-pane-rebuild-limit)))
+    (with-current-buffer session
+      (setq agent-ui--pane-rebuilds (if may (cons now recent) recent)))
+    (unless (or may (buffer-local-value 'agent-ui--pane-stopped session))
+      (with-current-buffer session
+        (setq agent-ui--pane-stopped t))
+      (message "Agent UI: %s's views laid out anew %d times in a second, left as they are (a bug)"
+               (buffer-name session) agent-ui-pane-rebuild-limit))
+    (when may
+      (with-current-buffer session
+        (setq agent-ui--pane-stopped nil)))
+    may))
+
 (defun agent-ui--pane-sync-window (window session)
   "SESSION's Agent UI in WINDOW's pane as it should be: its views in a grid
-below it (made again if they aren't), or none. Non-nil if they're shown."
+below it (made again if they aren't), or none. Non-nil if they're shown.
+In place: the views as when last planned, shown as planned (those left out
+for want of room too: see THE LAYOUT)."
   (let ((views (agent-ui--pane-views session))
         (cells (agent-ui--pane-cells (window-frame window) session)))
     (if (and cells
-             (seq-set-equal-p (mapcar #'window-buffer cells) views)
+             (seq-set-equal-p views (buffer-local-value 'agent-ui--pane-wanted session))
              (agent-ui--pane-in-place-p window cells))
         (progn
           (agent-ui--pane-decorate window cells)
@@ -918,14 +1084,21 @@ below it (made again if they aren't), or none. Non-nil if they're shown."
           ;; As high as what it shows needs now (views closed: less).
           (agent-ui--pane-fit window session)
           (agent-ui--pane-tops cells)
+          ;; Its pane resized: planned again soon.
+          (agent-ui--pane-resized window session)
           t)
-      (when cells
-        (agent-ui--pane-detach (window-frame window) session))
-      (if views
-          (and (agent-ui--pane-attach window views) t)
-        (when (eq (window-parameter window 'delete-window) #'agent-ui--pane-delete-session-window)
-          (set-window-parameter window 'delete-window nil))
-        nil))))
+      (cond
+       ;; Laid out anew too often: a loop, stopped, its windows as they are.
+       ((and (or cells views) (not (agent-ui--pane-rebuild-p session)))
+        (and cells t))
+       (t
+        (when cells
+          (agent-ui--pane-detach (window-frame window) session))
+        (if views
+            (and (agent-ui--pane-attach window views) t)
+          (when (eq (window-parameter window 'delete-window) #'agent-ui--pane-delete-session-window)
+            (set-window-parameter window 'delete-window nil))
+          nil))))))
 
 (defun agent-ui--pane-sync (&optional frame)
   "FRAME's (the selected one's) sessions' panes as they should be (see

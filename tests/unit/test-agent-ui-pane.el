@@ -673,3 +673,189 @@ redraw): a better one made, once; not again until the views change."
             (agent-ui--pane-settle (selected-window) session)
             (should (= rebuilt 1)))
         (advice-remove 'agent-ui--pane-attach 'test-rebuilt)))))
+
+(ert-deftest agent-ui-pane/scored-as-cut-at-its-most ()
+  "Views needing more than the most Agent UI takes: its columns cut there,
+each line they hide a line more. Three views of 21, 25 and 39 lines in 33
+at most, 205 columns: three columns (6 lines hidden), not two of 46 and 39
+(19 hidden) as when the cut was left out. Nothing cut: as before."
+  (should (equal (agent-ui--pane-key '(46 39) 33) '(52.0 0 2)))
+  (should (equal (agent-ui--pane-key '(21 25 39) 33) (list (+ 33 (/ 20.0 3) 6) 20 3)))
+  ;; Nothing cut: the height and room left empty together, as before.
+  (should (equal (agent-ui--pane-key '(10 6) 33) '(12.0 4 2)))
+  (let ((plan (agent-ui--pane-plan '(20.76 25.24 39.12) '(40 80 40) 205 33)))
+    (should (= (length (car plan)) 3))
+    ;; Its height: the tallest column's, uncut (Agent UI cuts it).
+    (should (= (nth 2 plan) 39.12)))
+  ;; The search finds three too.
+  (should (= (length (car (agent-ui--pane-search '(20.76 25.24 39.12) '(40 80 40) 205 33 nil))) 3)))
+
+(ert-deftest agent-ui-pane/laid-out-again-when-its-pane-is-resized ()
+  "Its pane resized another way than by tiling (a pane beside it closed or
+split, the frame resized): its views planned again for its room once the
+resizing stops, each change moving it; laid out again if their columns
+don't fit or a layout is better (two views stacked in 40 columns, side by
+side in 80, stacked again in 40). Not for a change of what they show, nor
+the border between the conversation and them moved."
+  (+test-aup
+    (let* ((window (selected-window))
+           (other (split-window window nil 'right))
+           (side-by-side (lambda ()
+                           (pcase-let ((`(,a ,b) (agent-ui--pane-cells (selected-frame))))
+                             (= (window-top-line a) (window-top-line b)))))
+           (replans (lambda ()
+                      (seq-count (lambda (timer) (eq (timer--function timer) #'agent-ui--pane-replan-now))
+                                 timer-list))))
+      (unwind-protect
+          (progn
+            (+test-aup-show name)
+            (+test-aup-show (agent-ui-sub-canvas name "tests"))
+            (agent-ui--pane-fit-now)
+            (should (= (window-total-width window) 40))
+            (should (= (length (agent-ui--pane-cells (selected-frame))) 2))
+            (should-not (funcall side-by-side))
+            ;; What they show changed, the border above them moved: no
+            ;; plan again.
+            (agent-ui-show '(:id "y" :type "text" :text "more") :canvas name)
+            (agent-ui--pane-fit-now)
+            (window-resize (window-next-sibling window) 1)
+            (agent-ui--pane-sync)
+            (should (= (funcall replans) 0))
+            ;; The pane beside it closed (not by tiling): 80 columns. Planned
+            ;; again once the resizing stops, not at once.
+            (delete-window other)
+            (agent-ui--pane-sync)
+            (should (= (window-total-width window) 80))
+            (should-not (funcall side-by-side))
+            (should (= (funcall replans) 1))
+            ;; Another change: the same plan, moved.
+            (agent-ui--pane-resized window session)
+            (should (= (funcall replans) 1))
+            (+test-timers-run 0.3)
+            (should (= (funcall replans) 0))
+            (should (= (length (agent-ui--pane-cells (selected-frame))) 2))
+            (should (funcall side-by-side))
+            (should (equal (buffer-local-value 'agent-ui--pane-planned-room session)
+                           (agent-ui--pane-room window)))
+            ;; Synced again, the room as planned: nothing more.
+            (agent-ui--pane-sync)
+            (should (= (funcall replans) 0))
+            ;; Narrowed again (the pane split): side by side no longer fits.
+            (split-window (window-parent window) nil 'right)
+            (agent-ui--pane-sync)
+            (should (= (window-total-width window) 40))
+            (+test-timers-run 0.3)
+            (should (= (length (agent-ui--pane-cells (selected-frame))) 2))
+            (should-not (funcall side-by-side)))
+        (when (timerp agent-ui--pane-resize-timer)
+          (cancel-timer agent-ui--pane-resize-timer))
+        (setq agent-ui--pane-resize-timer nil
+              agent-ui--pane-to-replan nil)))))
+
+(ert-deftest agent-ui-pane/resized-from-a-view-keeps-it-selected ()
+  "Laid out again for its pane's room while a view is selected: that view
+selected again after, in its new window."
+  (+test-aup
+    (let* ((window (selected-window))
+           (other (split-window window nil 'right)))
+      (+test-aup-show name)
+      (+test-aup-show (agent-ui-sub-canvas name "tests"))
+      (select-window (get-buffer-window (+test-aup-canvas name "tests")))
+      (delete-window other)
+      (agent-ui--pane-sync)
+      (agent-ui--pane-replan-now)
+      (pcase-let ((`(,a ,b) (agent-ui--pane-cells (selected-frame))))
+        (should (= (window-top-line a) (window-top-line b))))
+      (should (eq (window-buffer (selected-window)) (+test-aup-canvas name "tests")))
+      (should (agent-ui-pane-window-p (selected-window))))))
+
+(defun +test-aup-wide-three (name)
+  "Three views on NAME's session: its own, code (a diff: 80 columns at
+least), metrics."
+  (agent-ui-show '(:id "x" :type "text" :text "words") :canvas name)
+  (agent-ui-show '(:id "d" :type "diff" :diff "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-a\n+b\n")
+                 :canvas (agent-ui-sub-canvas name "code"))
+  (agent-ui-show '(:id "y" :type "text" :text "more words") :canvas (agent-ui-sub-canvas name "metrics")))
+
+(defmacro +test-aup-counting (var &rest body)
+  "BODY with VAR counting the windows split and deleted."
+  (declare (indent 1))
+  `(let* ((,var 0)
+          (count (lambda (&rest _) (cl-incf ,var))))
+     (advice-add 'split-window :before count '((name . test-counting)))
+     (advice-add 'delete-window :before count '((name . test-counting)))
+     (unwind-protect (progn ,@body)
+       (advice-remove 'split-window 'test-counting)
+       (advice-remove 'delete-window 'test-counting))))
+
+(ert-deftest agent-ui-pane/views-left-out-for-want-of-room ()
+  "A pane too narrow for a wide view (80 columns, of three): the other two
+shown, it left out; that layout in place, no window changed at each sync
+(each rebuilt it: a window change, syncing again in the same redisplay,
+Emacs frozen); the pane widened: all three, once the resizing stops."
+  (let ((size (cons (frame-width) (frame-height))))
+    (unwind-protect
+        (+test-aup
+          (set-frame-size nil 120 40)
+          (let* ((window (selected-window))
+                 (other (split-window window 60 'right)))
+            (+test-aup-wide-three name)
+            (agent-ui--pane-sync)
+            (should (= (window-total-width window) 60))
+            (should (equal (+test-aup-cells)
+                           (mapcar #'agent-ui-canvas-buffer-name
+                                   (list name (agent-ui-sub-canvas name "metrics")))))
+            (+test-aup-counting changes
+              (dotimes (_ 5)
+                (agent-ui--pane-sync))
+              (agent-ui--pane-fit-now)
+              (should (= changes 0)))
+            (should (buffer-local-value 'agent-ui--pane-wanted session))
+            ;; Widened: all three, once the resizing stops.
+            (delete-window other)
+            (agent-ui--pane-sync)
+            (should (= (window-total-width window) 120))
+            (agent-ui--pane-replan-now)
+            (should (= (length (agent-ui--pane-cells (selected-frame))) 3))
+            ;; Narrowed again: code left out again, at once (its columns
+            ;; don't fit).
+            (split-window (window-parent window) 60 'right)
+            (agent-ui--pane-sync)
+            (agent-ui--pane-replan-now)
+            (should (= (length (agent-ui--pane-cells (selected-frame))) 2))
+            (+test-aup-counting changes
+              (agent-ui--pane-sync)
+              (should (= changes 0)))))
+      (set-frame-size nil (car size) (cdr size)))))
+
+(ert-deftest agent-ui-pane/a-rebuild-loop-stopped ()
+  "A layout its sync never takes as in place (a bug): rebuilt at most
+`agent-ui-pane-rebuild-limit' times a second, then left as it is, said once;
+rebuilt again a second later."
+  (+test-aup
+    (let ((said nil))
+      (+test-aup-show name)
+      (+test-aup-show (agent-ui-sub-canvas name "tests"))
+      (cl-letf (((symbol-function 'agent-ui--pane-in-place-p) #'ignore)
+                ((symbol-function 'message) (lambda (format &rest args) (push (apply #'format format args) said))))
+        (with-current-buffer session
+          (setq agent-ui--pane-rebuilds nil))
+        (+test-aup-counting changes
+          (dotimes (_ 50)
+            (agent-ui--pane-sync))
+          (let ((stopped changes))
+            ;; Each rebuild: its windows deleted, made again.
+            (should (> stopped 0))
+            (dotimes (_ 10)
+              (agent-ui--pane-sync))
+            (should (= changes stopped))))
+        (should (= (length (seq-filter (lambda (text) (string-search "laid out anew" text)) said)) 1))
+        (should (= (length (buffer-local-value 'agent-ui--pane-rebuilds session)) agent-ui-pane-rebuild-limit))
+        ;; Its views still shown, as left.
+        (should (= (length (agent-ui--pane-cells (selected-frame))) 2))
+        ;; A second later: rebuilt again.
+        (with-current-buffer session
+          (setq agent-ui--pane-rebuilds (mapcar (lambda (time) (- time 1.5)) agent-ui--pane-rebuilds)))
+        (+test-aup-counting changes
+          (agent-ui--pane-sync)
+          (should (> changes 0)))))))
