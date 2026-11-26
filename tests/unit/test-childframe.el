@@ -231,6 +231,7 @@ killed. An error in one window is a message: the others still get theirs."
                                            (list dead-frame 'f-dead)))
            (dead-buffer (generate-new-buffer " *test-child*"))
            (+my/childframe--buffers (list (cons 'f-dead dead-buffer)))
+           (+my/childframe--listed nil)
            (frame-live (symbol-function 'frame-live-p))
            (invisible (symbol-function 'make-frame-invisible)))
       (delete-window closed)
@@ -256,6 +257,51 @@ killed. An error in one window is a message: the others still get theirs."
       (should-not (buffer-live-p dead-buffer))
       (should-not +my/childframe--buffers)
       (should (= (+test-messages "^Test: Boom$") 1)))))
+
+(ert-deftest childframe/sync-deletes-frames-left-behind ()
+  "A frame its list held and no longer does (dropped without being deleted)
+is deleted at the next sync, not left on the screen; another feature's frames
+and those still held are left alone."
+  (+test-with-reset
+    (let* ((window (selected-window))
+           (+test-childframe--frames (list (list window 'f-kept) (list window 'f-lost)))
+           (+my/childframe--listed (list (cons 'f-other 'other-list)))
+           (+my/childframe--buffers nil)
+           (deleted nil)
+           (frame-live (symbol-function 'frame-live-p)))
+      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                ((symbol-function 'frame-live-p)
+                 (lambda (f) (if (symbolp f) t (funcall frame-live f))))
+                ((symbol-function '+my/childframe-delete) (lambda (f) (push f deleted))))
+        (+my/childframe-sync '+test-childframe--frames #'always #'ignore "Test")
+        (should-not deleted)
+        (should (equal (alist-get 'f-lost +my/childframe--listed) '+test-childframe--frames))
+        ;; Dropped by other code, the frame still there.
+        (setq +test-childframe--frames (list (list window 'f-kept)))
+        (+my/childframe-sync '+test-childframe--frames #'always #'ignore "Test")
+        (should (equal deleted '(f-lost)))
+        (should-not (assq 'f-lost +my/childframe--listed))
+        (should (assq 'f-kept +my/childframe--listed))
+        (should (assq 'f-other +my/childframe--listed))))))
+
+(ert-deftest childframe/sync-keeps-what-hooks-added ()
+  "An entry added to the list while a frame is deleted (its hooks ran other
+code) stays: the list isn't set back to what it was before."
+  (+test-with-reset
+    (let* ((main (selected-window))
+           (closed (split-window nil nil 'right))
+           (+test-childframe--frames (list (list closed 'f-closed)))
+           (+my/childframe--listed nil)
+           (+my/childframe--buffers nil)
+           (frame-live (symbol-function 'frame-live-p)))
+      (delete-window closed)
+      (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                ((symbol-function 'frame-live-p)
+                 (lambda (f) (if (symbolp f) t (funcall frame-live f))))
+                ((symbol-function '+my/childframe-delete)
+                 (lambda (_) (push (list main 'f-new) +test-childframe--frames))))
+        (+my/childframe-sync '+test-childframe--frames #'ignore #'ignore "Test"))
+      (should (equal +test-childframe--frames (list (list main 'f-new)))))))
 
 (ert-deftest childframe/soon-once ()
   "After this redisplay, once however often asked; and again later."

@@ -57,6 +57,10 @@ PARAMETERS): not given back.")
   "(FRAME . PARAMETERS) for each frame `+my/childframe-make' made: those it was
 made with but `+my/childframe--laid-out' (see ITS OWN PARAMETERS).")
 
+(defvar +my/childframe--listed nil
+  "(FRAME . LIST) for each frame a feature's list (a symbol) has held, as
+`+my/childframe-sync' saw it (see LEFT BEHIND).")
+
 (defun +my/childframe-make (parent name &optional parameters)
   "A child frame of PARENT (see A FRAME), its buffer \" *NAME*\". PARAMETERS,
 an alist, are added to its parameters or replace them. Other code isn't told
@@ -132,7 +136,8 @@ get back their own values of the parameters it set (see ITS OWN PARAMETERS)."
 (defun +my/childframe--deleted-h (frame)
   "Kill the buffer of FRAME, deleted, if `+my/childframe-make' made it; forget
 its own parameters."
-  (setq +my/childframe--own (assq-delete-all frame +my/childframe--own))
+  (setq +my/childframe--own (assq-delete-all frame +my/childframe--own)
+        +my/childframe--listed (assq-delete-all frame +my/childframe--listed))
   (when-let* ((entry (assq frame +my/childframe--buffers)))
     (setq +my/childframe--buffers (delq entry +my/childframe--buffers))
     (when (buffer-live-p (cdr entry))
@@ -178,23 +183,42 @@ lays out the window's frame, making it if the window has none); the frames of
 windows that no longer want one are hidden, those of closed windows deleted,
 dead ones forgotten (their buffers killed).
 An error in SHOW is a message, after LABEL: the other windows still get theirs."
-  (let ((wanted (+my/childframe-windows wants)))
-    (set frames
-         (cl-remove-if (lambda (entry)
-                         (pcase-let ((`(,window ,frame) entry))
-                           (cond ((not (frame-live-p frame))
-                                  (+my/childframe--deleted-h frame)
-                                  t)
-                                 ((memq window wanted) nil)
-                                 ((window-live-p window)
-                                  (make-frame-invisible frame t)
-                                  nil)
-                                 (t (+my/childframe-delete frame) t))))
-                       (symbol-value frames)))
+  (let ((wanted (+my/childframe-windows wants))
+        (gone nil))
+    ;; Deleting a frame runs other code's hooks (`delete-frame-functions',
+    ;; `kill-buffer-hook'...): the list is taken as it is after them, the
+    ;; entries gone out of it, not set back to what it was before.
+    (dolist (entry (symbol-value frames))
+      (pcase-let ((`(,window ,frame) entry))
+        (cond ((not (frame-live-p frame))
+               (+my/childframe--deleted-h frame)
+               (push entry gone))
+              ((memq window wanted))
+              ((window-live-p window) (make-frame-invisible frame t))
+              (t (+my/childframe-delete frame) (push entry gone)))))
+    (set frames (cl-remove-if (lambda (entry) (memq entry gone)) (symbol-value frames)))
+    (+my/childframe--delete-left-behind frames)
     (dolist (window wanted)
       (condition-case err
           (funcall show window)
-        (error (message "%s: %s" label (error-message-string err)))))))
+        (error (message "%s: %s" label (error-message-string err)))))
+    (dolist (entry (symbol-value frames))
+      (unless (assq (nth 1 entry) +my/childframe--listed)
+        (push (cons (nth 1 entry) frames) +my/childframe--listed)))))
+
+;; LEFT BEHIND
+;; A frame out of its feature's list is out of its sync's reach: still on
+;; the screen, it stayed there, over whatever window came there (the error
+;; stripe over agent-shell, Agent UI, Beads... with the file's window long
+;; closed). Each sync deletes the frames its list held and no longer does.
+(defun +my/childframe--delete-left-behind (frames)
+  "Delete the frames FRAMES (a symbol) held and no longer holds (see LEFT
+BEHIND)."
+  (pcase-dolist (`(,frame . ,list) (copy-sequence +my/childframe--listed))
+    (when (and (eq list frames)
+               (not (cl-find frame (symbol-value frames) :key #'cadr)))
+      (setq +my/childframe--listed (assq-delete-all frame +my/childframe--listed))
+      (+my/childframe-delete frame))))
 
 (defun +my/childframe-soon (timer function)
   "Call FUNCTION right after this redisplay (frames can't be made during it),
