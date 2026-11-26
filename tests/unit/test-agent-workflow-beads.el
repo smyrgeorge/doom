@@ -134,6 +134,36 @@ read: agent-workflow-runs/its-concurrency-for-every-agent ran for minutes."
                    '("agent-workflow update demo-1 --append-notes one"
                      "agent-workflow update demo-1 --append-notes two")))))
 
+(ert-deftest agent-workflow-beads/a-wait-runs-nothing-else ()
+  "While a read or Emacs quitting waits for the writes, nothing else runs,
+as with a synchronous bd: no timer, no other process's output (an agent's
+turn ending). It did: Emacs quitting saved its runs with their agents'
+turns over meanwhile, not interrupted (agent-workflow-runs/
+back-after-emacs-stopped, on Linux's slower bd)."
+  (+test-awb 0.3
+    (let* ((timer-ran nil)
+           (output nil)
+           (other (make-process :name "awb-other" :command '("sh" "-c" "echo other; sleep 2")
+                                :connection-type 'pipe :noquery t
+                                :filter (lambda (_process string) (push string output))))
+           (timer (run-at-time 0 nil (lambda () (setq timer-ran t)))))
+      (unwind-protect
+          (progn
+            (agent-workflow--bd-write project "demo-1" "--status" "open")
+            (agent-workflow--bd-write project "demo-1" "--append-notes" "x")
+            (should (agent-workflow-bd-writes-wait 10))
+            (should (= (length (+test-awb--log log)) 2))
+            (should-not timer-ran)
+            (should-not output)
+            ;; Both there, once Emacs reads again.
+            (let ((end (+ (float-time) 5)))
+              (while (and (not (and timer-ran output)) (< (float-time) end))
+                (accept-process-output nil 0.05)))
+            (should timer-ran)
+            (should output))
+        (cancel-timer timer)
+        (delete-process other)))))
+
 (ert-deftest agent-workflow-beads/a-failed-write-said-the-rest-written ()
   (+test-awb 0
     (let ((said nil))

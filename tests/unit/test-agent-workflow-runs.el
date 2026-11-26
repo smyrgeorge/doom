@@ -869,8 +869,12 @@ stopped, asked; go on with more: continued; kept with the run."
       (should (+test-awr--wait
                (lambda () (seq-some (lambda (prompt) (string-match-p "\\`Your job, review, was interrupted (its run's budget was used up" prompt))
                                     (+test-awr--prompts "budget")))))
-      ;; Its time: counted while it ran, not while it waited for you.
-      (should (> (plist-get (agent-workflow-run-spent-now run) :time) 0))
+      ;; Its time: counted while it ran, not while it waited for you. What
+      ;; it spent says it to the second: this run, quick, may have run
+      ;; under half of one, 0 there (bd's writes no longer in its way:
+      ;; doom-8aj; it failed so on Linux).
+      (should (> (agent-workflow-run-active run) 0))
+      (should (natnump (plist-get (agent-workflow-run-spent-now run) :time)))
       ;; Kept with it.
       (let ((saved (with-temp-buffer
                      (insert-file-contents (expand-file-name "state.json" (agent-workflow-run-dir run)))

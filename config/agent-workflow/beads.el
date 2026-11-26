@@ -138,16 +138,21 @@ from its sentinel or from a wait, whichever comes first."
 
 (defun agent-workflow-bd-writes-wait (&optional timeout)
   "Wait until the engine's writes queued are written, TIMEOUT seconds at
-most (default 30): non-nil if they are. A write over is ended here, not
-left to its sentinel: `accept-process-output' on a process that has
-exited returns at once, its sentinel not run (it ran at 100% CPU, the
-writes never over, until its time was up)."
+most (default 30): non-nil if they are. Only bd's output is read, no
+timer run: as a synchronous bd, nothing else happens meanwhile (a read in
+the middle of the engine's code; Emacs quitting, its runs being saved).
+Reading every process's let an agent's turn end in that wait (doom-8aj's
+first version: Emacs quitting, the run saved with its agent's turn over,
+not interrupted). A write over is ended here, not left to its sentinel:
+`accept-process-output' on a process that has exited returns at once, its
+sentinel not run (it ran at 100% CPU, the writes never over, until its
+time was up)."
   (let ((end (+ (float-time) (or timeout 30))))
     (while (and (or agent-workflow--bd-process agent-workflow--bd-queue) (< (float-time) end))
       (let ((process agent-workflow--bd-process))
         (cond ((null process) (agent-workflow--bd-next))
-              ((process-live-p process) (accept-process-output process 0.05))
-              (t (accept-process-output process 0) ; what it wrote last, read
+              ((process-live-p process) (accept-process-output process 0.05 nil 1))
+              (t (accept-process-output process 0 nil 1) ; what it wrote last, read
                  (agent-workflow--bd-ended process)))))
     (not (or agent-workflow--bd-process agent-workflow--bd-queue))))
 
