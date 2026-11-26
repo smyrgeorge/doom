@@ -9,6 +9,10 @@
 ;; and shows the file there (see SELECTION in selection.el).
 (defvar +my/treemacs--follow-timer nil)
 
+(defvar +my/treemacs--waiting nil
+  "Non-nil while treemacs waits for a process of its own (see NOT IN THE
+MIDDLE OF TREEMACS'S WORK).")
+
 (defun +my/treemacs-follow-project-soon (&rest _)
   (when (timerp +my/treemacs--follow-timer)
     (cancel-timer +my/treemacs--follow-timer))
@@ -17,14 +21,29 @@
          0.1 nil
          (lambda ()
            (setq +my/treemacs--follow-timer nil)
-           (let ((buffer (window-buffer (selected-window))))
-             (unless (minibufferp buffer) ; e.g. M-x: stay
-               ;; Treemacs itself (selected) and the home directory are
-               ;; skipped there, like other buffers without a project.
-               (when (bound-and-true-p treemacs-project-follow-mode)
-                 (with-current-buffer buffer
-                   (ignore-errors (treemacs--do-follow-project))))
-               (+my/treemacs--follow-file buffer)))))))
+           (if +my/treemacs--waiting
+               (+my/treemacs-follow-project-soon) ; see NOT IN THE MIDDLE
+             (let ((buffer (window-buffer (selected-window))))
+               (unless (minibufferp buffer) ; e.g. M-x: stay
+                 ;; Treemacs itself (selected) and the home directory are
+                 ;; skipped there, like other buffers without a project.
+                 (when (bound-and-true-p treemacs-project-follow-mode)
+                   (with-current-buffer buffer
+                     (ignore-errors (treemacs--do-follow-project))))
+                 (+my/treemacs--follow-file buffer))))))))
+
+;; NOT IN THE MIDDLE OF TREEMACS'S WORK
+;; Treemacs draws a folder once its process (pfuture's) has said which of
+;; its folders show as one (`treemacs-collapse-dirs'), and Emacs runs timers
+;; while it waits for it. The follow (above) ran there, in the middle of a
+;; refresh (Emacs focused, a git change): treemacs follows nothing then
+;; (`treemacs--ready-to-follow' nil) and its tree is half drawn, so the file
+;; wasn't shown, yet was taken as followed, and not followed again until
+;; another buffer was shown. Now the follow waits until treemacs is done.
+(defadvice! +my/treemacs-waiting-a (fn &rest args)
+  :around #'pfuture-await-to-finish
+  (let ((+my/treemacs--waiting t))
+    (apply fn args)))
 
 ;; Treemacs followed the current file a moment after any change to Emacs's
 ;; buffer list (see above): only on a change of buffer now.

@@ -191,6 +191,27 @@ next file is selected, and shown."
       (should (+test-wait-for (lambda () (equal (+test-treemacs--highlighted) "f02.txt")) 3))
       (should (+test-wait-for (lambda () (+test-treemacs--shows-p "f02.txt")) 3)))))
 
+(ert-deftest e2e-treemacs/the-follow-waits-for-a-refresh ()
+  "Another file opened as the sidebar refreshes, treemacs's process slow (as
+on a busy runner): the follow, due while the refresh waits for it, comes
+once it's done, the file selected. It ran inside that wait, where treemacs
+follows nothing: the file, taken as followed, never was (CI: the setup's
+follow, a refresh as its Emacs started)."
+  (skip-unless treemacs-python-executable)
+  (+test-treemacs
+    (let ((slow (+test-tmp-file "slow-python")))
+      (with-temp-file slow
+        (insert "#!/bin/sh\nsleep 0.5\nexec "
+                (shell-quote-argument treemacs-python-executable) " \"$@\"\n"))
+      (set-file-modes slow #o755)
+      (find-file (+test-treemacs--file 2))
+      (+my/treemacs-follow-project-soon)
+      (let ((treemacs-python-executable slow))
+        (+my/treemacs-refresh-all))
+      (should (+test-wait-for (lambda () (and (equal (+test-treemacs--selected) "f02.txt")
+                                              (equal (+test-treemacs--highlighted) "f02.txt")))
+                              3)))))
+
 (ert-deftest e2e-treemacs/a-refresh-after-its-project-switched-under-it ()
   "The sidebar showing two projects, its cursor on a file of the first, which
 leaves the workspace without the tree redrawn (as the last workspace's tree,
