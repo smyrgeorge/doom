@@ -19,6 +19,30 @@ On top of Doom it adds:
 
 Keys use `Cmd` on macOS and `Ctrl` on Linux, as each system's apps do.
 
+## Why Emacs
+
+Coding agents mostly come with an app or a terminal of their own. Here they work inside the editor, next to everything
+else:
+
+- **One place.** The agent's conversation, what it shows you, the project's issues, Git, the terminal, PDFs and
+  previews share one window and one set of keys. There's nothing to switch to.
+- **Everything is text.** A session, a canvas, a run's pane, an issue: each is a buffer you search, copy and move
+  through like any file.
+- **A dynamic environment.** Emacs is less an editor than a Lisp environment that happens to edit text: every part of
+  it can be changed while it runs, and almost anything can be built in it. This config builds a window manager, a
+  three-way merge, a canvas for your agent and a crew of agents, all in Lisp. The agent works the same way: a project
+  panel is a Lisp file it can write and open at once, and a new kind of element it makes is loaded without a restart.
+- **A harness.** Emacs runs and talks to anything: processes, scripts, servers, agents over ACP. And the agents reach
+  back into it, through MCP tools and shell commands (`cmd/agent-ui`). So it can be the glue between your agents, your
+  code, your workflows and your tools, and what's built for one generalizes to the others. Agent UI gives any agent a
+  UI, Agent workflow runs agents as steps beside scripts and Lisp, and Agent workspace has several of them work
+  together, each built from the same parts.
+- **A server.** Emacs runs as a server, and `emacsclient` controls it from anywhere: a terminal, a script, an agent
+  (that's how `cmd/agent-ui` reaches it), or another machine, over SSH or Emacs's TCP server. Your editor, its sessions
+  and their agents keep running, and you reach them from where you are.
+- **Any agent.** agent-shell speaks ACP, so Claude Code, Codex or Gemini run the same way, with the same views.
+- **Yours.** Free software: a config in Git, tested on every push, on macOS and Linux, in a GUI or a terminal.
+
 ## Next steps
 
 - [ ] Agent UI in a repository of its own, an Emacs library that works without this config
