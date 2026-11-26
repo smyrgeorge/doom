@@ -38,6 +38,7 @@ Set these in `config.el`:
   run. Other agents' are named the same way (`Codex`, `Gemini`...).
 - A session starts in insert state. Its prompt is empty but for what you chose: the selection, dired's marked files (or
   those in the selection there), or the image you're on.
+- A session's mode line shows Nyan Cat for where you are in the conversation. Other buffers' mode lines don't.
 - Sessions are told they run in Emacs. `path:line` references become links, images show inline in the theme's colours,
   and the agent can ask Emacs what you're looking at.
 - Every agent is told the same. It's in the agent's system prompt where it takes one from Emacs, as Claude Code does.

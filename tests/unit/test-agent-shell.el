@@ -445,6 +445,19 @@ viewport's), on elsewhere as ever."
       (funcall mode)
       (should-not (+my/agent-shell-no-indent-guides-p)))))
 
+(ert-deftest agent-shell/nyan-cat-in-a-session-alone ()
+  "Nyan Cat in a session's mode line (`nyan-mode' non-nil in its buffer
+alone), the mode itself never turned on: other buffers keep their mode line."
+  (should (memq #'+my/agent-shell-nyan-h agent-shell-mode-hook))
+  (with-temp-buffer
+    (+my/agent-shell-nyan-h)
+    (should (local-variable-p 'nyan-mode))
+    (should nyan-mode))
+  (should-not (default-value 'nyan-mode))
+  (with-temp-buffer
+    (should-not nyan-mode))
+  (should-not (bound-and-true-p nyan-animation-timer)))
+
 ;; ====== CONTEXT FROM THE CURRENT BUFFER ======
 
 (ert-deftest agent-shell/context-from-a-buffer-with-dated-lines ()

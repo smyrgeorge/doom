@@ -65,6 +65,10 @@
 (package! acp :pin "041470ecff003630e03f061584d41071c36f0124")
 (package! agent-shell :pin "7c107f28293b02d058b622e4df6dc565b202be7a")
 
+;; Nyan Cat in a session's mode line, where you are in the conversation
+;; (config/agent-shell/nyan.el); not in other buffers.
+(package! nyan-mode)
+
 ;; YAML read as Lisp data: the agent workflows' files (config/agent-workflow/
 ;; workflows.el). Pinned: the commit they were checked with
 ;; (tests/unit/test-agent-workflow-files.el).
