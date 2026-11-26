@@ -78,7 +78,7 @@ package's own system prompt too (said twice)."
         (should (string-search "with your own tool for asking the user" (+my/agent-ui-context)))))))
 
 (ert-deftest agent-ui-config/its-mcp-tools ()
-  (should (eq agent-ui-mcp +my/agent-ui-mcp))
+  (should agent-ui-mcp)
   (should (seq-find (lambda (s) (equal (alist-get 'name s) "agent-ui")) agent-shell-mcp-servers)))
 
 ;; ====== MERMAID ======

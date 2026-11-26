@@ -36,11 +36,8 @@
 
 ;; MCP
 ;; Each agent-shell session also gets Agent UI as MCP tools (the package's
-;; agent-ui-mcp.el, `agent-ui-mcp'). (setq +my/agent-ui-mcp nil) in
-;; config.el: none.
-(defvar +my/agent-ui-mcp t
-  "Agent UI as MCP tools in each agent-shell session (see MCP above).")
-(setq agent-ui-mcp +my/agent-ui-mcp)
+;; agent-ui-mcp.el, `agent-ui-mcp', on by default). (setq agent-ui-mcp nil)
+;; in config.el, before this file loads: none.
 
 ;; TYPES THE AGENT MAKES
 ;; Staged ones wait in Doom's cache (not loaded again after a restart);

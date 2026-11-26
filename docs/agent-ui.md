@@ -62,8 +62,8 @@ A project's panels are in `.agent-ui/panels/` in its repository. This config has
 
 Every session is told about Emacs by this config ([agent-shell](agent-shell.md)), for any agent, including the ones
 that take no system prompt. Agent UI's paragraph is part of that, so the package's own system prompt is off
-(`agent-ui-system-prompt`). Each session also gets Agent UI's MCP tools; `(setq +my/agent-ui-mcp nil)` in `config.el`
-turns them off.
+(`agent-ui-system-prompt`). Each session also gets Agent UI's MCP tools; `(setq agent-ui-mcp nil)` in `config.el`,
+before `config/agent-ui` loads, turns them off.
 
 ## Diagrams
 
