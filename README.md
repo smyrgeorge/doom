@@ -5,6 +5,10 @@
 My Emacs configuration, built on [Doom Emacs](https://github.com/doomemacs/core) with Vim keys. It runs on **macOS**
 and **Linux** with **Emacs 31**, as a GUI app or in a terminal (`emacs -nw`).
 
+> [!NOTE]
+> This project is still under development. Features change, and some are still being built (the agent workspace, the
+> agent workflow). See [Next steps](#next-steps).
+
 On top of Doom it adds:
 
 - your coding agent in a pane of its own, with what it shows you under its conversation;
@@ -15,6 +19,13 @@ On top of Doom it adds:
 
 Keys use `Cmd` on macOS and `Ctrl` on Linux, as each system's apps do.
 
+## Next steps
+
+- [ ] Agent UI in a repository of its own, an Emacs library that works without this config
+- [ ] Agent workflow in a repository of its own, an Emacs library that works without this config
+- [ ] Agent workspace in a repository of its own, an Emacs library that works without this config
+- [ ] Expand what the agent workspace can do
+
 ## A tour
 
 Every feature has an example on files of its own: `M-x +my/example-NAME` ([Examples](docs/examples.md)). `SPC` is the
@@ -23,8 +34,8 @@ leader key, and `SPC m` holds the current mode's keys.
 ### Agent UI
 
 Your agent shows its work under its conversation: a checklist of its steps, test results filling in, a build's
-progress, charts. Each view is updated in place as the agent works, whichever agent it is
-([more](docs/agent-ui.md)).
+progress, charts. Each view is updated in place as the agent works, whichever agent it is. It's built on top of
+[agent-shell](https://github.com/xenodium/agent-shell), which runs the agent in Emacs ([more](docs/agent-ui.md)).
 
 | Key | Action |
 |---|---|
@@ -40,7 +51,8 @@ progress, charts. Each view is updated in place as the agent works, whichever ag
 
 A workflow describes the work on an issue the way GitHub Actions does: jobs, the order they run in, and their steps. A
 step is a script, Lisp, or an agent with its own instructions. Each run works in its own worktree, and its pane follows
-it live ([more](docs/agent-workflow.md)).
+it live. Its agents are [agent-shell](https://github.com/xenodium/agent-shell) sessions
+([more](docs/agent-workflow.md)).
 
 | Key | Action |
 |---|---|
@@ -55,8 +67,8 @@ it live ([more](docs/agent-workflow.md)).
 ### Agent workspace
 
 Several agents work on one project at once, as a crew. Each has a name, a role and a colour, and works in its own git
-worktree. The crew's app shows the project's issues, the stage where the agents work, and the room where they talk
-([more](docs/agent-workspace.md)).
+worktree. The crew's app shows the project's issues, the stage where the agents work, and the room where they talk.
+Each agent is an [agent-shell](https://github.com/xenodium/agent-shell) session ([more](docs/agent-workspace.md)).
 
 | Key | Action |
 |---|---|
@@ -85,7 +97,7 @@ one file. Slow queries load on their own without freezing Emacs. Your agent can 
 
 ![A project panel: this Mac's CPU, every second](examples/panel.png)
 
-### Tiling
+### Tiling window management
 
 Applications (your agent, the terminal, Magit, previews, drawings) open in a new pane: the main one on the left, the
 others stacked on the right. Files open as tabs in the current pane, and a pane closes with its last tab
@@ -293,3 +305,23 @@ test fails it puts the old pins back; `--keep` keeps the new ones, to fix the co
 - [Shell commands](docs/cmd.md): `cmd/diff`, `cmd/agent-ui`, `cmd/agent-workspace`, `cmd/agent-workflow`
 - [Tests](docs/tests.md): unit and end-to-end tests, on macOS and Linux, on each push (GitHub Actions)
 - [Repository layout](docs/layout.md): what each file is for
+
+## Attributions
+
+This config builds on the work of others:
+
+- [GNU Emacs](https://www.gnu.org/software/emacs/), and everyone who has made it what it is.
+- [Doom Emacs](https://github.com/doomemacs/core): the framework under it.
+- [agent-shell](https://github.com/xenodium/agent-shell), with [acp.el](https://github.com/xenodium/acp.el) and
+  [shell-maker](https://github.com/xenodium/shell-maker): your agent in Emacs. Agent UI, Agent workflow and Agent
+  workspace are built on it.
+- [Beads](https://github.com/gastownhall/beads): the issue tracker. [beads.el](https://codeberg.org/ctietze/beads.el)
+  and [vui.el](https://github.com/d12frosted/vui.el) show its issues in Emacs.
+- [Excalidraw](https://github.com/excalidraw/excalidraw) for drawings, [PDF.js](https://github.com/mozilla/pdf.js) for
+  PDFs, [Mermaid](https://github.com/mermaid-js/mermaid) and [mermaid-cli](https://github.com/mermaid-js/mermaid-cli)
+  for diagrams, [MathJax](https://www.mathjax.org) for Agent UI's formulas, and
+  [highlight.js](https://github.com/highlightjs/highlight.js) for code in the Markdown preview.
+- [yaml.el](https://github.com/zkry/yaml.el) reads the workflows' files. [delta](https://github.com/dandavison/delta)
+  and [magit-delta](https://github.com/dandavison/magit-delta) draw diffs.
+  [nyan-mode](https://github.com/TeMPOraL/nyan-mode) puts the cat in a session's mode line.
+- The packages Doom's modules bring: Magit, Vertico, Treemacs, nerd-icons and many more.
