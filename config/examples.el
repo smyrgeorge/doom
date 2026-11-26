@@ -28,7 +28,7 @@
 ;;               conversation, filled in as it works
 ;;   issues      a small project's issues in their list (config/beads.el),
 ;;               tracked with bd
-;;   panel       a project's panel (config/agent-ui/panels.el): this config's
+;;   panel       a project's panel (agent-ui-panels.el): this config's
 ;;               cpu panel, filled every second
 ;;   agent-workspace  an agent crew in its app (config/agent-workspace.el):
 ;;               three stand-in agents, offline, each in its worktree

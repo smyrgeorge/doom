@@ -161,7 +161,7 @@ in it: only that opens it again, its window closed)."
   "Whether a question waits in CANVAS (a run's pane, an agent's canvas)."
   (and (fboundp 'agent-ui-ask-waiting-p)
        (with-current-buffer canvas
-         (seq-some (lambda (key) (agent-ui-ask-waiting-p (agent-ui--entry-element (gethash key agent-ui--entries))))
+         (seq-some (lambda (key) (agent-ui-ask-waiting-p (agent-ui--entry-component (gethash key agent-ui--entries))))
                    agent-ui--order))))
 
 (defun agent-workflow-pane (run &optional show)

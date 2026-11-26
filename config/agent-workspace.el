@@ -368,7 +368,7 @@ does."
 ;;   agent;
 ;; - the stage (config/agent-workspace/stage.el): every agent a pane, in role
 ;;   order; the selected one's open (its session; below it its Agent UI, as in
-;;   any session's pane (config/agent-ui/pane.el): its canvases (its own,
+;;   any session's pane (agent-ui-pane.el): its canvases (its own,
 ;;   ask...) and panels laid out to use the room; v into them (again: the
 ;;   next), V Agent UI taking the whole pane; a question there takes no focus,
 ;;   its hand says it), the others folded to a bar (◫2: its panels). Its line (a
@@ -606,6 +606,6 @@ does."
 ;; ITS AVATAR on its worktree's tabs (see above).
 (add-hook '+my/tabs-prefix-functions #'agent-workspace-tab-prefix)
 
-;; A QUESTION WAITING on an agent's canvas (config/agent-ui/agent.el): its hand
+;; A QUESTION WAITING on an agent's canvas (agent-ui-agent.el): its hand
 ;; raised.
 (add-hook 'agent-ui-question-waiting-functions #'agent-workspace--question-waiting)

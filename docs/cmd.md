@@ -45,7 +45,8 @@ Then `git mergetool -t doom` runs it.
 ## cmd/agent-ui
 
 `cmd/agent-ui` shows things in a coding agent's session, on its canvas: progress bars, checklists, tables. It's made for
-agents, to run from their shell. [Agent UI](agent-ui.md) has the details.
+agents, to run from their shell. It runs the [agent-ui](https://github.com/smyrgeorge/agent-ui) package's own command
+(its `bin/agent-ui`, as Doom built it); [Agent UI](agent-ui.md) has the details.
 
 ```sh
 cmd/agent-ui show '{"id":"build","type":"progress","title":"Build","max":12}'
@@ -55,8 +56,8 @@ cmd/agent-ui show --canvas tests '{"id":"t","type":"table","columns":["Test","Re
                              # another canvas of the session, its own pane
 ```
 
-`cmd/agent-ui-mcp.el` serves the same operations as MCP tools. Each agent-shell session starts it this way:
-`emacs --batch -Q -l cmd/agent-ui-mcp.el -f agent-ui-mcp-main`.
+The agent-ui package's `agent-ui-mcp.el` serves the same operations as MCP tools. Each agent-shell session starts it this way:
+`emacs --batch -Q -l agent-ui-mcp.el -f agent-ui-mcp-main`.
 
 ## cmd/agent-workspace
 

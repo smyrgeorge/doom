@@ -27,7 +27,7 @@
 (declare-function nerd-icons-codicon "nerd-icons")
 ;; The Beads panel's types' look (config/beads/look.el), if it's loaded.
 (defvar +my/beads--types-look)
-;; Agent UI's (config/agent-ui/core.el), loaded before.
+;; Agent UI's (agent-ui-core.el), loaded before.
 (declare-function agent-ui-even-glyphs "agent-ui/core")
 (declare-function agent-ui-svg-image "agent-ui/core")
 (declare-function agent-ui--svg-font "agent-ui/core")

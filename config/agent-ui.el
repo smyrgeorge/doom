@@ -1,157 +1,104 @@
 ;;; $DOOMDIR/config/agent-ui.el -*- lexical-binding: t; -*-
 ;; Agent UI: what a coding agent (yours, in agent-shell) shows you in
-;; Emacs beyond its replies: progress bars, tables, charts, at the bottom of
-;; its session's pane, updated as things change (docs/agent-ui.md).
-;; Loaded from config.el; its code is in config/agent-ui/.
+;; Emacs beyond its replies, at the bottom of its session's pane. Loaded from
+;; config.el. Its own package now (~/dev/agent-ui, packages.el; its docs:
+;; docs/ there); here, this config's layer over it: its look, its keys,
+;; where its files go, the bugs it files, and what it's tied to here
+;; (Beads, Mermaid, tiling, the banner, WebKit).
+
+(require 'agent-ui)
 
 ;; ====== VARIABLES ======
 
-;; ELEMENT TYPES
-;; An element is data: JSON from the agent, a plist here, of a type defined
-;; once with `agent-ui-define' (config/agent-ui/core.el): its properties, a
-;; drawing as text and, optionally, one for the GUI. Its drawing failing shows
-;; the error in its place. Limits keep drawing quick (Emacs has one thread):
-;; `agent-ui-max-chars' (cut at a line's end; a panel's children each, the
-;; panel's frame whole, its lines within `agent-ui-panel-max-chars'),
-;; `agent-ui-max-rows', `agent-ui-max-cell-lines'.
-
-;; THE CANVAS
-;; A buffer per agent session, "Agent UI: NAME" (config/agent-ui/canvas.el):
-;; its elements in the order shown, each redrawn in place when it changes,
-;; `agent-ui-redraw-delay' after (updates within it drawn together); animated
-;; ones every `agent-ui-animation-interval'. In it: g r redraws it, q kills it.
-;; At most `agent-ui-max-elements'. Its top line empty, the cursor there when
-;; it opens: not on its first element's image (a box cursor frames it whole).
-
 ;; IN ITS SESSION'S PANE
-;; A session's Agent UI opens in its session's pane when an element is shown,
-;; without taking the focus (config/agent-ui/pane.el): the pane split, the
-;; conversation on top, Agent UI at the bottom, as high as what it shows
-;; needs (no empty lines under its views), at most half the pane
-;; (`agent-ui-pane-max-share').
-;; Its views (the session's canvas, and its others: ask, tests...) are laid
-;; out there to use the room (config/agent-ui/pane.el, THE LAYOUT): columns,
-;; each a stack of views, as many as fit (`agent-ui-grid-min-width' a view,
-;; `agent-ui-grid-wide-width' showing a wide type), the tallest dealt first
-;; into the emptiest column; laid out again when views open or close. Each view
-;; is a window of its own, with a bar naming it; under them Doom's mode
-;; line (see below); the session's mode line stays under the conversation. q closes a view (killed); a view's window closed (SPC w d)
-;; hides it until an element is shown in it (not updated); SPC m u, in the
-;; session or a view, hides Agent UI for the session or shows it again (a
-;; question shows it anyway). A session in no window (another workspace,
-;; another buffer in its pane): Agent UI waits, shown with it. Tiling lays
-;; the pane out as one, Agent UI's windows in it (config/tiling.el, WINDOWS
-;; ATTACHED TO A PANE). A pane too short for both (`agent-ui-pane-min-lines'
-;; each): the view in a pane of its own. A canvas
-;; without a session (from a shell), a project panel: a tiled pane of its own
-;; (one of tiling's applications).
 ;; Under the views, Doom's mode line (as tall as the windows' beside them),
 ;; saying what Agent UI's bar said (config/editor/modeline.el): what it is,
 ;; its views; no keys.
 (setq agent-ui-pane-mode-line t
       agent-ui-pane-keys nil)
 
-;; SOURCES
-;; An element can follow what changes by itself (config/agent-ui/source.el):
-;; a command Emacs runs for the agent (its output logged for it to read), a
-;; file as it grows, a command polled every so many seconds. Rules turn their
-;; lines into updates: the agent's tool calls run one after another, so a bar
-;; it updated itself would stand still while it waits on a long build.
+;; WHAT THE AGENT IS TOLD
+;; This config tells every session about Emacs itself (config/agent-shell/
+;; context.el: also the agents that take no system prompt), Agent UI's
+;; paragraph among it, after what's there (the theme's line, the project's
+;; issues): not the package's own (`agent-ui-system-prompt'), which would
+;; say it twice. The agent's name (its quick questions' tool) from the
+;; session's config.
+(setq agent-ui-system-prompt nil)
 
-;; IN THE CONVERSATION
-;; agent-shell owns its buffer's text: an element goes there the ways it has
-;; (config/agent-ui/snapshot.el). The agent saves one as an image (cmd/agent-ui
-;; snapshot ID: an SVG in the session's .agent-shell/images/) and links it in
-;; its reply, which agent-shell shows inline and its transcript keeps; a in a
-;; canvas puts the element at point into its session's prompt, as text.
+(defun +my/agent-ui-context ()
+  "Agent UI's paragraph of what a session is told (see above)."
+  (let ((agent-ui-agent-identifier
+         (map-elt (bound-and-true-p +my/agent-shell-context-config) :identifier)))
+    (agent-ui-agent-context)))
+
+(add-hook '+my/agent-shell-context-functions #'+my/agent-ui-context t)
 
 ;; MCP
-;; Each agent-shell session also gets Agent UI as MCP tools, with their
-;; schemas (`agent-shell-mcp-servers'): cmd/agent-ui-mcp.el, run by a batch
-;; Emacs (this one's binary) the agent starts, each call through
-;; cmd/agent-ui. The session's name and directory are passed to it. Its system
-;; prompt then says so. (setq +my/agent-ui-mcp nil) in config.el: none.
+;; Each agent-shell session also gets Agent UI as MCP tools (the package's
+;; agent-ui-mcp.el, `agent-ui-mcp'). (setq +my/agent-ui-mcp nil) in
+;; config.el: none.
 (defvar +my/agent-ui-mcp t
   "Agent UI as MCP tools in each agent-shell session (see MCP above).")
-
-;; KEPT WITH THE SESSION
-;; A session's canvas is saved as it changes, in its .agent-shell/agent-ui/
-;; (by its session id), and comes back when the session is resumed, as it was
-;; (config/agent-ui/persist.el); its sources aren't started again.
-
-;; THE AGENT'S WAY IN
-;; cmd/agent-ui, from the agent's shell: show, update, append, remove... an
-;; element as JSON, the reply as JSON (config/agent-ui/request.el), through
-;; emacsclient. Each agent-shell session starts its agent with
-;; AGENT_UI_SESSION, so its requests go to its own canvas, which closes with
-;; it (config/agent-ui/agent.el); without it, the session working in the
-;; request's directory.
+(setq agent-ui-mcp +my/agent-ui-mcp)
 
 ;; TYPES THE AGENT MAKES
-;; When none of the types fits, the agent writes one (cmd/agent-ui define
-;; FILE: an `agent-ui-define' and its definitions, named after it). It's
-;; checked, compiled and loaded, its example drawn for the agent to see
-;; (config/agent-ui/staging.el), and staged: usable at once, kept only if you
-;; keep it. A message and the canvas's header say so; R in the canvas (M-x
-;; agent-ui-review) lists them (config/agent-ui/review.el): RET its preview
-;; (its example drawn, its code), a keeps it, x discards it (its elements
-;; removed), v its code. Staged ones wait in `agent-ui-staging-directory' (not
-;; loaded again after a restart: the review loads one to preview it); kept ones
-;; go to `agent-ui-kept-directory', in this config (git), loaded at each start,
-;; and an issue is filed for their tests and documentation (in this config's
-;; Beads issues).
+;; Staged ones wait in Doom's cache (not loaded again after a restart);
+;; kept ones go to this config (git), loaded at each start, and an issue
+;; is filed for their tests and documentation (in this config's Beads
+;; issues, `+my/agent-ui-kept-issue' below).
 (setq agent-ui-staging-directory (expand-file-name "agent-ui/staged/" doom-cache-dir)
-      agent-ui-kept-directory (expand-file-name "config/agent-ui/kept/" doom-user-dir))
+      agent-ui-kept-directory (expand-file-name ".agent-ui/kept/" doom-user-dir))
 
-;; IMAGES FROM URLS: downloaded once, kept in Doom's cache.
-(setq agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir))
+;; IMAGES FROM URLS: downloaded once, kept in Doom's cache. Mermaid's
+;; diagrams too, when drawn by the package's own renderer.
+(setq agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir)
+      agent-ui-mermaid-cache-directory (expand-file-name "agent-ui/mermaid/" doom-cache-dir))
 ;; The project panels whose code was let run (by content): kept, not a cache's.
 (setq agent-ui-panel-trust-file (expand-file-name "agent-ui/trusted-panels.eld" doom-data-dir))
 
+;; MERMAID: diagrams drawn by config/mermaid.el's renderer (in the theme's
+;; colours, as the rest of this config's diagrams), not the package's;
+;; drawn again when the theme changes.
+(setq agent-ui-mermaid-render-function #'+my/mermaid-render
+      agent-ui-mermaid-key-function #'+my/mermaid-theme-json)
+(add-hook '+my/mermaid-theme-hook #'agent-ui-mermaid-theme-changed)
+
 ;; BUGS IN AGENT UI
 ;; When Agent UI itself misbehaves (a wrong drawing, an error, a property
-;; missing), from a session in any project: the agent files it (cmd/agent-ui
-;; bug, the MCP tool bug: asking you first), or you do, b on the element in
-;; its canvas (M-x agent-ui-report-bug anywhere). It goes into this config's
-;; Beads issues (a bug, labelled agent-ui), never the project's: found from
-;; Agent UI's code, bd run there (config/beads/file.el). The report carries
-;; the element shown (its JSON, its drawing), a repro from the agent, and the
-;; environment. A similar open bug gets it as a note instead. A message, and
-;; a notification while Emacs isn't in front (config/notify/agent-ui.el).
-;; Without issues there (or bd): nothing filed, the report given back, written
-;; (to the agent; to you, in a buffer, copied), to report by hand.
+;; missing), from a session in any project: the agent files it (bin/agent-ui
+;; bug, the MCP tool bug: asking you first), or you do, b on the component
+;; in its canvas (M-x agent-ui-report-bug anywhere). It goes into this
+;; config's Beads issues (a bug, labelled agent-ui), never the project's
+;; (config/beads/file.el). A message, and a notification while Emacs isn't
+;; in front (config/notify/agent-ui.el). Without issues here (or bd):
+;; nothing filed, the report given back, to report by hand.
 (setq agent-ui-bug-function
-      (lambda (title description library new)
-        (+my/beads-file-bug title description :from library :labels '("agent-ui") :new new)))
-
-;; WHAT THE AGENT IS TOLD
-;; What every session in agent-shell is told (config/agent-shell/context.el)
-;; gets a paragraph on the canvas (`agent-ui-agent-context'): what it's for, the
-;; command, and the skill to read before using it (skills/agent-ui/SKILL.md:
-;; its types, with examples). Only while Emacs runs a server.
+      (lambda (title description _library new)
+        (+my/beads-file-bug title description :from doom-user-dir :labels '("agent-ui") :new new)))
 
 ;; ====== KEY BINDINGS ======
 
-;; A PROJECT'S PANELS (config/agent-ui/panels.el): SPC o u opens one of the
-;; current project's (.agent-ui/panels/), picked from them, in a pane of its
-;; own; SPC o U in the window you're in.
+;; A PROJECT'S PANELS: SPC o u opens one of the current project's
+;; (.agent-ui/panels/), picked from them, in a pane of its own; SPC o U in
+;; the window you're in.
 (map! :leader
       :desc "Project panel"       "o u" #'agent-ui-open-panel
       :desc "Project panel, here" "o U" #'agent-ui-open-panel-here)
 
-;; THE CANVAS (see above): Vim's keys, as Doom's other buffers'.
+;; THE CANVAS: Vim's keys, as Doom's other buffers'.
 (map! :map agent-ui-canvas-mode-map
-      ;; q closes it for good: its buffer killed, its elements with it (a
+      ;; q closes it for good: its buffer killed, its components with it (a
       ;; session's saved ones come back when it's resumed); in its session's
       ;; pane, the other views laid out again; else its pane closed.
       :gn "q" #'agent-ui-quit
       :n "gr" #'agent-ui-canvas-redraw
       ;; A project panel, read again from its file (edited) and run anew.
       :n "gR" #'agent-ui-panel-reload
-      ;; The element at point saved as one of the project's panels.
+      ;; The component at point saved as one of the project's panels.
       :n "S"  #'agent-ui-save-panel
       :n "R"  #'agent-ui-review
-      :n "a"  #'agent-ui-send-element
+      :n "a"  #'agent-ui-send-component
       :n "b"  #'agent-ui-report-bug
       :n "c"  #'agent-ui-comment
       :n "d"  #'agent-ui-uncomment
@@ -164,16 +111,15 @@
       ;; A plan's steps dropped (again: back), reworded, before approving it.
       :n "x"  #'agent-ui-drop-item
       :n "e"  #'agent-ui-edit-item
-      ;; Agent UI hidden in its session's pane, or shown again (see above).
+      ;; Agent UI hidden in its session's pane, or shown again.
       :localleader
       :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle
       ;; What it shows now, a PDF: a session's view's in .agent-shell/pdf/, a
       ;; project panel's beside its file (only a panel has a notice offering it).
       :desc "Export as a PDF" "e" #'agent-ui-export-pdf)
 
-;; A FORM, filled in its buffer (config/agent-ui/elements/form.el): typed
-;; into, so Emacs's keys there, as beads.el's forms (C-c C-c sends it, C-c
-;; C-k cancels, TAB to the next field).
+;; A FORM, filled in its buffer: typed into, so Emacs's keys there, as
+;; beads.el's forms (C-c C-c sends it, C-c C-k cancels, TAB to the next field).
 (after! evil
   (evil-set-initial-state 'agent-ui-form-mode 'emacs))
 
@@ -191,33 +137,17 @@
       :n "v"   #'agent-ui-review-source
       :n "q"   #'quit-window)
 
+;; A QUESTION WAITING: a session's turn ended with a question on its canvas:
+;; C-c C-q in the session goes there.
+(map! :after agent-shell
+      :map agent-shell-mode-map
+      "C-c C-q" #'agent-ui-goto-question
+      :localleader
+      :desc "Question waiting" "q" #'agent-ui-goto-question
+      ;; IN ITS SESSION'S PANE (see above): hidden, or shown again.
+      :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle)
+
 ;; ====== CODE ======
-
-;; In config/agent-ui/, in this order: each part can use what the ones before
-;; it define.
-(load! "agent-ui/core")
-(load! "agent-ui/canvas")
-(load! "agent-ui/request")
-(load! "agent-ui/agent")
-;; In its session's pane: at the bottom, its views in columns.
-(load! "agent-ui/pane")
-(load! "agent-ui/persist")
-;; What the elements that ask share (picking, a note, the answer).
-(load! "agent-ui/ask")
-;; The element types, a file each in agent-ui/elements/.
-(load! "agent-ui/elements")
-;; A finished element closing itself, a countdown under it.
-(load! "agent-ui/finished")
-(load! "agent-ui/staging")
-(load! "agent-ui/review")
-(load! "agent-ui/source")
-;; Project panels: kept in a project's repository, opened on demand.
-(load! "agent-ui/panels")
-(load! "agent-ui/snapshot")
-(load! "agent-ui/bug")
-
-;; TYPES THE AGENT MAKES (see above): the ones you kept.
-(agent-ui-load-kept)
 
 (defun +my/agent-ui-kept-issue (name file)
   "An issue in this config's Beads issues for the type NAME just kept (in
@@ -229,7 +159,7 @@ FILE): its tests and documentation."
        "agent-ui-kept-issue" nil "bd" "create" "--silent" "--type=task" "--priority=3"
        "--labels=agent-ui"
        (format "--title=Agent UI: tests and docs for the kept type %s" name)
-       (format "--description=The agent made the element type %s; it was kept, in %s. Give it tests (tests/unit/test-agent-ui-elements.el expects every type), a section in skills/agent-ui/SKILL.md (its test expects one per type), and a row in docs/agent-ui.md's types."
+       (format "--description=The agent made the component type %s; it was kept, in %s. Give it tests and documentation (in the agent-ui package, ~/dev/agent-ui, if it belongs there)."
                name (file-relative-name file doom-user-dir))))))
 
 (add-hook 'agent-ui-kept-functions #'+my/agent-ui-kept-issue)
@@ -247,47 +177,22 @@ FILE): its tests and documentation."
 (add-hook 'agent-ui-panel-open-hook #'+my/agent-ui-panel-pdf-notice)
 
 ;; A LONE PANEL'S TITLE: a canvas showing one panel only (a dashboard) doesn't
-;; draw its title over it: its view's bar says it (config/agent-ui/pane.el),
-;; and in a pane of its own (a project panel), its tab (config/editor/tabs.el).
+;; draw its title over it: its view's bar says it, and in a pane of its own
+;; (a project panel), its tab (config/editor/tabs.el).
 (add-hook '+my/tabs-label-functions #'agent-ui-canvas-label)
 
-;; PAGES AND FILES an element opens (RET on an html card, an image): a page in
-;; WebKit in a pane where it can (config/html.el), else the browser.
+;; PAGES AND FILES a component opens (RET on an html card, an image): a page
+;; in WebKit in a pane where it can (config/html.el), else the browser.
 (defun +my/agent-ui-open-page (page)
-  "Open PAGE, an html element's file or URL (see above)."
+  "Open PAGE, an html component's file or URL (see above)."
   (if (fboundp '+my/html-open-in-emacs)
       (+my/html-open-in-emacs page)
     (agent-ui-html-browse page)))
 
 (setq agent-ui-open-page-function #'+my/agent-ui-open-page)
 
-;; MCP (see above): the server, for each session started from now on.
-(defun +my/agent-ui-mcp-server ()
-  "Agent UI's MCP server, as `agent-shell-mcp-servers' has them: its
-session's name and directory read when the session starts (in its buffer)."
-  `((name . "agent-ui")
-    (command . ,(expand-file-name invocation-name invocation-directory))
-    (args . ("--batch" "-Q" "-l" ,(expand-file-name "cmd/agent-ui-mcp.el" doom-user-dir)
-             "-f" "agent-ui-mcp-main"))
-    (env . (((name . "AGENT_UI_SESSION")
-             (value . ,(lambda () (agent-ui--session-name (current-buffer)))))
-            ((name . "AGENT_UI_DIR")
-             (value . ,(lambda () (if (fboundp 'agent-shell-cwd) (agent-shell-cwd) default-directory))))))))
-
-(defun +my/agent-ui-mcp-register ()
-  "Add (or replace) Agent UI's MCP server in `agent-shell-mcp-servers'."
-  (setq agent-shell-mcp-servers
-        (append (seq-remove (lambda (server) (equal (alist-get 'name server) "agent-ui"))
-                            (bound-and-true-p agent-shell-mcp-servers))
-                (list (+my/agent-ui-mcp-server)))
-        agent-ui-agent-mcp t))
-
-(when +my/agent-ui-mcp
-  (with-eval-after-load 'agent-shell
-    (+my/agent-ui-mcp-register)))
-
-;; A BUG FILED (b on an element, see BUGS IN AGENT UI above): RET right after
-;; opens it in Emacs's issue view (config/beads.el).
+;; A BUG FILED (b on a component, see BUGS IN AGENT UI above): RET right
+;; after opens it in Emacs's issue view (config/beads.el).
 (defun +my/agent-ui-open-issue (id dir)
   "Open issue ID of DIR's issues in Beads' issue view."
   (let ((default-directory dir))
@@ -298,20 +203,11 @@ session's name and directory read when the session starts (in its buffer)."
               (issue (ignore-errors (json-parse-string json :object-type 'alist :array-type 'list))))
         ;; bd show --json: an array of one issue.
         (beads-detail-open (if (and (consp issue) (consp (car issue)) (consp (caar issue))) (car issue) issue))
-      (agent-ui-bug-show-issue id dir))))
+      (message "Agent UI: bug %s filed (in %s)" id (abbreviate-file-name dir)))))
 
 (setq agent-ui-open-issue-function #'+my/agent-ui-open-issue)
 
-;; A QUESTION WAITING: a session's turn ended with a question on its canvas
-;; (config/agent-ui/agent.el): C-c C-q in the session goes there.
-(map! :after agent-shell
-      :map agent-shell-mode-map
-      "C-c C-q" #'agent-ui-goto-question
-      :localleader
-      :desc "Question waiting" "q" #'agent-ui-goto-question
-      ;; IN ITS SESSION'S PANE (see above): hidden, or shown again.
-      :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle)
-
-;; WHAT THE AGENT IS TOLD (see above), after what's there (the theme's line, the
-;; project's issues).
-(add-hook '+my/agent-shell-context-functions #'agent-ui-agent-context t)
+;; ON: what ties Agent UI to agent-shell and Emacs's windows (each session's
+;; canvas, its MCP tools, a question waiting, canvases kept with their
+;; sessions, the views synced with their pane; the kept types loaded).
+(agent-ui-mode 1)

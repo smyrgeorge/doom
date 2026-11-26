@@ -206,7 +206,7 @@ window (`+my/modeline-fit-a')."
     (+my/modeline-fit-layout-a (car modeline))))
 
 ;; AGENT UI'S VIEWS
-;; Under a session's Agent UI views (config/agent-ui/pane.el), doom-modeline's
+;; Under a session's Agent UI views (agent-ui-pane.el), doom-modeline's
 ;; mode line, as tall and coloured as the windows' beside them: Agent UI's
 ;; own bar was a header line's, shorter (`agent-ui-pane-mode-line', set in
 ;; config/agent-ui.el). A canvas's layout, wherever it shows (a view, a

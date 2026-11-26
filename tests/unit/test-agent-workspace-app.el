@@ -1177,7 +1177,7 @@ them, without waiting: a wait gives the batch frame its own size back."
 
 (ert-deftest agent-workspace-app/its-agent-ui-in-its-pane ()
   "An agent with a canvas and two panels: its Agent UI below its session in
-its open pane, as in any session's pane (config/agent-ui/pane.el): every
+its open pane, as in any session's pane (agent-ui-pane.el): every
 view shown (its canvas first, then its panels), each a window with its
 name on its bar, the bar under them; its header line counts its panels
 (◫2), a bar of an agent with none says nothing. v goes to its first view,

@@ -660,19 +660,6 @@ downloaded by a test); nil if Doom has none."
           ((file-directory-p real) (copy-directory real copy nil t t) copy))))
 
 ;; AGENT UI'S SKILL
-(defun +test-agent-ui-skill (&optional file)
-  "The agent-ui skill's text: FILE's (relative to skills/agent-ui/), else all
-of it as one, its SKILL.md then its references (by name)."
-  (let ((dir (expand-file-name "skills/agent-ui/" +test-root)))
-    (with-temp-buffer
-      (dolist (f (if file
-                     (list (expand-file-name file dir))
-                   (cons (expand-file-name "SKILL.md" dir)
-                         (directory-files (expand-file-name "references/" dir) t "\\.md\\'"))))
-        (goto-char (point-max))
-        (insert-file-contents f))
-      (buffer-string))))
-
 ;; THE EXAMPLES' MESSAGES
 (defun +test-example-messages ()
   "What the examples (examples/NAME.el) say in the echo area: (NAME . TEXT)

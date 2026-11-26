@@ -1,5 +1,5 @@
 ;;; $DOOMDIR/examples/panel.el -*- lexical-binding: t; -*-
-;; Example: a project panel (config/agent-ui/panels.el, docs/agent-ui.md). M-x
+;; Example: a project panel (agent-ui-panels.el, the agent-ui package; docs/agent-ui.md). M-x
 ;; +my/example-panel puts this config's own cpu panel (.agent-ui/panels/cpu.el)
 ;; in a project of its own in the temp folder and opens it as SPC o U does,
 ;; alone in the frame: how busy the CPU is, its load, its last minute and the

@@ -12,7 +12,7 @@
 
 (defun agent-workflow--pane-question (run job ask why)
   "What RUN asks you of JOB (ASK, its question: nil, a wait with none), WHY
-in words: Agent UI elements, the question first (its id ask), what to look
+in words: Agent UI components, the question first (its id ask), what to look
 at with it."
   (let ((kind (plist-get ask :kind)))
     (cond

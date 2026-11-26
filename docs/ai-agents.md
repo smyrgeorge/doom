@@ -7,7 +7,7 @@ it needs them.
 | Skill | What it teaches |
 |---|---|
 | [`emacs-profiling`](../skills/emacs-profiling/SKILL.md) | Reading a profile recorded with `SPC h T`, to find what makes Emacs slow |
-| [`agent-ui`](../skills/agent-ui/SKILL.md) | Showing things on its session's canvas |
+| [`agent-ui`](https://github.com/smyrgeorge/agent-ui/blob/main/skills/agent-ui/SKILL.md) | Showing things on its session's canvas (shipped with the agent-ui package) |
 | [`agent-workflow`](../skills/agent-workflow/SKILL.md) | Writing, checking and running agent workflows |
 | [`agent-workflow-step`](../skills/agent-workflow-step/SKILL.md) | Doing a job of a workflow's run |
 

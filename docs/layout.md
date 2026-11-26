@@ -7,7 +7,7 @@ What each file and folder of this config is for.
 | `init.el`, `packages.el` | Doom modules and extra packages |
 | `config.el` | The main config; loads `config/` |
 | `config/agent-shell.el`, `agent-shell/` | [Your agent](agent-shell.md) (Claude Code, Codex...), drawing for it, its issues |
-| `config/agent-ui.el`, `agent-ui/` | [Agent UI](agent-ui.md): what the agent shows beyond its replies (being built) |
+| `config/agent-ui.el` | [Agent UI](agent-ui.md): this config's layer over the agent-ui package (what the agent shows beyond its replies) |
 | `config/agent-workspace.el`, `agent-workspace/` | [Agent workspace](agent-workspace.md): a crew of agents on one project, each in its own worktree (being built) |
 | `config/agent-workflow.el`, `agent-workflow/` | [Agent workflow](agent-workflow.md): the work on an issue in jobs and steps, some an LLM (being built) |
 | `config/notify.el`, `notify/` | [Notifications](notifications.md) on the desktop while Emacs isn't in front |

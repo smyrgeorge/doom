@@ -83,6 +83,17 @@
 ;; Rainbow brackets: color (), [] and {} by nesting depth.
 (package! rainbow-delimiters)
 
+;; Agent UI: what a coding agent in agent-shell shows you under its session
+;; (config/agent-ui.el), its own package (github.com/smyrgeorge/agent-ui);
+;; its bin/, skills/ and assets/ with its Lisp. From its working copy in
+;; ~/dev/agent-ui where there's one (its changes, as they're made); else
+;; from GitHub, not pinned: its latest commit (doom sync -u to update).
+(if (file-directory-p "~/dev/agent-ui")
+    (package! agent-ui
+      :recipe (:local-repo "~/dev/agent-ui" :files (:defaults "bin" "skills" "assets")))
+  (package! agent-ui
+    :recipe (:host github :repo "smyrgeorge/agent-ui" :files (:defaults "bin" "skills" "assets"))))
+
 ;; Beads: a git-backed issue tracker (bd, scripts/tools.sh) in Emacs: SPC o i
 ;; (config/beads.el). Pinned: config/beads.el mends beads.el for bd 1.x, the
 ;; commit it was checked with (tests/unit/test-beads.el); vui, its UI library,

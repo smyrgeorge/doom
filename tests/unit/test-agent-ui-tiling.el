@@ -175,8 +175,8 @@ it in view, Answer too (its view grown if it must)."
         (should (eq (window-buffer view) main))
         (should (agent-ui-pane-window-p view))
         (with-current-buffer main
-          (let* ((start (agent-ui--element-start main "fix"))
-                 (end (agent-ui--element-end "fix" start)))
+          (let* ((start (agent-ui--component-start main "fix"))
+                 (end (agent-ui--component-end "fix" start)))
             (should (equal (get-text-property (window-point view) 'agent-ui-id) "fix"))
             (should (= (window-start view) (save-excursion (goto-char start) (line-beginning-position))))
             (should (save-excursion (goto-char start) (search-forward "⏵ Answer" end t)))))))))

@@ -4,7 +4,7 @@
 ;;
 ;; Every agent has a pane, in role order (they never move). One is open, the
 ;; selected agent's: its session, its line as its header line, and its Agent
-;; UI below it, as in any session's pane (config/agent-ui/pane.el): its
+;; UI below it, as in any session's pane (agent-ui-pane.el): its
 ;; canvases, when they show something (its own, then its others: ask...), and
 ;; its panels, laid out to use the room, each with a bar naming it, a bar under
 ;; them, as high as they need. Full size (V): its Agent UI may take the pane's

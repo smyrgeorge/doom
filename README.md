@@ -31,7 +31,7 @@ else:
 - **A dynamic environment.** Emacs is less an editor than a Lisp environment that happens to edit text: every part of
   it can be changed while it runs, and almost anything can be built in it. This config builds a window manager, a
   three-way merge, a canvas for your agent and a crew of agents, all in Lisp. The agent works the same way: a project
-  panel is a Lisp file it can write and open at once, and a new kind of element it makes is loaded without a restart.
+  panel is a Lisp file it can write and open at once, and a new kind of component it makes is loaded without a restart.
 - **A harness.** Emacs runs and talks to anything: processes, scripts, servers, agents over ACP. And the agents reach
   back into it, through MCP tools and shell commands (`cmd/agent-ui`). So it can be the glue between your agents, your
   code, your workflows and your tools, and what's built for one generalizes to the others. Agent UI gives any agent a
@@ -115,7 +115,7 @@ one file. Slow queries load on their own without freezing Emacs. Your agent can 
 |---|---|
 | `SPC o u` | Open one of the project's panels |
 | `gR` | Read its file again and run it anew |
-| `S` (on a canvas) | Save the element at point as a panel |
+| `S` (on a canvas) | Save the component at point as a panel |
 | `q` | Close it |
 | `M-x +my/example-panel` | Try it: the CPU, every second |
 
@@ -317,7 +317,8 @@ test fails it puts the old pins back; `--keep` keeps the new ones, to fix the co
 - [PDFs](docs/pdf.md), [Images](docs/images.md), [Drawings](docs/drawings.md), [Markdown](docs/markdown.md),
   [Mermaid](docs/mermaid.md)
 - [Your agent](docs/agent-shell.md): its sessions, drawing for it, profiling Emacs
-- [Agent UI](docs/agent-ui.md): what your agent shows under its session, and `cmd/agent-ui`
+- [Agent UI](docs/agent-ui.md): what your agent shows under its session, and `cmd/agent-ui` (its own package,
+  [agent-ui](https://github.com/smyrgeorge/agent-ui))
 - [Agent workspace](docs/agent-workspace.md): a crew of agents on one project, each in its own worktree (being built)
 - [Agent workflow](docs/agent-workflow.md): the work on an issue as GitHub Actions describes it, some steps an agent
   (being built)
