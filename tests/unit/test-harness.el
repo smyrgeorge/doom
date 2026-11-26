@@ -247,11 +247,13 @@ the question waited on the terminal, the file never ended."
   "With 4 slots or more, one takes the shortest file first, the others the
 longest (results show from the start); a file running alone first, by
 itself, then both lanes (it isn't starved by the short ones). Each file
-notes when it started, then takes 2 s."
+notes when run.sh started it (its Emacs process's start), then takes 2 s.
+Noting when its test ran instead counted its Emacs's loading too: under
+CI's load, one of the first wave was over 1.5 s late (Linux)."
   (let* ((when (file-name-as-directory (make-temp-file (+test-tmp-file "run-sh-when-") t)))
          (file (lambda (name &optional mark)
                  (cons (format "test-%s.el" name)
-                       (format "%s(ert-deftest run/%s () (write-region (format \"%%f\" (float-time)) nil %S) (sleep-for 2))\n"
+                       (format "%s(ert-deftest run/%s () (write-region (format \"%%f\" (float-time (alist-get 'start (process-attributes (emacs-pid))))) nil %S) (sleep-for 2))\n"
                                (if mark (concat mark "\n") "") name (expand-file-name name when)))))
          (files (list (funcall file "a") (funcall file "b") (funcall file "c") (funcall file "d")
                       (funcall file "e") (funcall file "f") (funcall file "g" ";; run.sh: alone (by the clock)")))

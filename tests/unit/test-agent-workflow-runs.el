@@ -557,7 +557,10 @@ again; its project noted; continued with the workflow as it is now."
   (+test-awr "restore"
     (let* ((issue (+test-awr--issue project "Restore"))
            (run (agent-workflow-start-run project issue)))
-      (+test-awr--finish run "build" nil "built")
+      ;; Review's prompt has build's notes: hold, its stand-in at work until
+      ;; Emacs stops. Answering at once, its turn could end in the wait for
+      ;; its session, before Emacs stopped (on Linux's CI).
+      (+test-awr--finish run "build" nil "built; hold")
       (let ((review (+test-awr--agent run "review")))
         (should (+test-awr--wait (lambda () (agent-workflow-agent-session review))))
         (should (member project (agent-workflow--known-projects)))
@@ -587,7 +590,9 @@ again; its project noted; continued with the workflow as it is now."
 interrupted as a running one (its agent and question gone with Emacs),
 continued then (doom-38o.75)."
   (+test-awr "restore-asking"
-    (let* ((issue (+test-awr--issue project "Restore asking"))
+    ;; Its title in build's prompt: hold, its stand-in at work (asking) until
+    ;; Emacs stops, its turn not over first.
+    (let* ((issue (+test-awr--issue project "Restore asking (hold)"))
            (run (agent-workflow-start-run project issue)))
       (should (+test-awr--wait (lambda () (agent-workflow-agent-session (+test-awr--agent run "build")))))
       (agent-workflow--job-set run "build" :status 'waiting
