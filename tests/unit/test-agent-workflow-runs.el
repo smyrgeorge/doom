@@ -834,7 +834,11 @@ stopped, asked; go on with more: continued; kept with the run."
       (should (equal (agent-workflow-run-budget run) '(:cost 10 :tokens nil :time nil)))
       (+test-awr--spend build 3.0 1000)
       (should (equal (butlast (agent-workflow-run-spent-now run) 2) '(:cost 3.0 :tokens 1000)))
-      (+test-awr--finish run "build" nil "built")
+      ;; Review's prompt has build's notes: hold, its stand-in at work until
+      ;; its budget stops it. Answering at once, its turn could end before
+      ;; the budget was used up, waiting for you then, not asked (on Linux's
+      ;; CI): a waiting job isn't stopped, it spends nothing.
+      (+test-awr--finish run "build" nil "built; hold")
       ;; build's agent gone: what it spent kept.
       (should (equal (butlast (agent-workflow-run-spent-now run) 2) '(:cost 3.0 :tokens 1000)))
       (let ((review (+test-awr--agent run "review")))
