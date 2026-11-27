@@ -120,8 +120,10 @@
 (after! evil
   (evil-set-initial-state 'agent-ui-form-mode 'emacs))
 
-;; TYPES THE AGENT MAKES (see above): the list, a preview.
-(map! :map agent-ui-review-mode-map
+;; TYPES THE AGENT MAKES (see above): the list, a preview. Their keymaps
+;; once agent-ui-review.el is loaded (when first used, not with Agent UI).
+(map! :after agent-ui-review
+      :map agent-ui-review-mode-map
       :n "RET" #'agent-ui-review-preview
       :n "a"   #'agent-ui-review-keep
       :n "x"   #'agent-ui-review-discard

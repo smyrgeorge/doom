@@ -45,6 +45,8 @@
                        ("s" . agent-ui-table-sort) ("K" . agent-ui-move-item-up) ("J" . agent-ui-move-item-down)
                        ("x" . agent-ui-drop-item) ("e" . agent-ui-edit-item)))
       (should (eq (lookup-key normal (kbd (car binding))) (cdr binding)))))
+  ;; The review's keys once it's loaded (when first used, not with Agent UI).
+  (require 'agent-ui-review)
   (let ((review (evil-get-auxiliary-keymap agent-ui-review-mode-map 'normal)))
     (should (eq (lookup-key review "x") #'agent-ui-review-discard))
     (should (eq (lookup-key review "a") #'agent-ui-review-keep)))
