@@ -1422,7 +1422,11 @@ said), its commits; started from another branch than the main one, said."
   "Its git line's Worktree and Magit, hovered: what they open (the pane's
 own), not a prompt they'd put into a session's."
   (let* ((element (car (agent-workflow--pane-git nil '(:branch "feature/x" :worktree "/w/" :into "main"))))
-         (text (agent-ui-render element (agent-ui-context))))
+         ;; Drawn as in a run's pane: its buttons answered by the pane
+         ;; (`agent-workflow-run-pane'), elsewhere a hover names the prompt.
+         (text (with-temp-buffer
+                 (setq-local agent-ui-answer-function #'agent-workflow--pane-answer)
+                 (agent-ui-render element (agent-ui-context)))))
     (should (equal (get-text-property (string-search "⏵ Worktree" text) 'help-echo text) "RET: open its worktree"))
     (should (equal (get-text-property (string-search "⏵ Magit" text) 'help-echo text) "RET: magit on its worktree"))))
 
