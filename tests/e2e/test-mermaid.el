@@ -37,10 +37,6 @@
 
 ;; ====== HELPERS ======
 
-(defun +test-mermaid--needs-mmdc ()
-  (unless (executable-find +my/mermaid-mmdc)
-    (ert-skip "No mmdc (npm install -g @mermaid-js/mermaid-cli)")))
-
 (defun +test-mermaid--theme (theme)
   "THEME, the only one, as SPC h t loads it."
   (mapc #'disable-theme custom-enabled-themes)
@@ -67,6 +63,31 @@
            (+test-mermaid--theme 'doom-one)
            ,@body)
        (mapc #'disable-theme custom-enabled-themes))))
+
+(defvar +test-mermaid--cannot-draw 'untried
+  "Why the real mmdc can't draw (its message), nil if it can: tried once, by
+the first test needing it.")
+
+;; An mmdc that can't draw (its headless Chrome gone from puppeteer's cache)
+;; failed each test only once its minute's wait for a drawing ended: four of
+;; them, and the file outlived run.sh's E2E_TIMEOUT, killed, the reason deep
+;; in its log.
+(defun +test-mermaid--needs-mmdc ()
+  "Skipped without mmdc; failed at once, saying why, if it can't draw (see
+above)."
+  (unless (executable-find +my/mermaid-mmdc)
+    (ert-skip "No mmdc (npm install -g @mermaid-js/mermaid-cli)"))
+  (when (eq +test-mermaid--cannot-draw 'untried)
+    (setq +test-mermaid--cannot-draw
+          (+test-mermaid--fresh
+            (let* ((result nil)
+                   (file (+my/mermaid-render "flowchart TD\n    A --> B\n"
+                                             (lambda (file message) (setq result (list file message))))))
+              (cond (file nil)
+                    ((+test-wait-for (lambda () result) 60) (cadr result))
+                    (t "no drawing in 60 s"))))))
+  (when +test-mermaid--cannot-draw
+    (ert-fail (list "mmdc can't draw" +test-mermaid--cannot-draw))))
 
 ;; ====== DRAWN ======
 

@@ -62,7 +62,8 @@ page in a covered frame.
 
 - The PDF and drawing tests copy PDF.js and Excalidraw from Doom's data folder, and skip without them. Opening a PDF or
   a drawing once downloads them, or run `emacs --batch -l tests/helper.el -l tests/assets.el`.
-- The Mermaid end-to-end tests draw with the real `mmdc`, and skip without it. The unit tests use a stand-in.
+- The Mermaid end-to-end tests draw with the real `mmdc`, and skip without it. If it can't draw, they fail at once with
+  its message: its headless Chrome missing, `scripts/tools.sh` installs it again. The unit tests use a stand-in.
 - The tests don't see your shell's Beads settings: every `BEADS_` and `BD_` variable, and `AGENT_WORKSPACE_AGENT`. Run
   by an agent of a crew, their `bd` never reaches the project's issues. Their `bd` sends no usage metrics either
   (`DO_NOT_TRACK`).
