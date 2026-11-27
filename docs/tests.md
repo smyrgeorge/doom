@@ -124,6 +124,7 @@ up the way the README sets up yours, so every push tests the installers too. The
   Doom.
 - `emacs.sh` syncs Doom. Its packages are cached until `init.el`, `packages.el` or `DOOM_REF` change. On macOS,
   Homebrew's downloads are cached too, a week at a time.
+- Agent UI isn't pinned: each run clones its latest commit, as a fresh install does, never the cached one.
 - PDF.js and Excalidraw are downloaded (`tests/assets.el`), so no test skips for want of them.
 - A newer push to a branch cancels the run still going there.
 - In each job, the end-to-end tests run even when a unit test failed, so one failure doesn't hide the other. The job

@@ -65,6 +65,13 @@ jobs:
           key: doom-linux-${{ matrix.xwidgets }}-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
           restore-keys: doom-linux-${{ matrix.xwidgets }}-${{ env.DOOM_REF }}-
 
+      # Agent UI isn't pinned (packages.el): the config is tested with its
+      # latest commit, as a fresh install gets it. `doom sync' leaves a
+      # restored clone at the commit it was cached with: removed, so it's
+      # cloned again (its commit printed by `doom sync').
+      - name: Agent UI (its latest commit)
+        run: rm -rf "$DOOM_EMACS/.local/straight/repos/agent-ui" "$DOOM_EMACS"/.local/straight/build-*/agent-ui
+
       - uses: docker/setup-buildx-action@v3
 
       # Debian, Emacs by scripts/emacs.sh, the tools by scripts/tools.sh
@@ -165,6 +172,10 @@ jobs:
           path: ~/.config/emacs/.local
           key: doom-macos-${{ env.DOOM_REF }}-${{ hashFiles('init.el', 'packages.el') }}
           restore-keys: doom-macos-${{ env.DOOM_REF }}-
+
+      # Agent UI at its latest commit, as on Linux.
+      - name: Agent UI (its latest commit)
+        run: rm -rf ~/.config/emacs/.local/straight/repos/agent-ui ~/.config/emacs/.local/straight/build-*/agent-ui
 
       # Homebrew's downloads (bottles, casks, its API's index): what emacs.sh
       # and tools.sh install is downloaded once a week, or when they change;
