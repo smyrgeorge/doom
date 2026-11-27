@@ -919,8 +919,13 @@ WebKit doesn't draw there: PDF.js renders no page)."
 
 (defun +test-e2e-run ()
   "Run this GUI Emacs's tests once it's up, report them on stderr (ERT's batch
-report), and exit with their status."
-  (run-at-time
+report), and exit with their status. Up: idle in its command loop, as a
+user's Emacs is between keys, so the config's idle timers (a preview redrawn
+once typing pauses) run in the tests' waits. Not a clock timer: due before
+the command loop's first read (a start slower than its delay, on a loaded
+machine), Emacs runs it before it counts itself idle, and no idle timer then
+ran for the whole run."
+  (run-with-idle-timer
    0.5 nil
    (lambda ()
      ;; On top of other windows while the tests run: macOS takes a window
