@@ -204,6 +204,9 @@ turn; Show session (at its question, if it asks)."
   "PROCESS's output counted (`agent-workflow--pane-output-counts'): its
 lines not blank, its errors and warnings (by their words, as a log finds
 them), read on from where it was last; nil without its buffer."
+  ;; `agent-ui-log--level' is the log type's: Agent UI loads its file only
+  ;; when a log is first shown.
+  (require 'agent-ui-log)
   (when-let* ((buffer (process-buffer process))
               ((buffer-live-p buffer)))
     (with-current-buffer buffer
