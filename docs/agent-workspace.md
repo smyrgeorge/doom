@@ -496,7 +496,7 @@ loops from the start, in a project whose issues Beads tracks. An agent whose rol
 
 ## An agent's panels
 
-An agent can open [project panels](agent-ui.md#project-panels) and keep them open while it works, such as a test watcher
+An agent can open [project dashboards](agent-ui.md#project-dashboards) and keep them open while it works, such as a test watcher
 or a service's logs. A panel it opens runs in its worktree, on its branch's code, and is its own: `tests · ada`.
 
 | Key | Action |

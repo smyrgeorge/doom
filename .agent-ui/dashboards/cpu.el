@@ -1,11 +1,11 @@
-;;; cpu.el --- Agent UI panel: this machine's CPU (a demo) -*- lexical-binding: t; -*-
+;;; cpu.el --- Agent UI dashboard: this machine's CPU (a demo) -*- lexical-binding: t; -*-
 ;; The CPU: how busy, its load, its last minute, and the processes using it
 ;; most, every second: one command run without waiting, its output read here.
 ;; macOS: sysctl and ps, busy the processes' %cpu (a recent average, as ps has
 ;; it) over the cores. Linux: nproc, /proc/loadavg and ps (its %cpu each
 ;; process's average over its life), busy from /proc/stat since the last
-;; fetch (since boot, the first time). Memory: the memory panel's.
-(agent-ui-panel
+;; fetch (since boot, the first time). Memory: the memory dashboard's.
+(agent-ui-dashboard
  :version 1
  :ui (:type "panel" :id "cpu-panel" :title "CPU (demo): this machine, every second"
       :children
@@ -25,9 +25,9 @@
  :fetch
  ;; Linux: /proc/stat's CPU time at the last fetch, (TOTAL . IDLE).
  (let ((last-stat nil))
-   (lambda (panel)
-     (agent-ui-panel-run
-      panel (if (eq system-type 'darwin)
+   (lambda (dashboard)
+     (agent-ui-dashboard-run
+      dashboard (if (eq system-type 'darwin)
                 "sysctl -n hw.ncpu vm.loadavg; echo ---; ps -A -r -o pid=,pcpu=,time=,comm="
               "nproc; cat /proc/loadavg; head -1 /proc/stat; echo ---; ps -A --sort=-pcpu -o pid=,pcpu=,time=,comm=")
       (lambda (out)
@@ -58,17 +58,17 @@
                        (busy (one-decimal (min 100.0 (if stat
                                                          (stat-busy stat)
                                                        (/ (apply #'+ (mapcar #'cadr processes)) cores))))))
-            (agent-ui-panel-update panel "cpu" :value busy)
-            (agent-ui-panel-update
-             panel "load"
+            (agent-ui-dashboard-update dashboard "cpu" :value busy)
+            (agent-ui-dashboard-update
+             dashboard "load"
              :figures (list (list :label "Load 1m" :value (or (nth 0 loads) 0) :good "none")
                             (list :label "5m" :value (or (nth 1 loads) 0) :good "none")
                             (list :label "15m" :value (or (nth 2 loads) 0) :good "none")
                             (list :label "Cores" :value cores :good "none")
                             (list :label "Tasks" :value (length processes) :good "none")))
-            (agent-ui-panel-append panel "cpu-history" :values (list busy))
-            (agent-ui-panel-update
-             panel "processes"
+            (agent-ui-dashboard-append dashboard "cpu-history" :values (list busy))
+            (agent-ui-dashboard-update
+             dashboard "processes"
              :rows (mapcar (pcase-lambda (`(,pid ,pcpu ,time ,command))
                              (list pid (truncate-string-to-width command 40 nil nil "…") (one-decimal pcpu) time))
                            (seq-take processes 12))))))))))

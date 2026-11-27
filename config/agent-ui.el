@@ -51,8 +51,8 @@
 ;; diagrams too, when drawn by the package's own renderer.
 (setq agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir)
       agent-ui-mermaid-cache-directory (expand-file-name "agent-ui/mermaid/" doom-cache-dir))
-;; The project panels whose code was let run (by content): kept, not a cache's.
-(setq agent-ui-panel-trust-file (expand-file-name "agent-ui/trusted-panels.eld" doom-data-dir))
+;; The project dashboards whose code was let run (by content): kept, not a cache's.
+(setq agent-ui-dashboard-trust-file (expand-file-name "agent-ui/trusted-dashboards.eld" doom-data-dir))
 
 ;; MERMAID: diagrams drawn by config/mermaid.el's renderer (in the theme's
 ;; colours, as the rest of this config's diagrams), not the package's;
@@ -76,12 +76,12 @@
 
 ;; ====== KEY BINDINGS ======
 
-;; A PROJECT'S PANELS: SPC o u opens one of the current project's
-;; (.agent-ui/panels/), picked from them, in a pane of its own; SPC o U in
+;; A PROJECT'S DASHBOARDS: SPC o u opens one of the current project's
+;; (.agent-ui/dashboards/), picked from them, in a pane of its own; SPC o U in
 ;; the window you're in.
 (map! :leader
-      :desc "Project panel"       "o u" #'agent-ui-open-panel
-      :desc "Project panel, here" "o U" #'agent-ui-open-panel-here)
+      :desc "Project dashboard"       "o u" #'agent-ui-open-dashboard
+      :desc "Project dashboard, here" "o U" #'agent-ui-open-dashboard-here)
 
 ;; THE CANVAS: Vim's keys, as Doom's other buffers'.
 (map! :map agent-ui-canvas-mode-map
@@ -90,10 +90,10 @@
       ;; pane, the other views laid out again; else its pane closed.
       :gn "q" #'agent-ui-quit
       :n "gr" #'agent-ui-canvas-redraw
-      ;; A project panel, read again from its file (edited) and run anew.
-      :n "gR" #'agent-ui-panel-reload
-      ;; The component at point saved as one of the project's panels.
-      :n "S"  #'agent-ui-save-panel
+      ;; A project dashboard, read again from its file (edited) and run anew.
+      :n "gR" #'agent-ui-dashboard-reload
+      ;; The component at point saved as one of the project's dashboards.
+      :n "S"  #'agent-ui-save-dashboard
       :n "R"  #'agent-ui-review
       :n "a"  #'agent-ui-send-component
       :n "b"  #'agent-ui-report-bug
@@ -112,7 +112,7 @@
       :localleader
       :desc "Agent UI: hide / show" "u" #'agent-ui-pane-toggle
       ;; What it shows now, a PDF: a session's view's in .agent-shell/pdf/, a
-      ;; project panel's beside its file (only a panel has a notice offering it).
+      ;; project dashboard's beside its file (only a dashboard has a notice offering it).
       :desc "Export as a PDF" "e" #'agent-ui-export-pdf)
 
 ;; A FORM, filled in its buffer: typed into, so Emacs's keys there, as
@@ -161,21 +161,21 @@ FILE): its tests and documentation."
 
 (add-hook 'agent-ui-kept-functions #'+my/agent-ui-kept-issue)
 
-;; A PROJECT PANEL'S NOTICE (config/banner.el): each one opened (SPC o u; not a
+;; A PROJECT DASHBOARD'S NOTICE (config/banner.el): each one opened (SPC o u; not a
 ;; session's canvas) offers to be exported as a PDF, as it shows now, beside
 ;; its file (`agent-ui-export-pdf', SPC m e there and in any canvas).
-(defun +my/agent-ui-panel-pdf-notice ()
-  "Offer the project panel here as a PDF (see above)."
+(defun +my/agent-ui-dashboard-pdf-notice ()
+  "Offer the project dashboard here as a PDF (see above)."
   (when (fboundp '+my/banner-show)
-    (+my/banner-show 'agent-ui-panel-pdf
-                     "Export this panel as a PDF, as it shows now (SPC m e)."
+    (+my/banner-show 'agent-ui-dashboard-pdf
+                     "Export this dashboard as a PDF, as it shows now (SPC m e)."
                      :actions '(("Export PDF" . agent-ui-export-pdf)))))
 
-(add-hook 'agent-ui-panel-open-hook #'+my/agent-ui-panel-pdf-notice)
+(add-hook 'agent-ui-dashboard-open-hook #'+my/agent-ui-dashboard-pdf-notice)
 
-;; A LONE PANEL'S TITLE: a canvas showing one panel only (a dashboard) doesn't
+;; A LONE PANEL'S TITLE: a canvas showing one panel only doesn't
 ;; draw its title over it: its view's bar says it, and in a pane of its own
-;; (a project panel), its tab (config/editor/tabs.el).
+;; (a project dashboard), its tab (config/editor/tabs.el).
 (add-hook '+my/tabs-label-functions #'agent-ui-canvas-label)
 
 ;; PAGES AND FILES a component opens (RET on an html card, an image): a page

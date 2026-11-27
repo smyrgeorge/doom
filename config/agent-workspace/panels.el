@@ -1,9 +1,9 @@
 ;;; $DOOMDIR/config/agent-workspace/panels.el -*- lexical-binding: t; -*-
-;; An agent's panels: the project panels it opens and keeps open while it
+;; An agent's panels: the project dashboards it opens and keeps open while it
 ;; works. Loaded from config/agent-workspace.el, after app.el. No Doom here.
 ;;
 ;; A panel an agent opens (agent-ui open NAME, from its session) runs in its
-;; worktree: its branch's .agent-ui/panels/NAME.el, its commands there. It's
+;; worktree: its branch's .agent-ui/dashboards/NAME.el, its commands there. It's
 ;; the agent's own, named "NAME · AGENT" ("tests · ada"): two agents opening
 ;; tests get one each; one you open from the main checkout stays its own.
 ;; Never popped up in a pane: the stage shows it in its agent's pane. Hidden,
@@ -20,23 +20,23 @@
 (require 'seq)
 (require 'subr-x)
 
-(declare-function agent-ui-panel-default-canvas-name "agent-ui/panels")
-(declare-function agent-ui-open-panel "agent-ui/panels")
+(declare-function agent-ui-dashboard-default-canvas-name "agent-ui/dashboards")
+(declare-function agent-ui-open-dashboard "agent-ui/dashboards")
 (declare-function agent-ui-error-message "agent-ui/core")
-(defvar agent-ui-panels--state)
-(defvar agent-ui-panel-directory)
-(declare-function agent-ui-panels--root "agent-ui/panels")
-(declare-function agent-ui-panels--file "agent-ui/panels")
-(declare-function agent-ui-panels--name "agent-ui/panels")
+(defvar agent-ui-dashboards--state)
+(defvar agent-ui-dashboard-directory)
+(declare-function agent-ui-dashboards--root "agent-ui/dashboards")
+(declare-function agent-ui-dashboards--file "agent-ui/dashboards")
+(declare-function agent-ui-dashboards--name "agent-ui/dashboards")
 
 ;; ====== WHOSE ======
 
 (defun agent-workspace--panel-agent (canvas)
-  "The agent whose panel CANVAS (a project panel's) is, or nil."
+  "The agent whose panel CANVAS (a project dashboard's) is, or nil."
   (when-let* (((buffer-live-p canvas))
-              ((boundp 'agent-ui-panels--state))
-              (panel (buffer-local-value 'agent-ui-panels--state canvas))
-              (root (agent-ui-panels--root panel))
+              ((boundp 'agent-ui-dashboards--state))
+              (panel (buffer-local-value 'agent-ui-dashboards--state canvas))
+              (root (agent-ui-dashboards--root panel))
               (where (agent-workspace-worktree-of (file-name-as-directory root))))
     (agent-workspace-agent (cadr where) (car where))))
 
@@ -45,15 +45,15 @@
 True names worked out only while a panel is open: its bar asks at each
 tick."
   (when-let* (((agent-workspace-agent-worktree agent))
-              ((boundp 'agent-ui-panels--state))
-              (panels (seq-filter (lambda (buffer) (buffer-local-value 'agent-ui-panels--state buffer))
+              ((boundp 'agent-ui-dashboards--state))
+              (panels (seq-filter (lambda (buffer) (buffer-local-value 'agent-ui-dashboards--state buffer))
                                   (buffer-list))))
     (let ((worktree (file-name-as-directory (file-truename (agent-workspace-agent-worktree agent)))))
       (seq-sort-by
        #'buffer-name #'string<
        (seq-filter (lambda (buffer)
                      (equal (file-name-as-directory
-                             (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state buffer))))
+                             (file-truename (agent-ui-dashboards--root (buffer-local-value 'agent-ui-dashboards--state buffer))))
                             worktree))
                    panels)))))
 
@@ -61,20 +61,20 @@ tick."
 
 (defun agent-workspace--panel-name (name root)
   "Panel NAME's canvas's name, of ROOT: an agent's worktree's \"NAME ·
-AGENT\", else as Agent UI names it. `agent-ui-panel-name-function'."
+AGENT\", else as Agent UI names it. `agent-ui-dashboard-name-function'."
   (if-let* ((where (agent-workspace-worktree-of (file-name-as-directory root))))
       (format "%s · %s" name (cadr where))
-    (agent-ui-panel-default-canvas-name name root)))
+    (agent-ui-dashboard-default-canvas-name name root)))
 
 (defun agent-workspace--panel-trust-root (root)
   "The root whose trust ROOT's panels share: an agent's worktree's
-project's. `agent-ui-panel-trust-root-function'."
+project's. `agent-ui-dashboard-trust-root-function'."
   (or (car (agent-workspace-worktree-of (file-name-as-directory root))) root))
 
 (defun agent-workspace--panel-display (canvas)
   "A panel's CANVAS opened for an agent: an agent's of a crew isn't shown
 \(its pane on the stage shows it), any other as Agent UI shows it.
-`agent-ui-panel-display-function'."
+`agent-ui-dashboard-display-function'."
   (if-let* ((agent (agent-workspace--panel-agent canvas)))
       (progn
         (with-current-buffer canvas
@@ -135,12 +135,12 @@ there, named after it; not moved after all (`unmoved'), where they were. In
   "Panel CANVAS as crew.json keeps it, as agent-ui open takes it: its name
 \(one opened from a file elsewhere in its worktree: that file, relative to
 it)."
-  (let* ((panel (buffer-local-value 'agent-ui-panels--state canvas))
-         (name (agent-ui-panels--name panel))
-         (file (agent-ui-panels--file panel))
-         (root (agent-ui-panels--root panel)))
+  (let* ((panel (buffer-local-value 'agent-ui-dashboards--state canvas))
+         (name (agent-ui-dashboards--name panel))
+         (file (agent-ui-dashboards--file panel))
+         (root (agent-ui-dashboards--root panel)))
     (if (file-equal-p file (expand-file-name (concat name ".el")
-                                             (expand-file-name agent-ui-panel-directory root)))
+                                             (expand-file-name agent-ui-dashboard-directory root)))
         name
       (file-relative-name file root))))
 
@@ -164,12 +164,12 @@ the others closed."
   "AGENT's panels NAMES (crew.json's) opened again, in its worktree, as its
 session opens one. One that can't open (its file gone): skipped, said; the
 others open. None without Agent UI."
-  (when (fboundp 'agent-ui-open-panel)
+  (when (fboundp 'agent-ui-open-dashboard)
     (dolist (name names)
       (condition-case err
-          (agent-ui-open-panel name (agent-workspace-agent-worktree agent) t)
+          (agent-ui-open-dashboard name (agent-workspace-agent-worktree agent) t)
         (error
          (display-warning 'agent-workspace
                           (format "%s's panel %s: %s: skipped" (agent-workspace-agent-name agent) name
-                                  (string-remove-prefix (format "panel %s: " name)
+                                  (string-remove-prefix (format "dashboard %s: " name)
                                                         (agent-ui-error-message err)))))))))

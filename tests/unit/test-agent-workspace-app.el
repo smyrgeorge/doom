@@ -1056,11 +1056,11 @@ out all the same, as before the popup came."
 
 (defconst +test-awa--panel
   ";;; -*- lexical-binding: t; -*-
-(agent-ui-panel
+(agent-ui-dashboard
  :version 1
  :ui (:type \"text\" :id \"t\" :text \"\")
  :every 60
- :fetch (lambda (panel) (agent-ui-panel-update panel \"t\" :text default-directory)))
+ :fetch (lambda (panel) (agent-ui-dashboard-update panel \"t\" :text default-directory)))
 "
   "A panel showing where it runs.")
 
@@ -1068,16 +1068,16 @@ out all the same, as before the popup came."
   "Panels NAMES committed in PROJECT (before its agents' worktrees are made),
 the project trusted."
   (let ((default-directory project))
-    (make-directory ".agent-ui/panels" t)
+    (make-directory ".agent-ui/dashboards" t)
     (dolist (name names)
-      (write-region +test-awa--panel nil (format ".agent-ui/panels/%s.el" name)))
+      (write-region +test-awa--panel nil (format ".agent-ui/dashboards/%s.el" name)))
     (+test-awa--git "add" ".")
     (+test-awa--git "-c" "user.name=Test" "-c" "user.email=test@example.com" "commit" "-q" "-m" "panels"))
-  (agent-ui-panel-trust-project project))
+  (agent-ui-dashboard-trust-project project))
 
 (defun +test-awa--open-panel (agent name)
   "AGENT's panel NAME opened, as its request opens it: its canvas."
-  (agent-ui-open-panel name (agent-workspace-agent-worktree agent) t))
+  (agent-ui-open-dashboard name (agent-workspace-agent-worktree agent) t))
 
 (defun +test-awa--canvas-show (agent element)
   "ELEMENT shown on AGENT's canvas, as its session shows it: the canvas."
@@ -1184,7 +1184,7 @@ name on its bar, the bar under them; its header line counts its panels
 then the next, wrapping. The stage still arranged: one pane open, the other
 a row; Agent UI's own changes not taken for a border dragged."
   (+test-awa "views"
-    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-views-trust.eld")))
+    (let ((agent-ui-dashboard-trust-file (+test-tmp-file "awa-views-trust.eld")))
       (+test-awa--panels project "logs" "tests")
       (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
@@ -1236,7 +1236,7 @@ a row; Agent UI's own changes not taken for a border dragged."
 lines, the cursor in it; V again: back to what its views need. Another agent
 selected, it's back too; a raised hand gone to: back."
   (+test-awa "full"
-    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-full-trust.eld")))
+    (let ((agent-ui-dashboard-trust-file (+test-tmp-file "awa-full-trust.eld")))
       (+test-awa--panels project "logs")
       (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
@@ -1278,7 +1278,7 @@ the ask canvas emptied and killed: its view gone. Another agent's only
 view, an ask canvas, killed (q): its Agent UI gone, its session alone in
 its pane."
   (+test-awa "others"
-    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-others-trust.eld")))
+    (let ((agent-ui-dashboard-trust-file (+test-tmp-file "awa-others-trust.eld")))
       (+test-awa--panels project "logs")
       (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
@@ -1328,7 +1328,7 @@ panel in it; for a folded one: its bar's badge only, the stage as it was.
 Closed: gone from its pane and its badge. With nothing to show, v and V say
 so. In a wide stage, still below its session."
   (+test-awa "coming"
-    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-coming-trust.eld")))
+    (let ((agent-ui-dashboard-trust-file (+test-tmp-file "awa-coming-trust.eld")))
       (+test-awa--panels project "logs")
       (pcase-let ((`(,ada ,ken) (+test-awa--crew '("ada" "builder") '("ken" "builder"))))
         (agent-workspace-open t)
@@ -1366,7 +1366,7 @@ share when nothing's left to show. Its canvas emptied (cleared, its last
 element removed): the same. Never another buffer in its views' windows
 \(Emacs's replacement for a killed buffer). Something new on it: back."
   (+test-awa "closed"
-    (let ((agent-ui-panel-trust-file (+test-tmp-file "awa-closed-trust.eld"))
+    (let ((agent-ui-dashboard-trust-file (+test-tmp-file "awa-closed-trust.eld"))
           ;; The room low, below the stage: room for Agent UI.
           (agent-workspace-room-height 4))
       (+test-awa--panels project "logs")

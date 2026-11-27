@@ -1,4 +1,4 @@
-;;; memory.el --- Agent UI panel: this machine's memory (a demo) -*- lexical-binding: t; -*-
+;;; memory.el --- Agent UI dashboard: this machine's memory (a demo) -*- lexical-binding: t; -*-
 ;; Where the memory goes, its pressure, swap, its last minute, the
 ;; compressor's work and the processes holding the most, every second: one
 ;; command run without waiting, its output read here. macOS: sysctl, vm_stat
@@ -10,7 +10,7 @@
 ;; critical when all did), zswap's pages from /proc/vmstat, and ps. Rates are
 ;; per second, from the last fetch's counters (kept in :fetch's closure:
 ;; nothing global).
-(agent-ui-panel
+(agent-ui-dashboard
  :version 1
  :ui (:type "panel" :id "memory" :title "Memory (demo): this machine, every second"
       :children
@@ -35,9 +35,9 @@
  :every 1
  :fetch
  (let ((last nil))                      ; (COMPRESSIONS DECOMPRESSIONS TIME), the last fetch's
-   (lambda (panel)
-     (agent-ui-panel-run
-      panel (if (eq system-type 'darwin)
+   (lambda (dashboard)
+     (agent-ui-dashboard-run
+      dashboard (if (eq system-type 'darwin)
                 (concat "sysctl -n hw.memsize vm.swapusage kern.memorystatus_vm_pressure_level; echo ---; vm_stat; "
                         "echo ---; ps -A -o pid=,rss=,pmem=,comm=")
               (concat "cat /proc/meminfo; echo ---; grep -E '^zswp(out|in) ' /proc/vmstat; "
@@ -110,33 +110,33 @@
                  (now (append (plist-get memory :counters) (list (float-time))))
                  (processes (sort (delq nil (mapcar #'process (split-string (plist-get memory :ps) "\n" t)))
                                   (lambda (a b) (> (nth 1 a) (nth 1 b))))))
-            (agent-ui-panel-update panel "used" :value percent)
-            (agent-ui-panel-update
-             panel "figures"
+            (agent-ui-dashboard-update dashboard "used" :value percent)
+            (agent-ui-dashboard-update
+             dashboard "figures"
              :figures (list (list :label "Physical" :value (gib total) :unit "G" :good "none")
                             (list :label "Used" :value (gib used) :unit "G" :good "none")
                             (list :label "Cached files" :value (gib (plist-get memory :cached)) :unit "G" :good "none")
                             (list :label "Swap used" :value (gib (plist-get memory :swap)) :unit "G" :good "none")))
-            (agent-ui-panel-update
-             panel "pressure"
+            (agent-ui-dashboard-update
+             dashboard "pressure"
              :tags (list (pcase (plist-get memory :pressure)
                            ("critical" '(:label "critical" :face "error"))
                            ("warning" '(:label "warning" :face "warning"))
                            ("normal" '(:label "normal" :face "success"))
                            (_ '(:label "not known" :face "muted")))))
-            (agent-ui-panel-update panel "breakdown"
+            (agent-ui-dashboard-update dashboard "breakdown"
                                    :labels (plist-get memory :labels)
                                    :values (mapcar #'gib (plist-get memory :breakdown)))
-            (agent-ui-panel-append panel "used-history" :values (list percent))
+            (agent-ui-dashboard-append dashboard "used-history" :values (list percent))
             (when last
               (let ((seconds (max 0.001 (- (nth 2 now) (nth 2 last)))))
-                (agent-ui-panel-append
-                 panel "compressor"
+                (agent-ui-dashboard-append
+                 dashboard "compressor"
                  :series (list (list :name "compressed" :values (list (round (/ (- (nth 0 now) (nth 0 last)) seconds))))
                                (list :name "decompressed" :values (list (round (/ (- (nth 1 now) (nth 1 last)) seconds))))))))
             (setq last now)
-            (agent-ui-panel-update
-             panel "processes"
+            (agent-ui-dashboard-update
+             dashboard "processes"
              :rows (mapcar (pcase-lambda (`(,pid ,rss ,pmem ,command))
                              (list pid (truncate-string-to-width command 40 nil nil "…")
                                    (size rss) (/ (round (* pmem 10)) 10.0)))

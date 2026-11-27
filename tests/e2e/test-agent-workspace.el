@@ -298,11 +298,11 @@ refused, nothing made."
 
 (defconst +test-e2e-aw--panel
   ";;; -*- lexical-binding: t; -*-
-(agent-ui-panel
+(agent-ui-dashboard
  :version 1
  :ui (:type \"text\" :id \"t\" :text \"\")
  :every 60
- :fetch (lambda (panel) (agent-ui-panel-update panel \"t\" :text default-directory)))
+ :fetch (lambda (panel) (agent-ui-dashboard-update panel \"t\" :text default-directory)))
 "
   "A panel showing where it runs.")
 
@@ -319,19 +319,19 @@ line; both panels fetch (shown); v goes into them, then the next; V: Agent UI
 taking the pane's room, the session keeping its last lines; V again: back.
 Agent UI's own changes not taken for a border dragged (no layout again)."
   (+test-e2e-aw
-    (let ((agent-ui-panel-trust-file (+test-tmp-file "aw-e2e-trust.eld"))
+    (let ((agent-ui-dashboard-trust-file (+test-tmp-file "aw-e2e-trust.eld"))
           (worktree (agent-workspace-agent-worktree ada)))
-      (make-directory (expand-file-name ".agent-ui/panels" worktree) t)
+      (make-directory (expand-file-name ".agent-ui/dashboards" worktree) t)
       (dolist (name '("logs" "tests"))
-        (write-region +test-e2e-aw--panel nil (expand-file-name (format ".agent-ui/panels/%s.el" name) worktree)))
-      (agent-ui-panel-trust-project project)
+        (write-region +test-e2e-aw--panel nil (expand-file-name (format ".agent-ui/dashboards/%s.el" name) worktree)))
+      (agent-ui-dashboard-trust-project project)
       (let* ((session (agent-workspace-agent-buffer ada))
              (canvas (agent-ui-canvas (agent-ui--session-name session))))
         (with-current-buffer canvas (setq agent-ui--session-buffer session))
         (agent-ui-show '(:type "text" :id "hello" :text "Hello") :canvas canvas)
-        (let* ((logs (agent-ui-open-panel "logs" worktree t))
-               (tests (agent-ui-open-panel "tests" worktree t))
-               (state (lambda (panel) (buffer-local-value 'agent-ui-panels--state panel)))
+        (let* ((logs (agent-ui-open-dashboard "logs" worktree t))
+               (tests (agent-ui-open-dashboard "tests" worktree t))
+               (state (lambda (panel) (buffer-local-value 'agent-ui-dashboards--state panel)))
                (app (agent-workspace--app project)))
           (+test--pump 0.5)
           (let ((pane (get-buffer-window session))
@@ -343,8 +343,8 @@ Agent UI's own changes not taken for a border dragged (no layout again)."
             (should (string-search (substring-no-properties (agent-workspace-badge ada))
                                    (+test-e2e-aw--header pane)))
             ;; Shown: both fetch.
-            (should (+test-wait-for (lambda () (and (agent-ui-panel-fetched (funcall state logs))
-                                                    (agent-ui-panel-fetched (funcall state tests))))
+            (should (+test-wait-for (lambda () (and (agent-ui-dashboard-fetched (funcall state logs))
+                                                    (agent-ui-dashboard-fetched (funcall state tests))))
                                     3))
             ;; Agent UI's own changes: the sizes as laid out (no layout again).
             (+test--pump 0.5)

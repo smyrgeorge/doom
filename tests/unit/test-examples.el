@@ -155,8 +155,8 @@ images/, always that name."
 config/examples.el's list and docs/examples.md's table; the docs name the
 picker (M-x +my/example) too."
   (should (equal (sort (+my/examples) #'string<)
-                 '("agent-ui" "agent-workflow" "agent-workspace" "banner" "excalidraw" "image" "issues" "markdown" "merge" "mermaid"
-                   "panel" "pdf" "stripe" "tiling")))
+                 '("agent-ui" "agent-workflow" "agent-workspace" "banner" "dashboard" "excalidraw" "image" "issues" "markdown" "merge"
+                   "mermaid" "pdf" "stripe" "tiling")))
   (let ((listed (with-temp-buffer
                   (insert-file-contents (expand-file-name "config/examples.el" +test-root))
                   (buffer-string)))
@@ -268,7 +268,7 @@ frame's other window, the side window kept (the merge's panes take the
 frame as Magit's e does)."
   (+test-examples
     (dolist (run (append (list #'+my/example-banner #'+my/example-mermaid #'+my/example-tiling
-                               #'+my/example-agent-ui #'+my/example-panel #'+my/example-merge)
+                               #'+my/example-agent-ui #'+my/example-dashboard #'+my/example-merge)
                          (and (executable-find "bd") (list #'+my/example-issues))))
       (+test-reset)
       (let* ((side (display-buffer-in-side-window (get-buffer-create "*side*") '((side . left))))
@@ -498,19 +498,19 @@ session is closed."
       (kill-buffer session)
       (should-not (file-exists-p dir)))))
 
-(ert-deftest examples/panel-the-cpu-filled ()
-  "This config's cpu panel, in a project of its own, alone in the frame,
+(ert-deftest examples/dashboard-the-cpu-filled ()
+  "This config's cpu dashboard, in a project of its own, alone in the frame,
 filled by its code (not asked: this config's own); its folder gone once
 it's closed."
   (+test-examples
-    (let* ((canvas (+my/example-panel))
+    (let* ((canvas (+my/example-dashboard))
            (dir (car (buffer-local-value '+my/example--closing canvas))))
       (should (equal (buffer-name canvas) "Agent UI: cpu (service)"))
       (should (eq (window-buffer (selected-window)) canvas))
       (should (= (length (window-list)) 1))
       (should (+test-wait-for (lambda () (plist-get (agent-ui-get "processes" :canvas canvas) :rows)) 10))
       (should (numberp (plist-get (agent-ui-get "cpu" :canvas canvas) :value)))
-      (should-not (agent-ui-panels--error (buffer-local-value 'agent-ui-panels--state canvas)))
+      (should-not (agent-ui-dashboards--error (buffer-local-value 'agent-ui-dashboards--state canvas)))
       (kill-buffer canvas)
       (should-not (file-exists-p dir)))))
 

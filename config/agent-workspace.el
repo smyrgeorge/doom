@@ -588,13 +588,13 @@ does."
 ;; WHAT AN AGENT IS TOLD (see ITS SESSION above), after what every session is.
 (add-hook '+my/agent-shell-context-functions #'agent-workspace-agent-context t)
 
-;; AN AGENT'S PANELS (config/agent-workspace/panels.el): a project panel an
+;; AN AGENT'S PANELS (config/agent-workspace/panels.el): a project dashboard an
 ;; agent opens runs in its worktree, "tests · ada", never popped up (its pane
 ;; on the stage shows it), trusted as its project, closed with the agent;
 ;; saved with the crew by name, opened again with it (see THE SAVED CREW).
-(setq agent-ui-panel-name-function #'agent-workspace--panel-name
-      agent-ui-panel-trust-root-function #'agent-workspace--panel-trust-root
-      agent-ui-panel-display-function #'agent-workspace--panel-display)
+(setq agent-ui-dashboard-name-function #'agent-workspace--panel-name
+      agent-ui-dashboard-trust-root-function #'agent-workspace--panel-trust-root
+      agent-ui-dashboard-display-function #'agent-workspace--panel-display)
 
 ;; NO CREW HERE (see THE APP above): a terminal offered, git init typed in it.
 (setq agent-workspace-no-crew-function #'+my/agent-workspace-git-init)

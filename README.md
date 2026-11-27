@@ -31,7 +31,7 @@ else:
 - **A dynamic environment.** Emacs is less an editor than a Lisp environment that happens to edit text: every part of
   it can be changed while it runs, and almost anything can be built in it. This config builds a window manager, a
   three-way merge, a canvas for your agent and a crew of agents, all in Lisp. The agent works the same way: a project
-  panel is a Lisp file it can write and open at once, and a new kind of component it makes is loaded without a restart.
+  dashboard is a Lisp file it can write and open at once, and a new kind of component it makes is loaded without a restart.
 - **A harness.** Emacs runs and talks to anything: processes, scripts, servers, agents over ACP. And the agents reach
   back into it, through MCP tools and shell commands (`cmd/agent-ui`). So it can be the glue between your agents, your
   code, your workflows and your tools, and what's built for one generalizes to the others. Agent UI gives any agent a
@@ -112,21 +112,21 @@ Each agent is an [agent-shell](https://github.com/xenodium/agent-shell) session 
 
 ![The crew's app: the issues and the minimap, the stage, the room](examples/agent-workspace.png)
 
-### Project panels
+### Project dashboards
 
-A dashboard kept in the project's repository, `.agent-ui/panels/NAME.el`: what it shows and the Lisp that fills it, in
+A dashboard kept in the project's repository, `.agent-ui/dashboards/NAME.el`: what it shows and the Lisp that fills it, in
 one file. Slow queries load on their own without freezing Emacs. Your agent can write, check and open them too
-([more](docs/agent-ui.md#project-panels)).
+([more](docs/agent-ui.md#project-dashboards)).
 
 | Key | Action |
 |---|---|
-| `SPC o u` | Open one of the project's panels |
+| `SPC o u` | Open one of the project's dashboards |
 | `gR` | Read its file again and run it anew |
-| `S` (on a canvas) | Save the component at point as a panel |
+| `S` (on a canvas) | Save the component at point as a dashboard |
 | `q` | Close it |
-| `M-x +my/example-panel` | Try it: the CPU, every second |
+| `M-x +my/example-dashboard` | Try it: the CPU, every second |
 
-![A project panel: this Mac's CPU, every second](examples/panel.png)
+![A project dashboard: this Mac's CPU, every second](examples/dashboard.png)
 
 ### Tiling window management
 

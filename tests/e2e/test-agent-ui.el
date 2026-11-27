@@ -237,33 +237,33 @@ elements hidden, its divider still there."
             (should (invisible-p (match-beginning 0))))
         (kill-buffer canvas)))))
 
-(ert-deftest e2e-agent-ui/a-panel-offers-its-pdf ()
-  "A project panel opened in a GUI frame: its notice offering its PDF over
+(ert-deftest e2e-agent-ui/a-dashboard-offers-its-pdf ()
+  "A project dashboard opened in a GUI frame: its notice offering its PDF over
 it; exported, a real PDF beside its file, its charts drawn in it as images
 (its SVG nests theirs)."
   (skip-unless (executable-find "rsvg-convert"))
-  (let* ((root (file-name-as-directory (make-temp-file "panel-pdf-" t)))
+  (let* ((root (file-name-as-directory (make-temp-file "dashboard-pdf-" t)))
          (default-directory root)
-         (agent-ui-panel-allow-function (lambda (_panel) nil))
+         (agent-ui-dashboard-allow-function (lambda (_dashboard) nil))
          (svg nil)
          (canvas nil))
     (unwind-protect
         (progn
-          (make-directory (expand-file-name agent-ui-panel-directory root) t)
-          (with-temp-file (expand-file-name "dash.el" (expand-file-name agent-ui-panel-directory root))
-            (insert "(agent-ui-panel :version 1
+          (make-directory (expand-file-name agent-ui-dashboard-directory root) t)
+          (with-temp-file (expand-file-name "dash.el" (expand-file-name agent-ui-dashboard-directory root))
+            (insert "(agent-ui-dashboard :version 1
  :ui (:type \"panel\" :id \"dash\" :title \"Dash\" :layout \"row\"
       :children ((:type \"chart\" :id \"load\" :title \"Load\" :values (3 5 4 8 6))
                  (:type \"gauge\" :id \"busy\" :title \"Busy\" :value 40 :max 100))))\n"))
           (delete-other-windows)
-          (setq canvas (agent-ui-open-panel "dash"))
+          (setq canvas (agent-ui-open-dashboard "dash"))
           (redisplay t)
           (with-current-buffer canvas
-            (should (assq 'agent-ui-panel-pdf +my/banner--list))
+            (should (assq 'agent-ui-dashboard-pdf +my/banner--list))
             (should header-line-format))
           (advice-add 'agent-ui-snapshot-svg :filter-return (lambda (text) (setq svg text)) '((name . e2e-svg)))
           (let ((pdf (with-current-buffer canvas (agent-ui-export-pdf))))
-            (should (string-prefix-p (expand-file-name agent-ui-panel-directory root) pdf))
+            (should (string-prefix-p (expand-file-name agent-ui-dashboard-directory root) pdf))
             (should (equal (with-temp-buffer
                              (set-buffer-multibyte nil)
                              (insert-file-contents-literally pdf nil 0 5)

@@ -12,14 +12,14 @@ moves while a build runs, a table of test results filling in, a chart, a questio
 
 Try it: `M-x +my/example-agent-ui`, an offline agent releasing a project ([Examples](examples.md)).
 
-What it is and how it works (its components, the command line, the canvas, sources, panels, types the agent makes) is
+What it is and how it works (its components, the command line, the canvas, sources, dashboards, types the agent makes) is
 in the package's own docs:
 
 - [Getting started](https://github.com/smyrgeorge/agent-ui/blob/main/docs/getting-started.md)
 - [The command line and MCP](https://github.com/smyrgeorge/agent-ui/blob/main/docs/command-line.md)
 - [The canvas](https://github.com/smyrgeorge/agent-ui/blob/main/docs/canvas.md)
 - [Component types](https://github.com/smyrgeorge/agent-ui/blob/main/docs/components.md)
-- [Project panels](https://github.com/smyrgeorge/agent-ui/blob/main/docs/panels.md)
+- [Project dashboards](https://github.com/smyrgeorge/agent-ui/blob/main/docs/dashboards.md)
 
 This page is what this config adds on top of it (`config/agent-ui.el`).
 
@@ -31,8 +31,8 @@ Vim's keys in a canvas, as Doom's other buffers':
 |---|---|
 | `q` | Close the canvas (a session's saved components come back when it's resumed) |
 | `g r` | Redraw it |
-| `g R` | A project panel: read again from its file, run anew |
-| `S` | Save the component at point as one of the project's panels |
+| `g R` | A project dashboard: read again from its file, run anew |
+| `S` | Save the component at point as one of the project's dashboards |
 | `a` | Put the component at point into its session's prompt |
 | `b` | Report a bug in Agent UI, about the component at point |
 | `c` / `d` | Comment on a line of code or a diff (sent with Send the review), or remove the comment |
@@ -44,7 +44,7 @@ Vim's keys in a canvas, as Doom's other buffers':
 | `SPC m e` | Export what the canvas shows as a PDF |
 
 In a session, `C-c C-q` (or `SPC m q`) goes to the question waiting on its canvas. `SPC o u` opens one of the
-current project's panels, in a pane of its own; `SPC o U` in the window you're in. A form opens in a buffer of its own,
+current project's dashboards, in a pane of its own; `SPC o U` in the window you're in. A form opens in a buffer of its own,
 with Emacs's keys: `C-c C-c` sends it, `C-c C-k` cancels it.
 
 ## In the session's pane
@@ -53,10 +53,10 @@ Agent UI opens under its session's conversation, its views (the session's canvas
 out in columns. Under them, Doom's mode line, saying what Agent UI's own bar would (`config/editor/modeline.el`).
 [Tiling](editor.md#tiling) lays the session's pane out as one, Agent UI's windows in it.
 
-## Project panels
+## Project dashboards
 
-A project's panels are in `.agent-ui/panels/` in its repository. This config has two, `cpu` and `memory`
-(`M-x +my/example-panel`). Each panel opened offers, in a notice, to export it as a PDF (`SPC m e`).
+A project's dashboards are in `.agent-ui/dashboards/` in its repository. This config has two, `cpu` and `memory`
+(`M-x +my/example-dashboard`). Each dashboard opened offers, in a notice, to export it as a PDF (`SPC m e`).
 
 ## What the agent is told
 
@@ -84,6 +84,6 @@ component types the agent makes and you keep (in `.agent-ui/kept/`) get an issue
 | `packages.el` | The `agent-ui` package, from `~/dev/agent-ui` |
 | `config/agent-ui.el` | This config's layer over it: keys, settings, hooks |
 | `cmd/agent-ui` | The package's command line (its `bin/agent-ui`), for this config's docs and scripts |
-| `.agent-ui/panels/` | This config's project panels |
+| `.agent-ui/dashboards/` | This config's project dashboards |
 | `tests/unit/test-agent-ui-config.el` | Tests of this config's layer (the package has its own) |
 | `tests/unit/test-agent-ui-tiling.el`, `tests/e2e/test-agent-ui.el` | Agent UI with tiling, and in a GUI Emacs |

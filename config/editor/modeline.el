@@ -210,7 +210,7 @@ window (`+my/modeline-fit-a')."
 ;; mode line, as tall and coloured as the windows' beside them: Agent UI's
 ;; own bar was a header line's, shorter (`agent-ui-pane-mode-line', set in
 ;; config/agent-ui.el). A canvas's layout, wherever it shows (a view, a
-;; run's pane, a project panel): the main one, with what Agent UI's bar said
+;; run's pane, a project dashboard): the main one, with what Agent UI's bar said
 ;; in place of the major mode (it said Agent UI too): "Agent UI · 2 views"
 ;; under the leftmost view (its keys, muted, under the rightmost: this config
 ;; says none); elsewhere the major mode.

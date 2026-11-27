@@ -1,5 +1,5 @@
 ;;; tests/unit/test-agent-workspace-panels.el -*- lexical-binding: t; -*-
-;; config/agent-workspace/panels.el: an agent's panels. A project panel
+;; config/agent-workspace/panels.el: an agent's panels. A project dashboard
 ;; opened from two agents' worktrees: one each, named after them, never
 ;; shown in a pane; trusted as their project; closed when the agent is put to
 ;; sleep or killed, kept across a restart; yours from the main checkout its
@@ -13,11 +13,11 @@
 
 (defconst +test-awp--panel
   ";;; tests.el --- Agent UI panel -*- lexical-binding: t; -*-
-(agent-ui-panel
+(agent-ui-dashboard
  :version 1
  :ui (:type \"text\" :id \"t\" :text \"\")
  :every 60
- :fetch (lambda (panel) (agent-ui-panel-update panel \"t\" :text default-directory)))
+ :fetch (lambda (panel) (agent-ui-dashboard-update panel \"t\" :text default-directory)))
 "
   "A panel showing where it runs.")
 
@@ -30,10 +30,10 @@ its panels and crew closed after."
      (let* ((project (file-name-as-directory
                       (file-truename (make-temp-file (+test-tmp-file "awp-") t))))
             (default-directory project)
-            (agent-ui-panel-trust-file (+test-tmp-file (format "awp-trust-%s.eld" (random 100000))))
+            (agent-ui-dashboard-trust-file (+test-tmp-file (format "awp-trust-%s.eld" (random 100000))))
             (agent-workspace--crews (make-hash-table :test #'equal)))
-       (make-directory (expand-file-name ".agent-ui/panels" project) t)
-       (with-temp-file (expand-file-name ".agent-ui/panels/tests.el" project) (insert +test-awp--panel))
+       (make-directory (expand-file-name ".agent-ui/dashboards" project) t)
+       (with-temp-file (expand-file-name ".agent-ui/dashboards/tests.el" project) (insert +test-awp--panel))
        (call-process "git" nil nil nil "init" "-q" "-b" "main")
        (call-process "git" nil nil nil "add" ".")
        (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "first")
@@ -57,26 +57,26 @@ its panels and crew closed after."
                ,@body)
            (agent-workspace-close-all)
            (dolist (buffer (buffer-list))
-             (when (buffer-local-value 'agent-ui-panels--state buffer)
+             (when (buffer-local-value 'agent-ui-dashboards--state buffer)
                (kill-buffer buffer))))))))
 
 (defun +test-awp--open (dir)
   "Panel tests opened as an agent's request opens it, from DIR."
-  (agent-ui-open-panel "tests" dir t))
+  (agent-ui-open-dashboard "tests" dir t))
 
 (ert-deftest agent-workspace-panels/one-each-in-its-worktree ()
   "Opened from two agents' worktrees: one each, \"tests · ada\" and \"tests ·
 ken\", rooted there, shown in no pane; theirs; yours from the main checkout
 its own, shown."
   (+test-awp
-    (agent-ui-panel-trust-project project)
+    (agent-ui-dashboard-trust-project project)
     (let ((a (+test-awp--open (agent-workspace-agent-worktree ada)))
           (k (+test-awp--open (agent-workspace-agent-worktree ken)))
           (mine (+test-awp--open project)))
       (should (equal (mapcar #'buffer-name (list a k mine))
                      (list "Agent UI: tests · ada" "Agent UI: tests · ken"
                            (format "Agent UI: tests (%s)" (file-name-nondirectory (directory-file-name project))))))
-      (should (equal (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state a)))
+      (should (equal (file-truename (agent-ui-dashboards--root (buffer-local-value 'agent-ui-dashboards--state a)))
                      (file-truename (agent-workspace-agent-worktree ada))))
       (should-not (get-buffer-window a t))
       (should-not (get-buffer-window k t))
@@ -88,32 +88,32 @@ its own, shown."
       ;; Opened again: the same one.
       (should (eq (+test-awp--open (agent-workspace-agent-worktree ada)) a))
       ;; Its --panel requests find it by its name, from its worktree.
-      (should (eq (agent-ui-panel-canvas "tests" (agent-workspace-agent-worktree ada)) a)))))
+      (should (eq (agent-ui-dashboard-canvas "tests" (agent-workspace-agent-worktree ada)) a)))))
 
 (ert-deftest agent-workspace-panels/trusted-as-its-project ()
   "A worktree's panels share its project's trust; its file changed on the
 agent's branch is asked about again unless the project is trusted."
   (+test-awp
-    (let ((file (expand-file-name ".agent-ui/panels/tests.el" (agent-workspace-agent-worktree ada))))
-      (should-not (agent-ui-panel-trusted-p file))
+    (let ((file (expand-file-name ".agent-ui/dashboards/tests.el" (agent-workspace-agent-worktree ada))))
+      (should-not (agent-ui-dashboard-trusted-p file))
       ;; Its content let run (from the main checkout): the same in the worktree.
-      (agent-ui-panel-trust (expand-file-name ".agent-ui/panels/tests.el" project))
-      (should (agent-ui-panel-trusted-p file))
+      (agent-ui-dashboard-trust (expand-file-name ".agent-ui/dashboards/tests.el" project))
+      (should (agent-ui-dashboard-trusted-p file))
       ;; Changed on ada's branch: asked again.
       (write-region "\n;; changed\n" nil file t)
-      (should-not (agent-ui-panel-trusted-p file))
+      (should-not (agent-ui-dashboard-trusted-p file))
       ;; The project trusted (asked from the worktree's panel: p): the
       ;; worktree's too, and the project's root remembered.
-      (agent-ui-panel-trust-project (agent-workspace-agent-worktree ada))
-      (should (agent-ui-panel-trusted-p file))
-      (should (agent-ui-panel-project-trusted-p project))
-      (should (equal (mapcar #'car (agent-ui-panel-trusted-projects)) (list project))))))
+      (agent-ui-dashboard-trust-project (agent-workspace-agent-worktree ada))
+      (should (agent-ui-dashboard-trusted-p file))
+      (should (agent-ui-dashboard-project-trusted-p project))
+      (should (equal (mapcar #'car (agent-ui-dashboard-trusted-projects)) (list project))))))
 
 (ert-deftest agent-workspace-panels/closed-with-its-agent ()
   "Put to sleep or killed, an agent's panels close; a restart keeps them;
 another agent's stay."
   (+test-awp
-    (agent-ui-panel-trust-project project)
+    (agent-ui-dashboard-trust-project project)
     (let ((a (+test-awp--open (agent-workspace-agent-worktree ada)))
           (k (+test-awp--open (agent-workspace-agent-worktree ken))))
       (agent-workspace-restart ada)
@@ -128,7 +128,7 @@ another agent's stay."
   "One opened or closed: said to `agent-workspace-change-functions' (its
 pane, its bar, crew.json follow it)."
   (+test-awp
-    (agent-ui-panel-trust-project project)
+    (agent-ui-dashboard-trust-project project)
     (let* ((whats nil)
            (agent-workspace-change-functions (list (lambda (agent what) (push (cons (agent-workspace-agent-name agent) what) whats))))
            (a (+test-awp--open (agent-workspace-agent-worktree ada))))

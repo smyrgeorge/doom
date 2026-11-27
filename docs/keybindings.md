@@ -53,7 +53,7 @@ keys, so Vim's and Doom's keys stay as they are there. The rules are in `config/
 | `n` / `p`, `y`, `RET` (the agent's diffs) | the same | The next / previous hunk, accept, open the file |
 | `C-c C-d`, `SPC m d` (a session) | the same | Draw for the agent |
 | `SPC m u` (a session, or its [Agent UI](agent-ui.md#in-the-sessions-pane)) | the same | Hide Agent UI in the session's pane / show it again |
-| `SPC m e` ([Agent UI](agent-ui.md#the-canvas), a [project panel](agent-ui.md#project-panels)) | the same | Save what it shows as a PDF: in the session's `.agent-shell/pdf/`, a panel's beside its file |
+| `SPC m e` ([Agent UI](agent-ui.md#the-canvas), a [project dashboard](agent-ui.md#project-dashboards)) | the same | Save what it shows as a PDF: in the session's `.agent-shell/pdf/`, a panel's beside its file |
 | `SPC o i` / `SPC o I` | `SPC o i` / `SPC o I` | The project's [issues](issues.md) / a new one |
 | `SPC o w` / `SPC o W` | `SPC o w` / `SPC o W` | The project's [agent crew](agent-workspace.md), in its own workspace / in the window you're in |
 | `C-c C-i` (a session), `C-c C-a` (an issue) | the same | An issue into the agent's prompt |

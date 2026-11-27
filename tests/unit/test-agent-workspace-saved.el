@@ -857,11 +857,11 @@ off, applied."
 
 (defconst +test-aws2--panel
   ";;; panel.el --- Agent UI panel -*- lexical-binding: t; -*-
-(agent-ui-panel
+(agent-ui-dashboard
  :version 1
  :ui (:type \"text\" :id \"t\" :text \"\")
  :every 60
- :fetch (lambda (panel) (agent-ui-panel-update panel \"t\" :text default-directory)))
+ :fetch (lambda (panel) (agent-ui-dashboard-update panel \"t\" :text default-directory)))
 "
   "A panel showing where it runs.")
 
@@ -870,30 +870,30 @@ off, applied."
 and tests, and trusted (the trust file the test's own); the panels open
 closed after."
   (declare (indent 1))
-  `(let ((agent-ui-panel-trust-file (+test-tmp-file (format "aws2-trust-%s.eld" ,name))))
+  `(let ((agent-ui-dashboard-trust-file (+test-tmp-file (format "aws2-trust-%s.eld" ,name))))
      (unwind-protect
          (+test-aws2 ,name
            (let ((default-directory project))
-             (make-directory ".agent-ui/panels" t)
+             (make-directory ".agent-ui/dashboards" t)
              (dolist (panel '("logs" "tests"))
-               (write-region +test-aws2--panel nil (format ".agent-ui/panels/%s.el" panel)))
+               (write-region +test-aws2--panel nil (format ".agent-ui/dashboards/%s.el" panel)))
              (call-process "git" nil nil nil "add" ".agent-ui")
              (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "panels"))
-           (agent-ui-panel-trust-project project)
+           (agent-ui-dashboard-trust-project project)
            ,@body)
        (dolist (buffer (buffer-list))
-         (when (buffer-local-value 'agent-ui-panels--state buffer)
+         (when (buffer-local-value 'agent-ui-dashboards--state buffer)
            (let ((kill-buffer-query-functions nil))
              (kill-buffer buffer)))))))
 
 (defun +test-aws2--open-panel (agent name)
   "Panel NAME opened as AGENT's session opens one (agent-ui open NAME)."
-  (agent-ui-open-panel name (agent-workspace-agent-worktree agent) t))
+  (agent-ui-open-dashboard name (agent-workspace-agent-worktree agent) t))
 
 (defun +test-aws2--open-panels ()
   "The panels open: their canvases' names."
   (sort (mapcar #'buffer-name
-                (seq-filter (lambda (buffer) (buffer-local-value 'agent-ui-panels--state buffer))
+                (seq-filter (lambda (buffer) (buffer-local-value 'agent-ui-dashboards--state buffer))
                             (buffer-list)))
         #'string<))
 
@@ -917,7 +917,7 @@ worktree, named after it, one from a file there too; crew.json keeps them
       (should (equal (+test-aws2--open-panels) '("Agent UI: tests · grace" "Agent UI: try · grace")))
       (dolist (canvas (agent-workspace-agent-panels ada))
         (should (equal (file-name-as-directory
-                        (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state canvas))))
+                        (file-truename (agent-ui-dashboards--root (buffer-local-value 'agent-ui-dashboards--state canvas))))
                        (file-name-as-directory (file-truename (agent-workspace-agent-worktree ada))))))
       (should (string-search "{\"name\": \"grace\", \"role\": \"builder\", \"colour\": \"blue\", \"panels\": [\"drafts/try.el\", \"tests\"]}"
                              (+test-aws2--file project))))))
@@ -935,7 +935,7 @@ checkout: in no agent's."
                              (+test-aws2--file project)))
       (let ((logs (+test-aws2--open-panel ada "logs")))
         (+test-aws2--open-panel ken "tests")
-        (agent-ui-open-panel "tests" project)
+        (agent-ui-open-dashboard "tests" project)
         (should (string-search "\"colour\": \"blue\", \"panels\": [\"logs\", \"tests\"]}" (+test-aws2--file project)))
         (should (string-search "{\"name\": \"ken\", \"role\": \"builder\", \"colour\": \"magenta\", \"panels\": [\"tests\"]}"
                                (+test-aws2--file project)))
@@ -1046,7 +1046,7 @@ Nothing written meanwhile."
       (let ((ada (agent-workspace-agent "ada" project)))
         (should (equal (+test-aws2--open-panels) '("Agent UI: logs · ada" "Agent UI: tests · ada")))
         (dolist (canvas (agent-workspace-agent-panels ada))
-          (should (equal (file-truename (agent-ui-panels--root (buffer-local-value 'agent-ui-panels--state canvas)))
+          (should (equal (file-truename (agent-ui-dashboards--root (buffer-local-value 'agent-ui-dashboards--state canvas)))
                          (file-truename (agent-workspace-agent-worktree ada))))
           ;; Shown in ada's Agent UI, as its views.
           (dolist (window (get-buffer-window-list canvas nil t))

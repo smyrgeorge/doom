@@ -3,7 +3,7 @@
 ;; tests are the package's, ~/dev/agent-ui/tests): Vim's keys, where its
 ;; files go, what a session is told (through config/agent-shell/context.el),
 ;; Mermaid's diagrams drawn by config/mermaid.el, the bugs it files into this
-;; config's Beads issues (config/beads/file.el), the panel's PDF notice, the
+;; config's Beads issues (config/beads/file.el), the dashboard's PDF notice, the
 ;; package's mode on.
 
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
@@ -29,7 +29,7 @@
   (should (equal agent-ui-kept-directory (expand-file-name ".agent-ui/kept/" doom-user-dir)))
   (should (equal agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir)))
   (should (equal agent-ui-mermaid-cache-directory (expand-file-name "agent-ui/mermaid/" doom-cache-dir)))
-  (should (equal agent-ui-panel-trust-file (expand-file-name "agent-ui/trusted-panels.eld" doom-data-dir))))
+  (should (equal agent-ui-dashboard-trust-file (expand-file-name "agent-ui/trusted-dashboards.eld" doom-data-dir))))
 
 (ert-deftest agent-ui-config/under-its-views-dooms-mode-line ()
   (should (eq agent-ui-pane-mode-line t))
@@ -39,8 +39,8 @@
 
 (ert-deftest agent-ui-config/vims-keys ()
   (let ((normal (evil-get-auxiliary-keymap agent-ui-canvas-mode-map 'normal)))
-    (dolist (binding '(("q" . agent-ui-quit) ("gr" . agent-ui-canvas-redraw) ("gR" . agent-ui-panel-reload)
-                       ("S" . agent-ui-save-panel) ("R" . agent-ui-review) ("a" . agent-ui-send-component)
+    (dolist (binding '(("q" . agent-ui-quit) ("gr" . agent-ui-canvas-redraw) ("gR" . agent-ui-dashboard-reload)
+                       ("S" . agent-ui-save-dashboard) ("R" . agent-ui-review) ("a" . agent-ui-send-component)
                        ("b" . agent-ui-report-bug) ("c" . agent-ui-comment) ("d" . agent-ui-uncomment)
                        ("s" . agent-ui-table-sort) ("K" . agent-ui-move-item-up) ("J" . agent-ui-move-item-down)
                        ("x" . agent-ui-drop-item) ("e" . agent-ui-edit-item)))
@@ -50,9 +50,9 @@
     (should (eq (lookup-key review "a") #'agent-ui-review-keep)))
   ;; A form typed into: Emacs's keys.
   (should (eq (evil-initial-state 'agent-ui-form-mode) 'emacs))
-  ;; SPC o u: a project's panel.
-  (should (eq (lookup-key doom-leader-map "ou") #'agent-ui-open-panel))
-  (should (eq (lookup-key doom-leader-map "oU") #'agent-ui-open-panel-here))
+  ;; SPC o u: a project's dashboard.
+  (should (eq (lookup-key doom-leader-map "ou") #'agent-ui-open-dashboard))
+  (should (eq (lookup-key doom-leader-map "oU") #'agent-ui-open-dashboard-here))
   ;; C-c C-q in a session: the question waiting.
   (require 'agent-shell)
   (should (eq (keymap-lookup agent-shell-mode-map "C-c C-q") #'agent-ui-goto-question)))
@@ -90,12 +90,12 @@ package's own system prompt too (said twice)."
 
 ;; ====== HOOKS ======
 
-(ert-deftest agent-ui-config/a-panels-notice-offers-a-pdf ()
-  (should (memq '+my/agent-ui-panel-pdf-notice agent-ui-panel-open-hook))
+(ert-deftest agent-ui-config/a-dashboards-notice-offers-a-pdf ()
+  (should (memq '+my/agent-ui-dashboard-pdf-notice agent-ui-dashboard-open-hook))
   (let (shown)
     (cl-letf (((symbol-function '+my/banner-show) (lambda (&rest args) (setq shown args))))
-      (+my/agent-ui-panel-pdf-notice))
-    (should (eq (car shown) 'agent-ui-panel-pdf))
+      (+my/agent-ui-dashboard-pdf-notice))
+    (should (eq (car shown) 'agent-ui-dashboard-pdf))
     (should (equal (plist-get (cddr shown) :actions) '(("Export PDF" . agent-ui-export-pdf))))))
 
 (ert-deftest agent-ui-config/the-rest-of-its-wiring ()
