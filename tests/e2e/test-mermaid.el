@@ -615,6 +615,8 @@ as it came."
 
 (ert-deftest e2e-mermaid/an-agent-ui-element-and-its-snapshot ()
   (+test-mermaid--needs-mmdc)
+  ;; Agent UI's snapshots: loaded when first used, not with Agent UI.
+  (require 'agent-ui-snapshot)
   (+test-mermaid--fresh
     (let* ((element '(:type "mermaid" :id "flow" :diagram "flowchart LR\n    build --> test --> deploy"))
            (ctx (agent-ui-context :width 60 :graphic t :char-width (frame-char-width) :line-height (frame-char-height)))
