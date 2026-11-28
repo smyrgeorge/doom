@@ -487,6 +487,23 @@ reads: git asked again at the next."
           (should (= (git-calls) 0))))
       (agent-workflow--cancel run))))
 
+(ert-deftest agent-workflow-pane/opens-before-any-session ()
+  "Started from Emacs before any agent-shell session: its pane opens all
+the same. Agent UI's parts (its canvas) come with agent-shell, or with the
+pane itself (`agent-workflow--pane-make'): the run doesn't wait for them
+to open it (doom-4h4.2: M-x agent-workflow-run as Emacs started, no
+pane). From the shell: made when you look."
+  (should (memq #'agent-workflow--pane-started agent-workflow-started-functions))
+  (let ((opened nil))
+    (cl-letf (((symbol-function 'agent-workflow-pane) (lambda (run show) (push (cons run show) opened)))
+              ;; Agent UI's parts not loaded yet: its canvas not defined.
+              ((symbol-function 'agent-ui-canvas) nil))
+      (agent-workflow--pane-started 'a-run nil)
+      (should (equal opened '((a-run . t))))
+      (setq opened nil)
+      (agent-workflow--pane-started 'a-run t)
+      (should-not opened))))
+
 (ert-deftest agent-workflow-pane/each-run-its-own-pane ()
   "Two runs of an issue with one workflow (the first failed, its pane kept):
 each its own pane, the second's named with its number; the first's still

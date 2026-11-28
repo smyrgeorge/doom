@@ -1107,9 +1107,12 @@ those you unfolded kept so."
 
 
 (defun agent-workflow--pane-started (run shell)
-  "RUN started: its pane opened, unless from the SHELL. In
-`agent-workflow-started-functions'."
-  (unless (or shell (not (fboundp 'agent-ui-canvas)))
+  "RUN started: its pane opened, unless from the SHELL or Agent UI is off.
+In `agent-workflow-started-functions'."
+  ;; Agent UI on (config/agent-ui.el), not its parts loaded: they come with
+  ;; agent-shell, and a run may start before any session (its pane loads
+  ;; them, `agent-workflow--pane-make').
+  (unless (or shell (not (featurep 'agent-ui)))
     (agent-workflow-pane run t)))
 
 (add-hook 'agent-workflow-started-functions #'agent-workflow--pane-started)
