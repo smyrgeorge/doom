@@ -59,7 +59,9 @@
   "Non-nil: macOS's input-source bubble by Emacs's cursor, as in other apps.")
 
 ;; FRAMES AND WINDOWS (config/emacs/window.el)
-;; The frame is maximized at startup.
+;; The frame is maximized at startup. A window quit (q) gets back the size it
+;; had before, only on the side it had it: a pane in a column then, beside the
+;; sidebar now, keeps its width (the sidebar took it all).
 
 ;; NEW WINDOWS GET FOCUS
 ;; Splits (SPC w s / SPC w v): Doom always splits below/right; these only decide

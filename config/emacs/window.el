@@ -60,3 +60,44 @@ one never ended (see NEW WINDOWS GET FOCUS), its window forgotten."
       (add-hook 'post-command-hook #'+my/focus-new-window-h)
       (add-hook 'pre-command-hook #'+my/focus-forget-h))
     window))
+
+;; A WINDOW QUIT GETS ITS SIZE BACK ON THE SIDE IT HAD IT
+;; A buffer shown in a window (`display-buffer' reusing it) has the window's
+;; size noted, to give back once it's quit (q): its height if it's in a
+;; column then, else its width. Emacs gives it back along the side the window
+;; is combined on when it's quit, though that may have changed: a session's
+;; pane over its Agent UI canvas (in a column with it) showing the issue list
+;; (SPC o i), the canvas closing meanwhile (its session not shown), was beside
+;; the sidebar once q quit it, and got its old height (53 lines) as its width:
+;; 53 columns of 202, the 149 others the sidebar's (kept so by
+;; config/treemacs/width.el, as if you had resized it). The side is noted with
+;; the size; a window combined the other way when quit keeps its size.
+(defvar +my/quit-restore--sides (make-hash-table :test #'eq :weakness 'key)
+  "A `quit-restore' parameter's size (its buffer's quadruple) to the side it
+was noted on: `height' or `width' (see above).")
+
+(defun +my/quit-restore--side (window)
+  "The side of WINDOW's size `display-buffer' notes, and quitting gives back."
+  (if (window-combined-p window) 'height 'width))
+
+(defun +my/quit-restore--quads (window)
+  "WINDOW's noted buffers with their sizes: its `quit-restore' parameters'."
+  (seq-filter (lambda (quad) (and (consp quad) (integerp (nth 3 quad))))
+              (mapcar (lambda (parameter) (nth 1 (window-parameter window parameter)))
+                      '(quit-restore quit-restore-prev))))
+
+(defadvice! +my/quit-restore-note-side-a (type window _buffer)
+  "The side of the size just noted for WINDOW (see above)."
+  :after #'display-buffer-record-window
+  (when (eq type 'reuse)
+    (dolist (quad (+my/quit-restore--quads window))
+      (unless (gethash quad +my/quit-restore--sides)
+        (puthash quad (+my/quit-restore--side window) +my/quit-restore--sides)))))
+
+(defadvice! +my/quit-restore-same-side-a (&optional window _bury-or-kill)
+  "WINDOW's noted size given back only on the side it was noted on (see above)."
+  :before #'quit-restore-window
+  (let ((window (window-normalize-window window t)))
+    (dolist (quad (+my/quit-restore--quads window))
+      (unless (eq (gethash quad +my/quit-restore--sides) (+my/quit-restore--side window))
+        (setcar (nthcdr 3 quad) nil)))))

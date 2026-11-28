@@ -1,7 +1,8 @@
 ;;; tests/unit/test-window.el -*- lexical-binding: t; -*-
 ;; config/emacs/window.el: new windows get focus (evil's splits, and windows
 ;; that `display-buffer' opens for a command), the frame maximized at startup;
-;; the fringes Doom's.
+;; a window quit gets its size back only on the side it had it; the fringes
+;; Doom's.
 
 (+test-load "config/emacs")
 
@@ -327,6 +328,51 @@ frame, child frames too, ran out of memory once)."
   (should-not (memq '+my/right-fringe-h after-setting-font-hook))
   (should-not (memq '+my/unpadded-right-fringe-h (bound-and-true-p agent-ui-canvas-hook)))
   (should-not (memq '+my/unpadded-right-fringe-h (bound-and-true-p treemacs-mode-hook))))
+
+;; ====== A WINDOW QUIT: ITS SIZE BACK ON ITS SIDE ======
+
+(defun +test-window--sidebar-and-column ()
+  "A sidebar on the left (`window-preserve-size', as config/treemacs/width.el
+keeps it) beside a pane in a column with a window below it: (SIDEBAR PANE
+BELOW), the pane selected."
+  (delete-other-windows)
+  (let* ((sidebar (selected-window))
+         (pane (split-window sidebar 20 'right))
+         (below (split-window pane -6 'below)))
+    (set-window-buffer sidebar (get-buffer-create " *test sidebar*"))
+    (window-preserve-size sidebar t t)
+    (set-window-buffer pane (get-buffer-create "*test pane*"))
+    (set-window-buffer below (get-buffer-create "*test below*"))
+    (select-window pane)
+    (list sidebar pane below)))
+
+(ert-deftest window/quit-keeps-the-size-on-another-side ()
+  "A buffer shown in a pane in a column (its height noted), the window below
+gone (the pane now beside the sidebar), then q: the pane and the sidebar keep
+their widths (Emacs gave the pane its old height as its width, the rest to
+the sidebar). Shown again in the column, q gives its height back."
+  (+test-with-reset
+    (pcase-let ((`(,sidebar ,pane ,below) (+test-window--sidebar-and-column)))
+      (unwind-protect
+          (progn
+            (switch-to-buffer (get-buffer-create "*test list*"))
+            (should (integerp (nth 3 (nth 1 (window-parameter pane 'quit-restore)))))
+            (delete-window below)
+            (let ((widths (list (window-total-width sidebar) (window-total-width pane))))
+              (quit-window nil pane)
+              (should (equal (window-buffer pane) (get-buffer "*test pane*")))
+              (should (equal (list (window-total-width sidebar) (window-total-width pane)) widths)))
+            ;; In a column, quit there: its height back, as Emacs has it.
+            (setq below (split-window pane -6 'below))
+            (let ((height (window-total-height pane)))
+              (set-window-parameter pane 'quit-restore nil)
+              (switch-to-buffer (get-buffer-create "*test list*"))
+              (window-resize pane -3)
+              (should (= (window-total-height pane) (- height 3)))
+              (quit-window nil pane)
+              (should (= (window-total-height pane) height))))
+        (dolist (name '(" *test sidebar*" "*test pane*" "*test below*" "*test list*"))
+          (when (get-buffer name) (kill-buffer name)))))))
 
 ;; ====== LOADED ======
 
