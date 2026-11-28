@@ -47,7 +47,8 @@ else:
 
 - [x] Agent UI in a repository of its own, an Emacs library that works without this config
   ([smyrgeorge/agent-ui](https://github.com/smyrgeorge/agent-ui))
-- [ ] Agent workflow in a repository of its own, an Emacs library that works without this config
+- [x] Agent workflow in a repository of its own, an Emacs library that works without this config
+  ([smyrgeorge/agent-workflow](https://github.com/smyrgeorge/agent-workflow))
 - [ ] Agent workspace in a repository of its own, an Emacs library that works without this config
 - [ ] Expand what the agent workspace can do
 
