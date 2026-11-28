@@ -191,6 +191,9 @@ answering the other)."
 
 (defun agent-workflow--pane-make (run)
   "RUN's pane made, drawn, in no window yet."
+  ;; Agent UI's parts, loaded with agent-shell otherwise (a run's pane may
+  ;; come first): before binding their option.
+  (require 'agent-ui-parts)
   (let* ((agent-ui-display-function #'ignore)
          (pane (agent-ui-canvas (agent-workflow--pane-name run)))
          (lines nil))

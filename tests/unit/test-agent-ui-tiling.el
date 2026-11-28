@@ -6,6 +6,8 @@
 ;; change functions: the tests run them where Emacs would.
 
 (+test-load "config/emacs" "config/tiling" "config/agent-ui")
+;; Its parts, loaded with agent-shell or when first used (no session here).
+(require 'agent-ui-parts)
 
 ;; ====== HELPERS ======
 

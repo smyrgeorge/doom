@@ -8,6 +8,16 @@
 
 (require 'agent-ui)
 
+;; Only agent-ui.el is loaded with Emacs: its parts (agent-ui-parts.el)
+;; the first time agent-shell is loaded or Agent UI used (65-90 ms of
+;; Emacs's start before). This config's own views drawn with its core's
+;; helpers (agent-workspace's lines, issues, branches, minimap; a run's
+;; pane): its core loaded when one is first called, not its parts.
+(dolist (fn '(agent-ui-even-glyphs agent-ui-blend agent-ui-color agent-ui-background
+              agent-ui-svg-image agent-ui--svg-font agent-ui-format-compact
+              agent-ui-error-message))
+  (autoload fn "agent-ui-core"))
+
 ;; ====== VARIABLES ======
 
 ;; IN ITS SESSION'S PANE
@@ -178,7 +188,12 @@ FILE): its tests and documentation."
 ;; A LONE PANEL'S TITLE: a canvas showing one panel only doesn't
 ;; draw its title over it: its view's bar says it, and in a pane of its own
 ;; (a project dashboard), its tab (config/editor/tabs.el).
-(add-hook '+my/tabs-label-functions #'agent-ui-canvas-label)
+(defun +my/agent-ui-canvas-label (buffer)
+  "BUFFER's label as Agent UI gives it (`agent-ui-canvas-label'); nil
+before it's loaded (no canvas then)."
+  (and (fboundp 'agent-ui-canvas-label) (agent-ui-canvas-label buffer)))
+
+(add-hook '+my/tabs-label-functions #'+my/agent-ui-canvas-label)
 
 ;; PAGES AND FILES a component opens (RET on an html card, an image): a page
 ;; in WebKit in a pane where it can (config/html.el), else the browser.
@@ -208,5 +223,6 @@ FILE): its tests and documentation."
 
 ;; ON: what ties Agent UI to agent-shell and Emacs's windows (each session's
 ;; canvas, its MCP tools, a question waiting, canvases kept with their
-;; sessions, the views synced with their pane; the kept types loaded).
+;; sessions, the views synced with their pane; the kept types loaded):
+;; the rest of it on once its parts are loaded (see above).
 (agent-ui-mode 1)

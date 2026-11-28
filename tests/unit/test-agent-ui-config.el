@@ -101,7 +101,7 @@ package's own system prompt too (said twice)."
     (should (equal (plist-get (cddr shown) :actions) '(("Export PDF" . agent-ui-export-pdf))))))
 
 (ert-deftest agent-ui-config/the-rest-of-its-wiring ()
-  (should (memq #'agent-ui-canvas-label +my/tabs-label-functions))
+  (should (memq #'+my/agent-ui-canvas-label +my/tabs-label-functions))
   (should (memq #'+my/agent-ui-kept-issue agent-ui-kept-functions))
   (should (eq agent-ui-open-page-function #'+my/agent-ui-open-page))
   (should (eq agent-ui-open-issue-function #'+my/agent-ui-open-issue)))

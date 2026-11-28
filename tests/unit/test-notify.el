@@ -10,6 +10,8 @@
 (+test-load "config/notify")
 ;; Agent UI's questions: the notification reads them from their canvas.
 (+test-load "config/agent-ui")
+;; Its parts, loaded with agent-shell or when first used (no session here).
+(require 'agent-ui-parts)
 
 ;; config/agent-shell.el's (what Claude Code is told about Emacs), not loaded
 ;; here: special, a test binds it.

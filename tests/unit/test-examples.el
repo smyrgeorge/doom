@@ -16,6 +16,9 @@
             "config/editor" "config/merge" "config/agent-ui" "config/beads" "config/webkit"
             "config/mermaid" "config/agent-shell" "config/agent-workspace" "config/agent-workflow"
             "config/examples")
+;; Agent UI's parts, loaded with agent-shell or when first used: before a
+;; test binds their options (`let'), loaded inside it they'd be lexical.
+(require 'agent-ui-parts)
 (require 'mermaid-mode)
 (require 'so-long)
 (require 'tab-line)

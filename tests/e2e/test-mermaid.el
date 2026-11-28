@@ -617,6 +617,9 @@ as it came."
   (+test-mermaid--needs-mmdc)
   ;; Agent UI's snapshots: loaded when first used, not with Agent UI.
   (require 'agent-ui-snapshot)
+  ;; Its mermaid type too (a theme switch no longer loads it): before its
+  ;; redraw is stood in for, which loaded inside would replace the stand-in.
+  (require 'agent-ui-mermaid)
   (+test-mermaid--fresh
     (let* ((element '(:type "mermaid" :id "flow" :diagram "flowchart LR\n    build --> test --> deploy"))
            (ctx (agent-ui-context :width 60 :graphic t :char-width (frame-char-width) :line-height (frame-char-height)))
