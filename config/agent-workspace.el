@@ -593,7 +593,7 @@ does."
 ;; on the stage shows it), trusted as its project, closed with the agent;
 ;; saved with the crew by name, opened again with it (see THE SAVED CREW).
 (setq agent-ui-dashboard-name-function #'agent-workspace--panel-name
-      agent-ui-dashboard-trust-root-function #'agent-workspace--panel-trust-root
+      agent-ui-trust-root-function #'agent-workspace--panel-trust-root
       agent-ui-dashboard-display-function #'agent-workspace--panel-display)
 
 ;; NO CREW HERE (see THE APP above): a terminal offered, git init typed in it.

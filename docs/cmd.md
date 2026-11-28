@@ -99,7 +99,9 @@ cmd/agent-workspace loop linus on                       # as L; off turns it off
 ## cmd/agent-workflow
 
 `cmd/agent-workflow` starts the runs of [agent workflows](agent-workflow.md), and checks the workflows and agents of
-this folder's project. It's for you and your scripts. An agent of a run ends its step with it.
+this folder's project. It's for you and your scripts. An agent of a run ends its step with it. It runs the
+[agent-workflow](https://github.com/smyrgeorge/agent-workflow) package's own command (its `bin/agent-workflow`, as Doom
+built it); its [docs](https://github.com/smyrgeorge/agent-workflow/blob/main/docs/command-line.md) have the details.
 
 ```sh
 cmd/agent-workflow run doom-a1b doom-c3d          # runs on these issues, each with its own workflow, followed

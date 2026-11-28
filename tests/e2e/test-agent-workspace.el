@@ -319,12 +319,12 @@ line; both panels fetch (shown); v goes into them, then the next; V: Agent UI
 taking the pane's room, the session keeping its last lines; V again: back.
 Agent UI's own changes not taken for a border dragged (no layout again)."
   (+test-e2e-aw
-    (let ((agent-ui-dashboard-trust-file (+test-tmp-file "aw-e2e-trust.eld"))
+    (let ((agent-ui-trust-file (+test-tmp-file "aw-e2e-trust.eld"))
           (worktree (agent-workspace-agent-worktree ada)))
       (make-directory (expand-file-name ".agent-ui/dashboards" worktree) t)
       (dolist (name '("logs" "tests"))
         (write-region +test-e2e-aw--panel nil (expand-file-name (format ".agent-ui/dashboards/%s.el" name) worktree)))
-      (agent-ui-dashboard-trust-project project)
+      (agent-ui-trust-project project)
       (let* ((session (agent-workspace-agent-buffer ada))
              (canvas (agent-ui-canvas (agent-ui--session-name session))))
         (with-current-buffer canvas (setq agent-ui--session-buffer session))

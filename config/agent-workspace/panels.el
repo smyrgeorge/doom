@@ -68,7 +68,7 @@ AGENT\", else as Agent UI names it. `agent-ui-dashboard-name-function'."
 
 (defun agent-workspace--panel-trust-root (root)
   "The root whose trust ROOT's panels share: an agent's worktree's
-project's. `agent-ui-dashboard-trust-root-function'."
+project's. `agent-ui-trust-root-function'."
   (or (car (agent-workspace-worktree-of (file-name-as-directory root))) root))
 
 (defun agent-workspace--panel-display (canvas)

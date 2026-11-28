@@ -30,7 +30,7 @@ its panels and crew closed after."
      (let* ((project (file-name-as-directory
                       (file-truename (make-temp-file (+test-tmp-file "awp-") t))))
             (default-directory project)
-            (agent-ui-dashboard-trust-file (+test-tmp-file (format "awp-trust-%s.eld" (random 100000))))
+            (agent-ui-trust-file (+test-tmp-file (format "awp-trust-%s.eld" (random 100000))))
             (agent-workspace--crews (make-hash-table :test #'equal)))
        (make-directory (expand-file-name ".agent-ui/dashboards" project) t)
        (with-temp-file (expand-file-name ".agent-ui/dashboards/tests.el" project) (insert +test-awp--panel))
@@ -69,7 +69,7 @@ its panels and crew closed after."
 ken\", rooted there, shown in no pane; theirs; yours from the main checkout
 its own, shown."
   (+test-awp
-    (agent-ui-dashboard-trust-project project)
+    (agent-ui-trust-project project)
     (let ((a (+test-awp--open (agent-workspace-agent-worktree ada)))
           (k (+test-awp--open (agent-workspace-agent-worktree ken)))
           (mine (+test-awp--open project)))
@@ -104,16 +104,16 @@ agent's branch is asked about again unless the project is trusted."
       (should-not (agent-ui-dashboard-trusted-p file))
       ;; The project trusted (asked from the worktree's panel: p): the
       ;; worktree's too, and the project's root remembered.
-      (agent-ui-dashboard-trust-project (agent-workspace-agent-worktree ada))
+      (agent-ui-trust-project (agent-workspace-agent-worktree ada))
       (should (agent-ui-dashboard-trusted-p file))
-      (should (agent-ui-dashboard-project-trusted-p project))
-      (should (equal (mapcar #'car (agent-ui-dashboard-trusted-projects)) (list project))))))
+      (should (agent-ui-project-trusted-p project))
+      (should (equal (mapcar #'car (agent-ui-trusted-projects)) (list project))))))
 
 (ert-deftest agent-workspace-panels/closed-with-its-agent ()
   "Put to sleep or killed, an agent's panels close; a restart keeps them;
 another agent's stay."
   (+test-awp
-    (agent-ui-dashboard-trust-project project)
+    (agent-ui-trust-project project)
     (let ((a (+test-awp--open (agent-workspace-agent-worktree ada)))
           (k (+test-awp--open (agent-workspace-agent-worktree ken))))
       (agent-workspace-restart ada)
@@ -128,7 +128,7 @@ another agent's stay."
   "One opened or closed: said to `agent-workspace-change-functions' (its
 pane, its bar, crew.json follow it)."
   (+test-awp
-    (agent-ui-dashboard-trust-project project)
+    (agent-ui-trust-project project)
     (let* ((whats nil)
            (agent-workspace-change-functions (list (lambda (agent what) (push (cons (agent-workspace-agent-name agent) what) whats))))
            (a (+test-awp--open (agent-workspace-agent-worktree ada))))

@@ -1,5 +1,6 @@
 ;;; $DOOMDIR/examples/agent-workflow.el -*- lexical-binding: t; -*-
-;; Example: a run's pane (config/agent-workflow.el, docs/agent-workflow.md).
+;; Example: a run's pane (the agent-workflow package's, config/agent-workflow.el,
+;; docs/agent-workflow.md).
 ;; M-x +my/example-agent-workflow makes a small compiler project (a git
 ;; repository in the temp folder, demo-1's branch in its worktree: two
 ;; commits, a file not committed yet) and opens the pane of a run of the
@@ -89,7 +90,7 @@ echo \"48 passed\""
 
 (defvar +my/example-agent-workflow--timer nil "What moves its boxes on.")
 
-;; config/agent-workflow's.
+;; The agent-workflow package's (its parts loaded by the example).
 (defvar agent-workflow--pane-activity)
 (defvar agent-workflow--pane-boxes)
 
@@ -205,6 +206,8 @@ under its command (the screenshots wait for it)."
 its live boxes and Log beside it (the folder deleted once it's closed). See
 examples/agent-workflow.el."
   (interactive)
+  ;; The package's parts, loaded when first used otherwise.
+  (require 'agent-workflow-parts)
   (+my/example-agent-workflow--stop)
   (when-let* ((old (+my/example-agent-workflow--pane)))
     (kill-buffer old))

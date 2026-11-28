@@ -29,7 +29,7 @@
   (should (equal agent-ui-kept-directory (expand-file-name ".agent-ui/kept/" doom-user-dir)))
   (should (equal agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir)))
   (should (equal agent-ui-mermaid-cache-directory (expand-file-name "agent-ui/mermaid/" doom-cache-dir)))
-  (should (equal agent-ui-dashboard-trust-file (expand-file-name "agent-ui/trusted-dashboards.eld" doom-data-dir))))
+  (should (equal agent-ui-trust-file (expand-file-name "agent-ui/trusted-dashboards.eld" doom-data-dir))))
 
 (ert-deftest agent-ui-config/under-its-views-dooms-mode-line ()
   (should (eq agent-ui-pane-mode-line t))

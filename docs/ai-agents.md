@@ -8,8 +8,8 @@ it needs them.
 |---|---|
 | [`emacs-profiling`](../skills/emacs-profiling/SKILL.md) | Reading a profile recorded with `SPC h T`, to find what makes Emacs slow |
 | [`agent-ui`](https://github.com/smyrgeorge/agent-ui/blob/main/skills/agent-ui/SKILL.md) | Showing things on its session's canvas (shipped with the agent-ui package) |
-| [`agent-workflow`](../skills/agent-workflow/SKILL.md) | Writing, checking and running agent workflows |
-| [`agent-workflow-step`](../skills/agent-workflow-step/SKILL.md) | Doing a job of a workflow's run |
+| [`agent-workflow`](https://github.com/smyrgeorge/agent-workflow/blob/main/skills/agent-workflow/SKILL.md) | Writing, checking and running agent workflows (shipped with the agent-workflow package) |
+| [`agent-workflow-step`](https://github.com/smyrgeorge/agent-workflow/blob/main/skills/agent-workflow-step/SKILL.md) | Doing a job of a workflow's run (shipped with the agent-workflow package) |
 
 ## emacs-profiling
 
@@ -52,7 +52,7 @@ checklists, tables, text, Markdown, updated as it works ([Agent UI](agent-ui.md)
 ## agent-workflow
 
 `agent-workflow` teaches an agent to write, check and run [agent workflows](agent-workflow.md): the project's
-`.agent-workflow/` workflows and agents, and `cmd/agent-workflow`.
+`.agent-workflow/` workflows and agents, and the package's `bin/agent-workflow` (`cmd/agent-workflow` here).
 
 - Any agent in agent-shell is told where the skill is. You don't need to install it.
 - Install it as above, with `agent-workflow` instead of `emacs-profiling`, for an agent outside Emacs.

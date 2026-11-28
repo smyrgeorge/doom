@@ -80,6 +80,12 @@ progress, charts. Each view is updated in place as the agent works, whichever ag
 
 ### Agent workflow
 
+> [!NOTE]
+> Agent workflow has moved to a repository of its own: [smyrgeorge/agent-workflow](https://github.com/smyrgeorge/agent-workflow),
+> an Emacs package built on Agent UI and agent-shell (its code, tests and docs are there now). This config installs it
+> (`packages.el`) and adds its own layer on top: what a session is told, the issue picker's look, the crew's check, its
+> own workflows (`config/agent-workflow.el`).
+
 A workflow describes the work on an issue the way GitHub Actions does: jobs, the order they run in, and their steps. A
 step is a script, Lisp, or an agent with its own instructions. Each run works in its own worktree, and its pane follows
 it live. Its agents are [agent-shell](https://github.com/xenodium/agent-shell) sessions

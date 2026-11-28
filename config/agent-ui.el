@@ -61,8 +61,9 @@
 ;; diagrams too, when drawn by the package's own renderer.
 (setq agent-ui-image-cache-directory (expand-file-name "agent-ui/images/" doom-cache-dir)
       agent-ui-mermaid-cache-directory (expand-file-name "agent-ui/mermaid/" doom-cache-dir))
-;; The project dashboards whose code was let run (by content): kept, not a cache's.
-(setq agent-ui-dashboard-trust-file (expand-file-name "agent-ui/trusted-dashboards.eld" doom-data-dir))
+;; The projects whose code you trust (their dashboards', their agent workflows'),
+;; and the dashboards let run by content: kept, not a cache's.
+(setq agent-ui-trust-file (expand-file-name "agent-ui/trusted-dashboards.eld" doom-data-dir))
 
 ;; MERMAID: diagrams drawn by config/mermaid.el's renderer (in the theme's
 ;; colours, as the rest of this config's diagrams), not the package's;

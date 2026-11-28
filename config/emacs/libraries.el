@@ -11,7 +11,7 @@
 ;; `color-name-to-rgb', `color-blend', `text-property-search-forward',
 ;; `completing-read-multiple'...), else here. A function needing a library's
 ;; variable (to bind it) or its faces requires it first itself (`crm-separator'
-;; in config/agent-workflow/queue.el, the ANSI faces in
+;; in the agent-workflow package's issue picker, the ANSI faces in
 ;; config/agent-workspace/core.el).
 
 (dolist (library '(("map" map-elt map-nested-elt map-put!)

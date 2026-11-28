@@ -1,235 +1,113 @@
 ;;; $DOOMDIR/config/agent-workflow.el -*- lexical-binding: t; -*-
 ;; Agent workflows: the work on an issue described as GitHub Actions does,
-;; jobs and their steps, some steps an LLM in agent-shell (docs/agent-workflow.md).
-;; Loaded from config.el; its code is in config/agent-workflow/.
+;; jobs and their steps, some steps an LLM in agent-shell. Loaded from
+;; config.el. Its own package now (~/dev/agent-workflow, packages.el; its
+;; docs: docs/ there); here, this config's layer over it: where its files
+;; go, what a session is told, its permissions, its picker's look, the
+;; agent workspace's crew, its keys (docs/agent-workflow.md).
+
+(require 'agent-workflow)
+
+;; Only agent-workflow.el is loaded with Emacs: its parts the first time
+;; it's used (a command, cmd/agent-workflow, runs coming back once Emacs is
+;; idle).
 
 ;; ====== VARIABLES ======
 
-(defgroup agent-workflow nil
-  "Agent workflows: the work on an issue in jobs and steps, some an LLM."
-  :group 'tools)
+;; RUNS COMING BACK: the projects that had runs, noted in Doom's data
+;; folder, read back once Emacs has started (`agent-workflow-mode'). Trust
+;; is Agent UI's (config/agent-ui.el: `agent-ui-trust-file').
+(setq agent-workflow-projects-file (expand-file-name "agent-workflow-projects.eld" doom-data-dir))
 
-;; WHERE THEY ARE
-;; A project's workflows (.yml) and agents (.md) come from three places, a
-;; later one's replacing an earlier one's of the same name: the starters
-;; (config/agent-workflow/workflows/ and agents/), the project's (committed,
-;; read from your checkout, never an agent's worktree) and yours (out of
-;; git). Each in its folder's workflows/ and agents/.
-(defcustom agent-workflow-directory ".agent-workflow"
-  "Where a project keeps its workflows and agents, committed: its
-workflows/ and agents/, relative to its main checkout."
-  :type 'string
-  :group 'agent-workflow)
+;; WHAT THE AGENT IS TOLD
+;; This config tells every session about Emacs itself (config/agent-shell/
+;; context.el: also the agents that take no system prompt): agent workflows'
+;; lines among it, not the package's own (`agent-workflow-system-prompt'),
+;; which would say them twice. An agent of the pool: its job; every
+;; session: where the skill is.
+(setq agent-workflow-system-prompt nil)
 
-(defcustom agent-workflow-local-directory ".agent-shell/agent-workflow"
-  "Where a project keeps your own workflows and agents, out of git
-\(.agent-shell/ is ignored): its workflows/ and agents/, relative to its
-main checkout. They replace the project's and the starters of the same
-name."
-  :type 'string
-  :group 'agent-workflow)
+(defun +my/agent-workflow-agent-context ()
+  "What an agent of the pool starting is told (`agent-workflow-agent-context');
+nil for any other session, the pool not loaded (none of its agents then)."
+  (and (featurep 'agent-workflow-pool) (agent-workflow-agent-context)))
 
-;; THE POOL
-;; Agent sessions, as many at once as this says, in every project: an agent
-;; has no role and no name, it's a job's (config/agent-workflow/pool.el),
-;; known by its issue and job ("doom-a1b · review"), started with its step's
-;; agent in the issue's worktree (config/agent-workflow/worktree.el).
-(defcustom agent-workflow-pool 3
-  "How many agent sessions of the pool run at once, in every project."
-  :type 'natnum
-  :group 'agent-workflow)
+(add-hook '+my/agent-shell-context-functions #'+my/agent-workflow-agent-context t)
+(add-hook '+my/agent-shell-context-functions #'agent-workflow-skill-context t)
 
-;; ITS PERMISSION MODE
-;; Claude Code's (`agent-workflow-modes'): the step's agent's (mode:), else
-;; this: auto, Claude deciding what needs your OK.
-(defcustom agent-workflow-mode "auto"
-  "The permission mode an agent starts in (Claude Code's id) when its
-agent has none. auto: Claude decides what needs your OK. nil: Claude
-Code's own default."
-  :type '(choice (const :tag "Claude Code's" nil) string)
-  :group 'agent-workflow)
+;; ITS PERMISSIONS: an agent other than Claude Code (which takes its rules as
+;; options) has its permission requests answered by its agent's rules, in
+;; Claude Code's syntax, as an agent workspace's role's are
+;; (config/agent-shell/permissions.el).
+(defun +my/agent-workflow-session-rules (rules)
+  "RULES, an agent of the pool's, its session's (`+my/agent-shell-permission-rules')."
+  (setq-local +my/agent-shell-permission-rules rules))
 
-(defcustom agent-workflow-kinds
-  '((claude-code :config agent-shell-anthropic-make-claude-code-config :claude-code t)
-    (codex :config agent-shell-openai-make-codex-config)
-    (gemini-cli :config agent-shell-google-make-gemini-config)
-    (opencode :config agent-shell-opencode-make-agent-config)
-    (qwen-code :config agent-shell-qwen-make-agent-config)
-    (copilot :config agent-shell-github-make-copilot-config)
-    (goose :config agent-shell-goose-make-agent-config)
-    (cursor :config agent-shell-cursor-make-agent-config))
-  "The agents the pool can run: a kind (a symbol: agent-shell's identifier
-for it) and how its session starts. :config, a function returning
-agent-shell's config for it; :claude-code, non-nil if it's Claude Code (an
-agent's tools go to its options). An agent file says which (kind:), a
-step over it, else `agent-workflow-kind'."
-  :type '(alist :key-type symbol :value-type plist)
-  :group 'agent-workflow)
+(setq agent-workflow-session-rules-function #'+my/agent-workflow-session-rules)
 
-(defcustom agent-workflow-kind 'claude-code
-  "The kind of agent a step runs when neither it nor its agent's file says
-\(kind:): a key of `agent-workflow-kinds'."
-  :type 'symbol
-  :group 'agent-workflow)
+;; THE ISSUE PICKER (M-x agent-workflow-run-ticket): each issue as the issue
+;; list draws it (config/beads/look.el, once it's loaded): a status icon, a
+;; priority badge and a type icon before it, its labels as tags after.
+(defvar +my/beads--statuses)
 
-(defcustom agent-workflow-exit-timeout 7
-  "Seconds a stopped session's processes have to exit, before any left is
-killed."
-  :type 'number
-  :group 'agent-workflow)
+(defun +my/agent-workflow-issue-affixes (info statuses)
+  "INFO's (PREFIX . SUFFIX), an issue as the issue list draws it, STATUSES
+the open issues' (those blocking it); the package's own look without the
+list's (`agent-workflow-issue-affixes')."
+  (if (not (fboundp '+my/beads-format-status))
+      (agent-workflow-issue-affixes info statuses)
+    ;; The statuses' faces: beads.el's, in the theme's colours once loaded
+    ;; (config/beads/theme.el); the list may not have been opened yet.
+    (let ((+my/beads--statuses statuses)
+          (labels (alist-get 'labels info)))
+      (require 'beads-faces nil t)
+      (cons (concat (string-pad (+my/beads-format-status info) 2)
+                    (+my/beads-format-priority info) " "
+                    (+my/beads-format-type info) " ")
+            (when labels
+              (concat "  " (mapconcat #'+my/beads--label-tag labels " ")))))))
 
-;; RUNS
-;; You start them (M-x agent-workflow-run-ticket on tickets, M-x
-;; agent-workflow-run a workflow with no ticket; cmd/agent-workflow run): their
-;; jobs in order, Emacs the engine (config/agent-workflow/runs.el). A run
-;; whose issue is blocked is queued, looked at again this often.
-(defcustom agent-workflow-queue-check 30
-  "Seconds between looks at runs waiting for something outside Emacs (their
-issue's blockers closing)."
-  :type 'number
-  :group 'agent-workflow)
+(setq agent-workflow-issue-affixes-function #'+my/agent-workflow-issue-affixes)
 
-;; RUNS COMING BACK
-;; Emacs starting, the runs not over of the projects that had some (noted
-;; here) are read back, a job that was running interrupted, waiting for
-;; continue (config/agent-workflow/resume.el); continued by themselves if
-;; this says so.
-(defcustom agent-workflow-projects-file
-  (expand-file-name "agent-workflow-projects.eld"
-                    (if (boundp 'doom-data-dir) doom-data-dir user-emacs-directory))
-  "Where the projects that had runs are noted: their runs are read back as
-Emacs starts."
-  :type 'file
-  :group 'agent-workflow)
+;; THE AGENT WORKSPACE: a project whose crew runs has no agents of the pool,
+;; its loops would take the same issues. Read from its lock and agents,
+;; never requiring it.
+(declare-function agent-workspace-agents "agent-workspace/core")
+(declare-function agent-workspace-agent-state "agent-workspace/core")
 
-(defcustom agent-workflow-worktree-removal-delay 10
-  "Seconds after a run is cancelled or fails before its worktree is removed
-by itself (its pane counting them down, Keep worktree stopping it); only
-if nothing in it would be lost (no change not committed): else it stays,
-for M-x agent-workflow-remove-worktree. nil: never by itself. A run done
-removes its own at once."
-  :type '(choice (const :tag "Never by itself" nil) natnum)
-  :group 'agent-workflow)
+(defun +my/agent-workflow-crew-running (project)
+  "Why the pool runs no agent in PROJECT: its agent-workspace crew runs (its
+agents in this Emacs, or its lock held by an Emacs alive); nil if it doesn't.
+One of `agent-workflow-project-busy-functions'."
+  (when (or (and (fboundp 'agent-workspace-agents)
+                 (seq-some (lambda (agent) (not (memq (agent-workspace-agent-state agent) '(asleep home))))
+                           (ignore-errors (agent-workspace-agents project))))
+            (when-let* ((file (expand-file-name ".agent-shell/agent-workspace/crew.lock" project))
+                        ((file-readable-p file))
+                        (pid (ignore-errors
+                               (with-temp-buffer (insert-file-contents file)
+                                                 (string-to-number (car (split-string (buffer-string)))))))
+                        ((> pid 0))
+                        (attributes (process-attributes pid)))
+              (and (not (member (alist-get 'state attributes) '("Z" "X")))
+                   (string-match-p "emacs" (downcase (or (alist-get 'comm attributes) ""))))))
+    (format "The agent-workspace crew of %s runs: its agents would take the same issues"
+            (file-name-nondirectory (directory-file-name project)))))
 
-(defcustom agent-workflow-continue-on-start nil
-  "Non-nil: runs read back as Emacs starts are continued by themselves.
-nil: they wait for M-x agent-workflow-continue."
-  :type 'boolean
-  :group 'agent-workflow)
-
-;; BUDGETS
-;; A run's budget, when its workflow has none (config/agent-workflow/
-;; budget.el): its cost (dollars), tokens, time (seconds); nil: no cap.
-(defcustom agent-workflow-budget nil
-  "A run's budget when its workflow says none: (:cost DOLLARS :tokens N
-:time SECONDS), any of them; nil: no cap."
-  :type '(choice (const :tag "None" nil) plist)
-  :group 'agent-workflow)
-
-;; TRUST
-;; A project's own workflows run as you (their scripts, elisp, if): only once
-;; you trust it, noted here (config/agent-workflow/trust.el).
-(defcustom agent-workflow-trust-file
-  (expand-file-name "agent-workflow-trusted.eld"
-                    (if (boundp 'doom-data-dir) doom-data-dir user-emacs-directory))
-  "Where the projects whose workflows you trust are noted."
-  :type 'file
-  :group 'agent-workflow)
-
-;; SCRIPTS
-;; A run: step's script, its suite's for a merge (config/agent-workflow/
-;; steps.el): stopped once it's run this long, unless its step's timeout says.
-(defcustom agent-workflow-script-timeout 1800
-  "Seconds a step's script may run, unless its step's timeout: says."
-  :type 'number
-  :group 'agent-workflow)
-
-;; LOOPS
-;; An agent's outcome sending the work back (changes: rerun build) is
-;; counted: past this many rounds (a job's or workflow's max-rounds says
-;; otherwise), or 3 times that in all, the run asks you
-;; (config/agent-workflow/back.el, LOOPS).
-(defcustom agent-workflow-max-rounds 10
-  "How many times a job may send the work back before the run asks you."
-  :type 'natnum
-  :group 'agent-workflow)
-
-;; PROGRESS
-;; A run started from Emacs opens its pane, an Agent UI canvas in sections:
-;; the run, what needs you, a section per agent (its own canvas), its log
-;; (config/agent-workflow/pane.el); M-x agent-workflow-list lists them all
-;; (list.el). From the shell, cmd/agent-workflow run follows its runs' logs
-;; (log.el). The pane's Log shows this many of the last lines.
-(defcustom agent-workflow-pane-log-lines 200
-  "How many of a run's last log lines its pane keeps (its Log shows the
-last few, scrolling back through these)."
-  :type 'natnum
-  :group 'agent-workflow)
-
-;; CHECKING THEM
-;; M-x agent-workflow-check (config/agent-workflow/check.el) reads them all
-;; anew and lists every problem, each line taking you to its file and line;
-;; cmd/agent-workflow check [FILE] does the same from the shell, as JSON
-;; (config/agent-workflow/request.el). A file with an error is left out; a
-;; warning leaves it in. What's checked: the tops of agents.el and
-;; workflows.el.
-
-;; ====== ITS PARTS ======
-
-(load! "agent-workflow/core")
-(load! "agent-workflow/agents")
-(load! "agent-workflow/workflows")
-(load! "agent-workflow/worktree")
-(load! "agent-workflow/pool")
-(load! "agent-workflow/beads")
-(load! "agent-workflow/trust")
-(load! "agent-workflow/runs")
-(load! "agent-workflow/queue")
-(load! "agent-workflow/where")
-(load! "agent-workflow/back")
-(load! "agent-workflow/answers")
-(load! "agent-workflow/steps")
-(load! "agent-workflow/resume")
-(load! "agent-workflow/budget")
-(load! "agent-workflow/watch")
-(load! "agent-workflow/log")
-(load! "agent-workflow/pane")
-(load! "agent-workflow/pane-answer")
-(load! "agent-workflow/pane-boxes")
-(load! "agent-workflow/list")
-(load! "agent-workflow/dry")
-(load! "agent-workflow/check")
-(load! "agent-workflow/request")
+(add-hook 'agent-workflow-project-busy-functions #'+my/agent-workflow-crew-running)
 
 ;; ====== KEYS ======
 
-;; THE RUNS' LIST (M-x agent-workflow-list, config/agent-workflow/list.el):
-;; RET opens a run's pane; Vim's keys, as Doom's other lists.
-(map! :map agent-workflow-list-mode-map
+;; THE RUNS' LIST (M-x agent-workflow-list): RET opens a run's pane; Vim's
+;; keys, as Doom's other lists. Once its file is loaded (when first used).
+(map! :after agent-workflow-list
+      :map agent-workflow-list-mode-map
       :n "RET" #'agent-workflow-list-open
       :n "gr"  #'revert-buffer
       :n "q"   #'quit-window)
 
-;; ====== HOOKS ======
+;; ====== ON ======
 
-;; WHAT AN AGENT IS TOLD
-;; In its system prompt, after what every Claude Code session is: the job it
-;; does, where, how it ends a step, then its agent's instructions
-;; (config/agent-workflow/pool.el).
-(add-hook '+my/agent-shell-context-functions #'agent-workflow-agent-context t)
-
-;; WHAT EVERY SESSION IS TOLD
-;; Where the agent-workflow skill is (skills/agent-workflow/SKILL.md): to
-;; write, check or run a project's workflows (config/agent-workflow/core.el).
-(add-hook '+my/agent-shell-context-functions #'agent-workflow-skill-context t)
-
-;; Its canvas opens no pane of its own: kept, for its ticket's pane.
-(agent-workflow--take-canvases)
-
-;; Emacs quits: the pool's sessions end with it, asking nothing.
-(add-hook 'kill-emacs-hook #'agent-workflow--quit-h)
-
-;; Emacs started: the runs not over read back (and continued, if
-;; `agent-workflow-continue-on-start'), once it's been idle a second, not
-;; while it starts.
-(add-hook 'emacs-startup-hook #'agent-workflow-restore-all-when-idle)
+;; Runs not over come back once Emacs has started (and been idle a second);
+;; the pool's sessions end with Emacs, asking nothing.
+(agent-workflow-mode 1)

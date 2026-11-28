@@ -24,7 +24,7 @@ The examples, and what to try in each:
 | `issues` | [A project's issues](issues.md) in their list (needs `bd`) | `RET` opens one, Show closed shows the closed ones |
 | `dashboard` | [A project dashboard](agent-ui.md#project-dashboards), this config's CPU dashboard, filled every second | `gR` reads it again, `q` closes it |
 | `agent-workspace` | [An agent crew](agent-workspace.md) in its app: three stand-in agents, offline, each in its worktree | `a` then `A` answers sam's hand, `#ken` in the room, `j` / `k` on the bars, `Q` closes it |
-| `agent-workflow` | [A run's pane](agent-workflow.md#following-a-run) as it runs: its tiles, branch, flow, jobs, live boxes and Log, from its journal (no agent runs: its e2e script does) | `TAB` on a divider folds its section, `RET` on a commit or a file opens it, Show output, `q` closes it |
+| `agent-workflow` | [A run's pane](https://github.com/smyrgeorge/agent-workflow/blob/main/docs/running.md) as it runs: its tiles, branch, flow, jobs, live boxes and Log, from its journal (no agent runs: its e2e script does) | `TAB` on a divider folds its section, `RET` on a commit or a file opens it, Show output, `q` closes it |
 
 `scripts/screenshots.sh [NAME...]` takes the screenshots. It runs on macOS only, with macOS's `screencapture`, and the
 terminal it runs from needs the Screen Recording permission. The examples themselves work on Linux too.

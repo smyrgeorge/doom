@@ -870,7 +870,7 @@ off, applied."
 and tests, and trusted (the trust file the test's own); the panels open
 closed after."
   (declare (indent 1))
-  `(let ((agent-ui-dashboard-trust-file (+test-tmp-file (format "aws2-trust-%s.eld" ,name))))
+  `(let ((agent-ui-trust-file (+test-tmp-file (format "aws2-trust-%s.eld" ,name))))
      (unwind-protect
          (+test-aws2 ,name
            (let ((default-directory project))
@@ -879,7 +879,7 @@ closed after."
                (write-region +test-aws2--panel nil (format ".agent-ui/dashboards/%s.el" panel)))
              (call-process "git" nil nil nil "add" ".agent-ui")
              (call-process "git" nil nil nil "-c" "user.name=T" "-c" "user.email=t@t" "commit" "-q" "-m" "panels"))
-           (agent-ui-dashboard-trust-project project)
+           (agent-ui-trust-project project)
            ,@body)
        (dolist (buffer (buffer-list))
          (when (buffer-local-value 'agent-ui-dashboards--state buffer)

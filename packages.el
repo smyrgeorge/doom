@@ -69,9 +69,8 @@
 ;; (config/agent-shell/nyan.el); not in other buffers.
 (package! nyan-mode)
 
-;; YAML read as Lisp data: the agent workflows' files (config/agent-workflow/
-;; workflows.el). Pinned: the commit they were checked with
-;; (tests/unit/test-agent-workflow-files.el).
+;; YAML read as Lisp data: the agent workflows' files (the agent-workflow
+;; package's). Pinned: the commit they were checked with.
 (package! yaml :pin "5546f36bde24a9a8c1934e0f6ce205cd41d72537")
 
 ;; Git: TODOs in magit status.
@@ -93,6 +92,18 @@
       :recipe (:local-repo "~/dev/agent-ui" :files (:defaults "bin" "skills" "assets")))
   (package! agent-ui
     :recipe (:host github :repo "smyrgeorge/agent-ui" :files (:defaults "bin" "skills" "assets"))))
+
+;; Agent workflow: the work on an issue in jobs and steps, some an LLM
+;; (config/agent-workflow.el), its own package (github.com/smyrgeorge/
+;; agent-workflow), on agent-shell and Agent UI; its bin/, skills/ and
+;; starters/ with its Lisp. From its working copy in ~/dev/agent-workflow
+;; where there's one (its changes, as they're made); else from GitHub, not
+;; pinned: its latest commit (doom sync -u to update).
+(if (file-directory-p "~/dev/agent-workflow")
+    (package! agent-workflow
+      :recipe (:local-repo "~/dev/agent-workflow" :files (:defaults "bin" "skills" "starters")))
+  (package! agent-workflow
+    :recipe (:host github :repo "smyrgeorge/agent-workflow" :files (:defaults "bin" "skills" "starters"))))
 
 ;; Beads: a git-backed issue tracker (bd, scripts/tools.sh) in Emacs: SPC o i
 ;; (config/beads.el). Pinned: config/beads.el mends beads.el for bd 1.x, the
