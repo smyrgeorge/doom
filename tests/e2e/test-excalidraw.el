@@ -1179,7 +1179,8 @@ under this drawing's name."
 
 (ert-deftest e2e-exd/drawn-for-claude-m-p-right-after-a-change ()
   "M-p right after a change (its export still on its way): M-n brings the
-change back, also after M-p M-p M-n M-n. Nothing changed: no wait."
+change back, also after M-p M-p M-n M-n. Nothing changed: no export
+waited for."
   (+test-exd
     (+test-exd--for-claude
       (make-directory (expand-file-name "drawings" dir) t)
@@ -1195,10 +1196,15 @@ change back, also after M-p M-p M-n M-n. Nothing changed: no wait."
         ;; unmodified before (M-p then waited for that export, 0.65 s on
         ;; CI's macOS runner).
         (should (+test-wait-for (lambda () (and (file-exists-p file) (not (buffer-modified-p drawing)))) 5))
-        ;; Nothing changed: M-p at once.
-        (let ((start (float-time)))
+        ;; Nothing changed: M-p waits for no export, the version its page
+        ;; says it's at (asked first, `+my/excalidraw-flush') the one the
+        ;; buffer has. Not by the clock: M-p took 0.68 s on CI's macOS
+        ;; runner, its page's answer slow beside other Emacsen's pages.
+        (let* ((xwidget (+test-exd--xw))
+               (fetched (xwidget-get xwidget 'fetched)))
+          (should fetched)
           (execute-kbd-macro (kbd "M-p"))
-          (should (< (- (float-time) start) 0.5)))
+          (should (equal (xwidget-get xwidget 'flushed) fetched)))
         (+test-exd--shows '("diamond"))
         (execute-kbd-macro (kbd "M-n"))
         (+test-exd--shows nil)
