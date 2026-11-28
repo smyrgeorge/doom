@@ -21,6 +21,7 @@ docs:
 - [Running](https://github.com/smyrgeorge/agent-workflow/blob/main/docs/running.md)
 - [The command line](https://github.com/smyrgeorge/agent-workflow/blob/main/docs/command-line.md)
 - [Customization](https://github.com/smyrgeorge/agent-workflow/blob/main/docs/customization.md)
+- [Issue trackers](https://github.com/smyrgeorge/agent-workflow/blob/main/docs/trackers.md)
 
 This page is what this config adds on top of it (`config/agent-workflow.el`).
 
@@ -28,13 +29,38 @@ This page is what this config adds on top of it (`config/agent-workflow.el`).
 
 | Key | What it does |
 |---|---|
-| `M-x agent-workflow-run-ticket` | Start runs on issues, each with its workflow (picked in columns, those that fit first) |
+| `M-x agent-workflow-run-ticket` | Start runs on issues, each with its workflow (picked in columns, those that fit first). In a project without Beads: on a task you type |
+| `M-x agent-workflow-run-task` | Start a run on a task you type: its first line its title, the rest its description |
 | `M-x agent-workflow-run` | Start a workflow that takes no ticket |
 | `M-x agent-workflow-list` | Every run of the project; `RET` opens its pane, `gr` reads them again, `q` closes it |
 | `M-x agent-workflow-check` | Every workflow and agent of the project checked, each problem taking you to its line |
 
 `cmd/agent-workflow` is the package's command line (its `bin/agent-workflow`), for this config's docs, scripts and
 workflows ([cmd/agent-workflow](cmd.md#cmdagent-workflow)).
+
+## Beads, its issue tracker
+
+The package reads and writes issues through a tracker of yours. Here it's [Beads](issues.md): a project with `.beads/`
+has its runs on its issues, read and written with `bd` (`config/agent-workflow/beads.el`). In a project without Beads, a
+run is on a task you type (its id `task-1`, kept in its run), or a workflow's own.
+
+On a Beads issue, a run:
+
+- sets it in progress as it starts, and open again if it's cancelled or fails;
+- writes its state in the issue's metadata (`workflow`, `workflow_run`, `workflow_state`, `workflow_jobs`) and the job
+  running as a label (`job:build`);
+- adds what each job said to its notes;
+- closes it once its branch is merged (or its run is done in your checkout).
+
+These writes go in the background, one after another, so Emacs never waits on `bd`. A newer run state replaces one not
+written yet. Emacs quitting writes what's left first. They're made as `agent-workflow` in Beads' history
+(`+my/agent-workflow-bd-actor`).
+
+An agent of a run, and its scripts, run `bd` as `ISSUE/JOB` (`BEADS_ACTOR`), on the project's issues (`BEADS_DIR`: they
+work in a worktree). An agent may run `bd show` without asking, and is told it reads its issue.
+
+A workflow's `for:` names Beads' types (`bug`, `feature`, `task`, `epic`, `chore`, `decision`, `spike`, `story`,
+`milestone`): another is warned about. An epic stands for its open issues.
 
 ## The issue picker
 
@@ -133,7 +159,11 @@ Its scripts read these from Emacs's environment (`(setenv "GITHUB_POLL" "60")`):
 |---|---|
 | `packages.el` | The `agent-workflow` package, from `~/dev/agent-workflow` |
 | `config/agent-workflow.el` | This config's layer over it: settings, hooks, keys |
+| `config/agent-workflow/beads.el` | Beads as its issue tracker; the picker's look |
+| `config/agent-workflow/context.el` | What an agent of a run is told, its permissions |
+| `config/agent-workflow/crew.el` | No pool where the agent workspace's crew runs |
 | `cmd/agent-workflow` | The package's command line (its `bin/agent-workflow`), for this config's docs and scripts |
 | `.agent-workflow/` | This config's own workflows, agents and scripts |
 | `config/notify/agent-workflow.el` | Its notifications |
 | `tests/unit/test-agent-workflow-config.el` | Tests of this config's layer and its own workflows (the package has its own) |
+| `tests/unit/test-agent-workflow-beads.el` | Tests of Beads as its tracker (the real `bd`, and a stand-in) |

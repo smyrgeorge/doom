@@ -7,6 +7,7 @@
 ;; list (config/beads/look.el), the agent workspace's crew refusing the
 ;; pool, the runs' list's keys, the package's mode on; and this config's
 ;; own workflows (.agent-workflow/: github, screenshots), their scripts.
+;; Beads, its issue tracker: test-agent-workflow-beads.el.
 
 (load (expand-file-name "beads-autoloads" (file-name-directory (locate-library "beads"))) nil t)
 (+test-load "config/emacs" "config/tiling" "config/banner" "config/beads"
@@ -95,14 +96,16 @@ saying why; a lock left by an Emacs gone: not."
 ;; ====== THE ISSUE PICKER ======
 
 (defun +test-awfc--issue (id title type &rest more)
-  "A stand-in open issue ID, as `agent-workflow-open-issues' has it: MORE
-bd's other keys (status, priority, labels...) as a plist."
-  (list id title type
-        (append `((id . ,id) (title . ,title) (issue_type . ,type))
-                (let (alist)
-                  (while more
-                    (push (cons (intern (substring (symbol-name (pop more)) 1)) (pop more)) alist))
-                  (nreverse alist)))))
+  "A stand-in open issue ID, as the Beads tracker lists it: a plist, :data
+its bd JSON (MORE: bd's other keys, status, priority, labels..., as a
+plist)."
+  (let ((data (append `((id . ,id) (title . ,title) (issue_type . ,type))
+                      (let (alist)
+                        (while more
+                          (push (cons (intern (substring (symbol-name (pop more)) 1)) (pop more)) alist))
+                        (nreverse alist)))))
+    (list :id id :title title :type type :status (alist-get 'status data) :labels (alist-get 'labels data)
+          :data data)))
 
 (defconst +test-awfc--issues
   (list (+test-awfc--issue "demo-1" "Parser rewrite" "epic" :status "open" :priority 1 :labels '("parser"))
@@ -115,11 +118,11 @@ bd's other keys (status, priority, labels...) as a plist."
 
 (defun +test-awfc--affixes ()
   "Each candidate's (NAME PREFIX SUFFIX), as the picker draws them, in its order."
-  (let (seen)
-    (cl-letf (((symbol-function 'agent-workflow-open-issues) (lambda (_) +test-awfc--issues))
-              ((symbol-function 'agent-workflow-epic-issues)
-               (lambda (_ id) (and (equal id "demo-1") '("demo-11" "demo-12"))))
-              ((symbol-function 'completing-read-multiple)
+  (let ((seen nil)
+        (agent-workflow-trackers
+         (list (list :detect #'always :issues (lambda (_) +test-awfc--issues)
+                     :children (lambda (_ id) (and (equal id "demo-1") '("demo-11" "demo-12")))))))
+    (cl-letf (((symbol-function 'completing-read-multiple)
                (lambda (_prompt table &rest _)
                  (let* ((names (all-completions "" table))
                         (metadata (completion-metadata "" table nil)))
@@ -140,7 +143,7 @@ bd's other keys (status, priority, labels...) as a plist."
 (ert-deftest agent-workflow-config/picked-as-the-issue-list-draws-them ()
   "Each issue as the list draws it: its status (blocked by an open issue:
 ⊘1), its priority (P0 a badge), its type's icon before its id and title;
-its labels as tags after, an epic said; in bd's order."
+its labels as tags after, an epic said; in bd's order (config/agent-workflow/beads.el)."
   (should (eq agent-workflow-issue-affixes-function #'+my/agent-workflow-issue-affixes))
   (let ((rows (+test-awfc--affixes)))
     (should (equal (mapcar #'car rows)
