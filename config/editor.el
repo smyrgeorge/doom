@@ -242,6 +242,14 @@ An entry overrides a mode's own (set in config.el).")
 (defvar +my/large-file-ask-size (* 10 1024 1024)
   "Opening normally a large file bigger than this asks first.")
 
+;; EMACS LISP PACKAGES CHECKED
+;; flycheck-package (package-lint) checks that each package in a file's
+;; Package-Requires can be installed from package.el's archives. Doom installs
+;; packages with straight and never downloads their index, so each one was "not
+;; installable" (agent-ui.el's agent-shell and vui, both on MELPA). That check
+;; is skipped while package.el knows no packages; package-lint's others run as
+;; before, and a package's CI runs it with MELPA's index (editor/package-lint.el).
+
 ;; EVIL
 ;; Saving a buffer returns to normal state.
 (add-hook! 'after-save-hook #'evil-normal-state)
@@ -362,3 +370,4 @@ An entry overrides a mode's own (set in config.el).")
 (load! "editor/tree-sitter")
 (load! "editor/long-lines")
 (load! "editor/large-files")
+(load! "editor/package-lint")

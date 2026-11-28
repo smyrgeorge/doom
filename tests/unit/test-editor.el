@@ -646,3 +646,26 @@ one: opening a file can wait for input before anything was displayed)."
         (accept-process-output nil 0.01)))
     (should-not +my/defer-fontification)
     (should-not (get-text-property 1 'fontified))))
+
+;; ====== EMACS LISP PACKAGES CHECKED ======
+
+(ert-deftest editor/package-lint-installable-only-with-package-el-s-index ()
+  "Doom installs with straight: package.el knows no package, and
+package-lint's \"not installable\" is skipped then (each dependency was);
+with its archives' index, checked as before."
+  (require 'package-lint)
+  (let ((not-installable
+         (lambda ()
+           (with-temp-buffer
+             (insert ";;; x.el --- X  -*- lexical-binding: t; -*-\n"
+                     ";; Package-Requires: ((emacs \"29.1\") (no-such-package \"1.0\"))\n"
+                     ";;; Code:\n(provide 'x)\n;;; x.el ends here\n")
+             (emacs-lisp-mode)
+             (seq-filter (lambda (problem) (string-match-p "not installable" (nth 3 problem)))
+                         (package-lint-buffer))))))
+    (let ((package-archive-contents nil)
+          (package-alist nil))
+      (should-not (funcall not-installable)))
+    (let ((package-archive-contents '((other . [(1 0) nil "Other." tar nil])))
+          (package-alist nil))
+      (should (funcall not-installable)))))
